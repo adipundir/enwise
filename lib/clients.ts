@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { clients, type Client } from "@/lib/db/schema";
-import type { EnvoiceCtx } from "@/lib/mcp/context";
+import type { EnwiseCtx } from "@/lib/mcp/context";
 
 const DEFAULT_FIND_LIMIT = 5;
 const DEFAULT_LIST_LIMIT = 50;
@@ -25,7 +25,7 @@ export type ClientCreate = {
 export type ClientPatch = Partial<ClientCreate>;
 
 export async function createClient(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   input: ClientCreate,
 ): Promise<Client> {
   const [row] = await db
@@ -36,7 +36,7 @@ export async function createClient(
 }
 
 export async function updateClient(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   clientId: string,
   patch: ClientPatch,
 ): Promise<Client | null> {
@@ -54,7 +54,7 @@ export async function updateClient(
 }
 
 export async function getClient(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   clientId: string,
 ): Promise<Client | null> {
   const [row] = await db
@@ -67,7 +67,7 @@ export async function getClient(
 }
 
 export async function listClients(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   opts: { limit?: number; includeArchived?: boolean } = {},
 ): Promise<Client[]> {
   const limit = clamp(opts.limit ?? DEFAULT_LIST_LIMIT, 1, MAX_LIST_LIMIT);
@@ -82,7 +82,7 @@ export async function listClients(
 }
 
 export async function archiveClient(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   clientId: string,
 ): Promise<Client | null> {
   const [row] = await db
@@ -110,7 +110,7 @@ export type ClientMatch = {
  * match. Excludes archived clients unless `includeArchived` is true.
  */
 export async function findClients(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   opts: { query: string; limit?: number; includeArchived?: boolean },
 ): Promise<ClientMatch[]> {
   const query = opts.query.trim();

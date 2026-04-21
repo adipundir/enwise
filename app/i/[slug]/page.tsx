@@ -194,7 +194,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
 
           <footer className="mt-10 flex items-center justify-between border-t border-zinc-200 pt-4 text-xs text-zinc-500">
             <span>{invoice.invoiceNumber}</span>
-            <span>Powered by envoice</span>
+            <span>Powered by enwise</span>
           </footer>
         </article>
       </div>

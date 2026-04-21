@@ -1,4 +1,4 @@
-import { authInfoForCtx, type EnvoiceCtx } from "@/lib/mcp/context";
+import { authInfoForCtx, type EnwiseCtx } from "@/lib/mcp/context";
 import { hitRateLimit } from "@/lib/ratelimit";
 import { resolveBearer } from "@/lib/tokens";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
@@ -8,7 +8,7 @@ const BEARER_RE = /^Bearer\s+(.+)$/i;
 export async function authenticateMcpRequest(
   request: Request,
 ): Promise<
-  | { ok: true; ctx: EnvoiceCtx; authInfo: AuthInfo; rawToken: string }
+  | { ok: true; ctx: EnwiseCtx; authInfo: AuthInfo; rawToken: string }
   | { ok: false; response: Response }
 > {
   const header = request.headers.get("authorization") ?? "";
@@ -51,7 +51,7 @@ function unauthorized(code: "missing_bearer" | "invalid_token"): Response {
       status: 401,
       headers: {
         "content-type": "application/json",
-        "www-authenticate": 'Bearer realm="envoice"',
+        "www-authenticate": 'Bearer realm="enwise"',
       },
     },
   );

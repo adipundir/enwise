@@ -1,4 +1,4 @@
-# envoice
+# enwise
 
 An MCP server for running an invoicing business entirely through natural language in Claude. Built on Next.js + Neon Postgres + Vercel.
 
@@ -89,13 +89,13 @@ Project → Settings → Environment Variables (Production + Preview + Developme
 | Variable | Where from |
 |---|---|
 | `AUTH_SECRET` | `openssl rand -base64 32` |
-| `AUTH_URL` | `https://<your-vercel-domain>` (e.g. `envoice.vercel.app`) |
+| `AUTH_URL` | `https://<your-vercel-domain>` (e.g. `enwise.vercel.app`) |
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | GitHub OAuth app (create a separate app or add the prod callback to the existing one) |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth client (add prod callback + origin) |
 | `CRON_SECRET` | `openssl rand -hex 32` |
 | `PUBLIC_BASE_URL` | `https://<your-vercel-domain>` |
 | `RESEND_API_KEY` | [resend.com/api-keys](https://resend.com/api-keys). Verify a domain first or Resend will reject sends. |
-| `RESEND_FROM_ADDRESS` | Must live on a verified Resend domain, e.g. `invoices@envoice.app` |
+| `RESEND_FROM_ADDRESS` | Must live on a verified Resend domain, e.g. `invoices@enwise.app` |
 
 ### 5. Update OAuth callback URLs
 

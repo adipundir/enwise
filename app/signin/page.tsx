@@ -34,7 +34,7 @@ export default async function SignInPage({
       </div>
       <SignInModalShell>
       <div className="space-y-3 pr-6">
-        <h1 className="display text-2xl leading-tight">Sign in to envoice.</h1>
+        <h1 className="display text-2xl leading-tight">Sign in to enwise.</h1>
         <p className="text-sm text-zinc-500">
           One account. One API key. Then you live in Claude.
         </p>

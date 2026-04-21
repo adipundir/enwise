@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import type { EnvoiceCtx } from "@/lib/mcp/context";
+import type { EnwiseCtx } from "@/lib/mcp/context";
 
 export type CurrencyBucket = {
   currency: string;
@@ -19,7 +19,7 @@ export interface ClientSummary {
 }
 
 export async function getClientSummary(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   clientId: string,
 ): Promise<ClientSummary | null> {
   const metaRes = await db.execute(sql`
@@ -102,7 +102,7 @@ const PERIOD_CONFIG: Record<
 };
 
 export async function getRevenueSummary(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   opts: { period: RevenuePeriod } = { period: "month" },
 ): Promise<RevenueSummary> {
   const cfg = PERIOD_CONFIG[opts.period];
@@ -190,7 +190,7 @@ export interface OutstandingInvoice {
 }
 
 export async function getOutstandingInvoices(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   opts: { clientId?: string; overdueOnly?: boolean; limit?: number } = {},
 ): Promise<OutstandingInvoice[]> {
   const limit = Math.max(1, Math.min(200, opts.limit ?? 100));

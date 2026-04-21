@@ -9,7 +9,7 @@ import {
   type Invoice,
   type InvoiceLineItem,
 } from "@/lib/db/schema";
-import type { EnvoiceCtx } from "@/lib/mcp/context";
+import type { EnwiseCtx } from "@/lib/mcp/context";
 import { addAmounts, computeLine, isValidCurrency } from "@/lib/money";
 import { allocateInvoiceNumber } from "@/lib/numbering";
 
@@ -75,7 +75,7 @@ async function writeEvent(
   });
 }
 
-async function getClientScoped(ctx: EnvoiceCtx, clientId: string) {
+async function getClientScoped(ctx: EnwiseCtx, clientId: string) {
   const [row] = await db
     .select()
     .from(clients)
@@ -90,7 +90,7 @@ export type CreateInvoiceResult =
   | { ok: false; code: "client_not_found" | "invalid_currency" | "no_line_items" | "invalid_amount"; message: string };
 
 export async function createInvoice(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   input: CreateInvoiceInput,
 ): Promise<CreateInvoiceResult> {
   if (input.lineItems.length === 0) {
@@ -250,7 +250,7 @@ export async function createInvoice(
 // ---------- Read ----------
 
 export async function getInvoice(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   invoiceId: string,
 ): Promise<InvoiceWithLineItems | null> {
   const [inv] = await db
@@ -303,7 +303,7 @@ export type ListInvoicesOpts = {
 };
 
 export async function listInvoices(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   opts: ListInvoicesOpts = {},
 ): Promise<Invoice[]> {
   const limit = Math.max(1, Math.min(200, opts.limit ?? 25));
@@ -330,7 +330,7 @@ export async function listInvoices(
 }
 
 export async function findInvoiceByNumber(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   invoiceNumber: string,
 ): Promise<Invoice | null> {
   const [row] = await db
@@ -361,7 +361,7 @@ export type MutateResult<T> =
   | { ok: false; code: "not_found" | "invoice_not_draft" | "client_not_found"; message: string };
 
 export async function updateInvoice(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   invoiceId: string,
   patch: UpdateInvoiceInput,
 ): Promise<MutateResult<InvoiceWithLineItems>> {
@@ -411,7 +411,7 @@ async function withRecomputedTotals(invoiceId: string) {
 }
 
 export async function addLineItem(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   invoiceId: string,
   item: LineItemInput,
 ): Promise<MutateResult<InvoiceWithLineItems>> {
@@ -446,7 +446,7 @@ export async function addLineItem(
 }
 
 export async function updateLineItem(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   invoiceId: string,
   lineItemId: string,
   patch: Partial<LineItemInput>,
@@ -481,7 +481,7 @@ export async function updateLineItem(
 }
 
 export async function removeLineItem(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   invoiceId: string,
   lineItemId: string,
 ): Promise<MutateResult<InvoiceWithLineItems>> {
@@ -522,7 +522,7 @@ export async function removeLineItem(
  * This is an internal service function, called by the email send pipeline.
  */
 export async function finalizeInvoice(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   invoiceId: string,
 ): Promise<MutateResult<InvoiceWithLineItems>> {
   const inv = await getInvoice(ctx, invoiceId);
@@ -614,7 +614,7 @@ export async function finalizeInvoice(
 // ---------- Status transitions ----------
 
 export async function markInvoicePaid(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   invoiceId: string,
   opts: { amount?: string; paidAt?: string } = {},
 ): Promise<MutateResult<InvoiceWithLineItems>> {
@@ -643,7 +643,7 @@ export async function markInvoicePaid(
 }
 
 export async function voidInvoice(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   invoiceId: string,
   opts: { reason?: string } = {},
 ): Promise<MutateResult<InvoiceWithLineItems>> {
@@ -661,7 +661,7 @@ export async function voidInvoice(
 }
 
 export async function deleteInvoice(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   invoiceId: string,
 ): Promise<MutateResult<{ deleted: true }>> {
   const inv = await getInvoice(ctx, invoiceId);
@@ -681,7 +681,7 @@ export async function deleteInvoice(
 }
 
 export async function setShareEnabled(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   invoiceId: string,
   enabled: boolean,
 ): Promise<MutateResult<InvoiceWithLineItems>> {
@@ -697,7 +697,7 @@ export async function setShareEnabled(
 // ---------- Duplicate ----------
 
 export async function duplicateInvoice(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   invoiceId: string,
   opts: { clientId?: string; newIssueDate?: string } = {},
 ): Promise<CreateInvoiceResult> {

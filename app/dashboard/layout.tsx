@@ -20,7 +20,7 @@ export default async function DashboardLayout({
             href="/dashboard"
             className="text-base font-semibold tracking-tight text-zinc-100"
           >
-            envoice
+            enwise
           </Link>
           <nav className="flex items-center gap-6 text-sm text-zinc-400">
             <Link href="/dashboard" className="hover:text-zinc-100">

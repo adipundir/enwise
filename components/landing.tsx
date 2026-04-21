@@ -14,14 +14,18 @@ export async function Landing() {
       <main className="flex flex-1 flex-col">
         {/* Hero */}
         <section className="mx-auto w-full max-w-6xl px-6 pt-24 pb-20 sm:pt-32">
-          <h1 className="display text-4xl leading-[1.08] sm:text-5xl md:text-6xl text-zinc-100">
-            Create invoices with AI.
+          <h1 className="display text-4xl leading-[1.05] sm:text-5xl md:text-6xl">
+            <span className="font-bold text-zinc-100">
+              Create invoices with AI.
+            </span>
+            <br />
+            <span className="font-normal text-zinc-500">
+              Bill clients, send PDFs, and track payments by chatting with
+              Claude.
+            </span>
           </h1>
-          <p className="mt-5 max-w-2xl text-xl leading-snug text-zinc-300 sm:text-2xl">
-            Bill clients, send PDFs, and track payments by chatting with Claude.
-          </p>
-          <p className="mt-8 max-w-xl text-sm leading-relaxed text-zinc-500">
-            envoice plugs into Claude over the Model Context Protocol. Tell it
+          <p className="mt-8 max-w-xl text-sm leading-relaxed text-zinc-600">
+            enwise plugs into Claude over the Model Context Protocol. Tell it
             who to bill and what for. It creates the invoice, attaches a PDF,
             emails the client, and records the payment when it comes in. The
             web app exists for one thing: creating an API key.
@@ -148,8 +152,7 @@ export async function Landing() {
                   <Li>Up to 10 sent invoices / month</Li>
                   <Li>All MCP tools, all features</Li>
                   <Li>PDF + share link per invoice</Li>
-                  <Li>Shared envoice from-address</Li>
-                  <Li>&ldquo;Powered by envoice&rdquo; on PDFs</Li>
+                  <Li>&ldquo;Powered by enwise&rdquo; on PDFs</Li>
                 </ul>
                 <Link
                   href={primaryHref}
@@ -173,9 +176,9 @@ export async function Landing() {
                 </p>
                 <ul className="mt-6 flex-1 space-y-2.5 text-sm text-zinc-700">
                   <LiDark>Unlimited sent invoices</LiDark>
-                  <LiDark>Send from your own verified domain</LiDark>
-                  <LiDark>No envoice branding on PDFs</LiDark>
+                  <LiDark>No enwise branding on PDFs</LiDark>
                   <LiDark>Recurring invoices + auto-send</LiDark>
+                  <LiDark>Custom brand color + logo on PDFs</LiDark>
                   <LiDark>Higher rate limit (600 / min / token)</LiDark>
                   <LiDark>Priority support</LiDark>
                 </ul>
@@ -189,17 +192,13 @@ export async function Landing() {
               </div>
             </div>
 
-            <p className="mt-8 text-xs text-zinc-600">
-              Free during beta: Pro is waived for every beta account for at
-              least 60 days after general launch.
-            </p>
           </div>
         </section>
       </main>
 
       <footer className="border-t border-zinc-900">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-8 text-xs text-zinc-600">
-          <span className="text-base font-semibold text-zinc-400">envoice</span>
+          <span className="text-base font-semibold text-zinc-400">enwise</span>
           <span>
             Invoicing from inside Claude. © {new Date().getFullYear()}.
           </span>

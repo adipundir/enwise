@@ -307,7 +307,7 @@ export function InvoiceDocument({ invoice, client, business }: InvoicePdfData) {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>{invoice.invoiceNumber}</Text>
-          <Text style={styles.footerText}>Powered by envoice</Text>
+          <Text style={styles.footerText}>Powered by enwise</Text>
         </View>
       </Page>
     </Document>

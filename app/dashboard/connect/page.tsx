@@ -11,7 +11,7 @@ export default function ConnectPage() {
   const desktopConfig = JSON.stringify(
     {
       mcpServers: {
-        envoice: {
+        enwise: {
           command: "npx",
           args: [
             "-y",
@@ -35,7 +35,7 @@ export default function ConnectPage() {
         </div>
         <h1 className="display text-3xl text-zinc-100 sm:text-4xl">Connect to Claude</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">
-          Point Claude at your envoice MCP server. You&apos;ll need an API token.{" "}
+          Point Claude at your enwise MCP server. You&apos;ll need an API token.{" "}
           <Link
             href="/dashboard/api-tokens"
             className="text-zinc-200 underline underline-offset-2 hover:text-white"
@@ -80,7 +80,7 @@ export default function ConnectPage() {
           </li>
           <li>
             <span className="text-zinc-500">2. </span>
-            Name it <strong>envoice</strong>, paste the endpoint URL above.
+            Name it <strong>enwise</strong>, paste the endpoint URL above.
           </li>
           <li>
             <span className="text-zinc-500">3. </span>
@@ -132,7 +132,7 @@ export default function ConnectPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold tracking-tight text-zinc-100">
-              Optional: install the envoice Claude Skill
+              Optional: install the enwise Claude Skill
             </h2>
             <p className="mt-1 text-xs text-zinc-500">
               A short instruction file that teaches Claude the canonical
@@ -141,7 +141,7 @@ export default function ConnectPage() {
             </p>
           </div>
           <a
-            href="/envoice.skill.md"
+            href="/enwise.skill.md"
             download
             className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-100 hover:bg-zinc-800"
           >
@@ -149,7 +149,7 @@ export default function ConnectPage() {
           </a>
         </div>
         <p className="text-xs text-zinc-500">
-          Not required. envoice tool descriptions already guide Claude through
+          Not required. enwise tool descriptions already guide Claude through
           every operation; the skill just makes multi-step flows snappier.
         </p>
       </section>
@@ -162,7 +162,7 @@ export default function ConnectPage() {
           Once connected, try these prompts in Claude:
         </p>
         <ul className="mt-3 space-y-1.5 text-sm text-zinc-300">
-          <li>→ &ldquo;What does my envoice business profile look like right now?&rdquo;</li>
+          <li>→ &ldquo;What does my enwise business profile look like right now?&rdquo;</li>
           <li>→ &ldquo;Set up my business: I&apos;m Acme Design, based in Brooklyn, default currency USD.&rdquo;</li>
           <li>→ &ldquo;Add a client called Globex, email bill@globex.com.&rdquo;</li>
           <li>→ &ldquo;Invoice Globex $5,000 for Q2 brand refresh, 8% tax, net 30, and email it.&rdquo;</li>
