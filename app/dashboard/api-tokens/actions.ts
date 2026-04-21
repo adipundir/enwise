@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { createToken, revokeToken } from "@/lib/tokens";
+import { createToken, listTokens, revokeToken } from "@/lib/tokens";
 
 type BusinessUser = { id: string; defaultBusinessId?: string | null };
 
@@ -22,19 +22,14 @@ export type CreateTokenState = {
   error?: string;
 };
 
-export async function createTokenAction(
-  _prev: CreateTokenState | undefined,
-  formData: FormData,
-): Promise<CreateTokenState> {
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) {
-    return { ok: false, error: "Give the token a name (e.g. 'Claude Desktop')." };
-  }
-  if (name.length > 80) {
-    return { ok: false, error: "Name must be 80 characters or fewer." };
-  }
-
+/** One-click: no name required. Assigns a sensible default. */
+export async function createTokenAction(): Promise<CreateTokenState> {
   const { userId, businessId } = await requireContext();
+  const existing = await listTokens(businessId);
+  const activeCount = existing.filter((t) => !t.revokedAt).length;
+  const name =
+    activeCount === 0 ? "Default" : `Token ${existing.length + 1}`;
+
   const { raw } = await createToken({
     businessId,
     createdByUserId: userId,
@@ -42,6 +37,7 @@ export async function createTokenAction(
   });
 
   revalidatePath("/dashboard/api-tokens");
+  revalidatePath("/dashboard");
   return { ok: true, rawToken: raw, tokenName: name };
 }
 
@@ -51,4 +47,5 @@ export async function revokeTokenAction(formData: FormData): Promise<void> {
   const { businessId } = await requireContext();
   await revokeToken({ businessId, tokenId });
   revalidatePath("/dashboard/api-tokens");
+  revalidatePath("/dashboard");
 }
