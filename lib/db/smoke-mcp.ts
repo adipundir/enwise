@@ -174,6 +174,23 @@ async function main() {
       await callTool(raw, "get_revenue_summary", { period: "month" });
       await callTool(raw, "get_outstanding_invoices", {});
 
+      // Recurring
+      const recId = await callTool(raw, "create_recurring_invoice", {
+        client_id: c1,
+        interval: "monthly",
+        start_date: new Date().toISOString().slice(0, 10),
+        line_items: [
+          { description: "Monthly retainer", quantity: "1", unit_price: "3000" },
+        ],
+      });
+      await callTool(raw, "list_recurring_invoices", {});
+      if (recId) {
+        await callTool(raw, "run_recurring_invoice_now", { recurring_id: recId });
+        await callTool(raw, "pause_recurring_invoice", { recurring_id: recId });
+        await callTool(raw, "resume_recurring_invoice", { recurring_id: recId });
+        await callTool(raw, "cancel_recurring_invoice", { recurring_id: recId });
+      }
+
       // Verify PDF endpoint
       const inv = await callTool(raw, "get_invoice", { invoice_id: invoiceId });
       const slug = inv ? await fetchShareSlug(raw, invoiceId) : null;
