@@ -88,15 +88,6 @@ export default async function DashboardHome() {
         </p>
       </section>
 
-      {bootstrapRawToken ? (
-        <ApiKeyRevealCard rawToken={bootstrapRawToken} mcpUrl={mcpUrl} />
-      ) : (
-        <section className="grid gap-px bg-zinc-900 sm:grid-cols-2">
-          <ApiKeyCard currentPrefix={currentPrefix} />
-          <ConnectClaudeCard />
-        </section>
-      )}
-
       <section className="grid grid-cols-2 gap-px bg-zinc-900 sm:grid-cols-4">
         <Stat label="Clients" value={String(clientCount.length)} />
         <Stat label="Invoices" value={String(allInvoices.length)} />
@@ -116,6 +107,15 @@ export default async function DashboardHome() {
           value={business?.defaultCurrency ?? "—"}
         />
       </section>
+
+      {bootstrapRawToken ? (
+        <ApiKeyRevealCard rawToken={bootstrapRawToken} mcpUrl={mcpUrl} />
+      ) : (
+        <section className="grid gap-px bg-zinc-900 sm:grid-cols-2">
+          <ApiKeyCard currentPrefix={currentPrefix} />
+          <ConnectClaudeCard />
+        </section>
+      )}
 
       {recentInvoices.length > 0 ? (
         <section>
