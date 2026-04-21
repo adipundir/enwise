@@ -76,34 +76,64 @@ async function main() {
       ?.map((t) => t.name) ?? [];
   console.log(`  tools: [${tools.join(", ")}]`);
 
-  // 4. Call whoami
-  const whoResp = await fetch(`${BASE_URL}/api/mcp`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "authorization": `Bearer ${raw}`,
-      "accept": "application/json, text/event-stream",
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/call",
-      params: { name: "whoami", arguments: {} },
-    }),
+  // 4. Exercise each tool
+  await callTool(raw, "whoami", {});
+  await callTool(raw, "get_business_profile", {});
+  await callTool(raw, "update_business_profile", {
+    name: "Smoke Test Co (renamed)",
+    tax_id: "TEST-123",
+    default_currency: "eur",
+    country: "gb",
   });
-  console.log(`whoami      → HTTP ${whoResp.status}`);
-  const whoBody = (await whoResp.json()) as {
-    result?: { structuredContent?: unknown };
-    error?: unknown;
-  };
-  console.log(
-    "  result:",
-    JSON.stringify(whoBody.result?.structuredContent ?? whoBody, null, 2),
-  );
 
   // 5. Cleanup
   await db.delete(users).where(eq(users.id, user.id));
   console.log("cleaned up");
+}
+
+async function callTool(
+  token: string,
+  name: string,
+  args: Record<string, unknown>,
+) {
+  const resp = await fetch(`${BASE_URL}/api/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "authorization": `Bearer ${token}`,
+      "accept": "application/json, text/event-stream",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Math.floor(Math.random() * 1e9),
+      method: "tools/call",
+      params: { name, arguments: args },
+    }),
+  });
+  const body = (await resp.json()) as {
+    result?: { structuredContent?: unknown; isError?: boolean };
+  };
+  const structured = body.result?.structuredContent;
+  const ok = body.result?.isError !== true;
+  const label = `${ok ? "✓" : "✗"} ${name.padEnd(26)} HTTP ${resp.status}`;
+  console.log(label);
+  if (structured) {
+    const summary = summarizeStructured(structured);
+    if (summary) console.log(`    ${summary}`);
+  }
+}
+
+function summarizeStructured(s: unknown): string {
+  const obj = s as { ok?: boolean; data?: unknown; error?: { code?: string; message?: string } };
+  if (obj.ok === false && obj.error) {
+    return `error: ${obj.error.code} — ${obj.error.message}`;
+  }
+  const d = obj.data as
+    | { business?: { name?: string }; name?: string; default_currency?: string; tax_id?: string | null }
+    | undefined;
+  if (d?.business?.name) return `business: ${d.business.name}`;
+  if (d?.name) return `name=${d.name} currency=${d.default_currency} tax_id=${d.tax_id}`;
+  return "";
 }
 
 main().catch(async (err) => {
