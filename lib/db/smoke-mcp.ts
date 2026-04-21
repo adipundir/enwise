@@ -128,9 +128,84 @@ async function main() {
     await callTool(raw, "archive_product", { product_id: p1 });
   }
 
+  // Invoices
+  if (c1) {
+    const invoiceId = await callTool(raw, "create_invoice", {
+      client_id: c1,
+      line_items: [
+        {
+          description: "Q2 brand refresh",
+          quantity: "1",
+          unit_price: "5000",
+          tax_rate: "0.08",
+        },
+        {
+          description: "Rush fee",
+          quantity: "1",
+          unit_price: "500",
+        },
+      ],
+      notes: "Thanks for your business!",
+      terms: "Net 30",
+    });
+    if (invoiceId) {
+      await callTool(raw, "get_invoice", { invoice_id: invoiceId });
+      await callTool(raw, "add_line_item", {
+        invoice_id: invoiceId,
+        description: "Additional round of revisions",
+        quantity: "2",
+        unit_price: "250",
+        tax_rate: "0.08",
+      });
+      await callTool(raw, "list_invoices", { client_id: c1 });
+      await callTool(raw, "get_invoice_share_url", { invoice_id: invoiceId });
+      await callTool(raw, "mark_invoice_paid", { invoice_id: invoiceId });
+      await callTool(raw, "duplicate_invoice", { invoice_id: invoiceId });
+      // Test immutability
+      await callTool(raw, "update_invoice", {
+        invoice_id: invoiceId,
+        notes: "should fail — invoice is paid",
+      });
+
+      // Verify PDF endpoint
+      const inv = await callTool(raw, "get_invoice", { invoice_id: invoiceId });
+      const slug = inv ? await fetchShareSlug(raw, invoiceId) : null;
+      if (slug) {
+        const pdfResp = await fetch(`${BASE_URL}/i/${slug}/pdf`);
+        const ct = pdfResp.headers.get("content-type") ?? "";
+        const size = Number(pdfResp.headers.get("content-length") ?? "0");
+        const buf = await pdfResp.arrayBuffer();
+        console.log(
+          `${pdfResp.ok && ct.startsWith("application/pdf") ? "✓" : "✗"} pdf endpoint              HTTP ${pdfResp.status} (${ct}, ${size || buf.byteLength} bytes)`,
+        );
+      }
+    }
+  }
+
   // 5. Cleanup
   await db.delete(users).where(eq(users.id, user.id));
   console.log("cleaned up");
+}
+
+async function fetchShareSlug(token: string, invoiceId: string): Promise<string | null> {
+  const resp = await fetch(`${BASE_URL}/api/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+      accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Math.floor(Math.random() * 1e9),
+      method: "tools/call",
+      params: { name: "get_invoice_share_url", arguments: { invoice_id: invoiceId } },
+    }),
+  });
+  const body = (await resp.json()) as {
+    result?: { structuredContent?: { data?: { slug?: string } } };
+  };
+  return body.result?.structuredContent?.data?.slug ?? null;
 }
 
 async function callTool(
@@ -189,9 +264,16 @@ function summarizeStructured(s: unknown): string {
         matches?: Array<{ name?: string; score?: number }>;
         clients?: unknown[];
         products?: unknown[];
+        invoices?: unknown[];
         unit_price?: string;
         archived?: boolean;
         id?: string;
+        invoice_number?: string;
+        status?: string;
+        total?: string;
+        outstanding?: string;
+        share_url?: string;
+        url?: string;
       }
     | undefined;
   if (d?.business?.name) return `business: ${d.business.name}`;
@@ -200,6 +282,10 @@ function summarizeStructured(s: unknown): string {
   }
   if (d?.clients) return `${d.clients.length} clients`;
   if (d?.products) return `${d.products.length} products`;
+  if (d?.invoices) return `${d.invoices.length} invoices`;
+  if (d?.invoice_number)
+    return `${d.invoice_number} ${d.status} total=${d.total} ${d.currency}`;
+  if (d?.url) return d.url;
   if (d?.unit_price)
     return `${d.name} — ${d.unit_price} ${d.currency} ${d.archived ? "(archived)" : ""}`.trim();
   if (d?.name)
