@@ -6,28 +6,35 @@ import { auth } from "@/auth";
 import { invoiceShareUrl } from "@/lib/invoices";
 import { formatMoney, addAmounts } from "@/lib/money";
 import { createToken, listTokens } from "@/lib/tokens";
-import { FirstTokenReveal } from "./FirstTokenReveal";
+import { ApiKeySection } from "./ApiKeySection";
 
 export default async function DashboardHome() {
   const session = await auth();
-  const user = session?.user as { id?: string; defaultBusinessId?: string | null } | undefined;
+  const user = session?.user as
+    | { id?: string; defaultBusinessId?: string | null }
+    | undefined;
   const businessId = user?.defaultBusinessId;
 
   const [business] = businessId
     ? await db.select().from(businesses).where(eq(businesses.id, businessId))
     : [];
 
-  // Auto-create + reveal a bootstrap token on first visit (zero tokens yet).
+  // One key per user. If none exists, mint it now and reveal the raw once.
   let bootstrapRawToken: string | null = null;
+  let currentPrefix: string | null = null;
   if (businessId && user?.id) {
     const existingTokens = await listTokens(businessId);
-    if (existingTokens.length === 0) {
+    const active = existingTokens.filter((t) => !t.revokedAt);
+    if (active.length === 0) {
       const created = await createToken({
         businessId,
         createdByUserId: user.id,
         name: "Default",
       });
       bootstrapRawToken = created.raw;
+      currentPrefix = created.token.tokenPrefix;
+    } else {
+      currentPrefix = active[0]!.tokenPrefix;
     }
   }
 
@@ -77,14 +84,15 @@ export default async function DashboardHome() {
           <span className="text-zinc-200">
             {business?.name ?? "(setting up…)"}
           </span>
-          . Everything else happens in Claude once you&apos;ve plugged in the
-          key below.
+          . Everything else happens in Claude once your key is plugged in.
         </p>
       </section>
 
-      {bootstrapRawToken ? (
-        <FirstTokenReveal rawToken={bootstrapRawToken} mcpUrl={mcpUrl} />
-      ) : null}
+      <ApiKeySection
+        initialRawToken={bootstrapRawToken}
+        currentPrefix={currentPrefix}
+        mcpUrl={mcpUrl}
+      />
 
       <section className="grid grid-cols-2 gap-px bg-zinc-900 sm:grid-cols-4">
         <Stat label="Clients" value={String(clientCount.length)} />
@@ -130,34 +138,16 @@ export default async function DashboardHome() {
                   {formatMoney(inv.total, inv.currency)}
                 </div>
                 <div className="text-xs text-zinc-500">Due {inv.dueDate}</div>
-                <a
+                <Link
                   href={invoiceShareUrl(inv.shareSlug)}
                   target="_blank"
-                  rel="noreferrer"
                   className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
                 >
                   Share link →
-                </a>
+                </Link>
               </div>
             ))}
           </div>
-        </section>
-      ) : null}
-
-      {!bootstrapRawToken ? (
-        <section className="grid gap-px bg-zinc-900 sm:grid-cols-2">
-          <DashboardCard
-            href="/dashboard/api-tokens"
-            index="01"
-            title="Manage API tokens"
-            description="Generate new bearer tokens or revoke existing ones."
-          />
-          <DashboardCard
-            href="/dashboard/connect"
-            index="02"
-            title="Connect to Claude"
-            description="Claude Desktop config + Claude.ai custom connector instructions."
-          />
         </section>
       ) : null}
     </div>
@@ -221,52 +211,5 @@ function StatusChip({ status }: { status: string }) {
     >
       {status}
     </span>
-  );
-}
-
-function DashboardCard({
-  href,
-  index,
-  title,
-  description,
-}: {
-  href: string;
-  index: string;
-  title: string;
-  description: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="group flex flex-col justify-between bg-[#0a0a0a] p-8 transition-colors hover:bg-[#0d0d0d]"
-    >
-      <div>
-        <div className="text-xs font-mono uppercase tracking-widest text-zinc-600">
-          {index}
-        </div>
-        <h2 className="mt-6 text-xl font-semibold tracking-tight text-zinc-100">
-          {title}
-        </h2>
-        <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-400">
-          {description}
-        </p>
-      </div>
-      <div className="mt-10 inline-flex items-center gap-2 text-sm text-zinc-300 group-hover:text-zinc-100">
-        Continue
-        <svg
-          viewBox="0 0 16 16"
-          className="size-4 transition-transform group-hover:translate-x-0.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <path
-            d="M3 8h10m0 0-4-4m4 4-4 4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
-    </Link>
   );
 }
