@@ -11,7 +11,7 @@ async function handle(request: Request): Promise<Response> {
 
   const server = createMcpServer();
   const transport = new WebStandardStreamableHTTPServerTransport({
-    // Stateless mode — no cross-request session state. Every call re-authenticates.
+    // Stateless mode. no cross-request session state. Every call re-authenticates.
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });

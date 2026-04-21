@@ -299,7 +299,7 @@ export function registerInvoiceTools(server: McpServer) {
     "get_invoice",
     {
       title: "Get invoice",
-      description: "Fetch an invoice by id — full header, line items, and totals.",
+      description: "Fetch an invoice by id. full header, line items, and totals.",
       inputSchema: { invoice_id: uuid },
     },
     async (args, extra) => {
@@ -405,7 +405,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Mark invoice paid",
       description:
-        "Record payment for an invoice. Defaults amount to the invoice total and paid_at to today. Supports partial payments — pass an amount less than total to reflect that. Amount must be >= 0.",
+        "Record payment for an invoice. Defaults amount to the invoice total and paid_at to today. Supports partial payments. pass an amount less than total to reflect that. Amount must be >= 0.",
       inputSchema: {
         invoice_id: uuid,
         amount: nonNegativeAmount.optional(),
@@ -435,7 +435,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Void invoice",
       description:
-        "Void an invoice (any status). Voided invoices are kept for audit, but can't be paid or edited. Use this when a sent invoice needs correction — then call duplicate_invoice for the replacement.",
+        "Void an invoice (any status). Voided invoices are kept for audit, but can't be paid or edited. Use this when a sent invoice needs correction. then call duplicate_invoice for the replacement.",
       inputSchema: { invoice_id: uuid, reason: z.string().max(500).optional() },
     },
     async (args, extra) => {
@@ -453,7 +453,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Delete invoice (draft only)",
       description:
-        "Soft-delete a draft invoice. Sent/paid/void invoices must be kept for audit — use void_invoice instead.",
+        "Soft-delete a draft invoice. Sent/paid/void invoices must be kept for audit. use void_invoice instead.",
       inputSchema: { invoice_id: uuid },
     },
     async (args, extra) => {
@@ -493,7 +493,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Email invoice to client",
       description:
-        "Send an invoice to the client by email. Generates the PDF as an attachment and includes a link to the public share page. Defaults `to` to the client's email; pass `to` to override. Flips the invoice from draft to sent and freezes the client+business snapshot onto the invoice (so later edits to the client don't mutate the sent copy). Safe to call again on an already-sent invoice — it just re-sends without re-snapshotting.",
+        "Send an invoice to the client by email. Generates the PDF as an attachment and includes a link to the public share page. Defaults `to` to the client's email; pass `to` to override. Flips the invoice from draft to sent and freezes the client+business snapshot onto the invoice (so later edits to the client don't mutate the sent copy). Safe to call again on an already-sent invoice. it just re-sends without re-snapshotting.",
       inputSchema: {
         invoice_id: uuid,
         to: z.array(z.string().email()).max(10).optional(),

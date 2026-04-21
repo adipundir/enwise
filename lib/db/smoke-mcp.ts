@@ -166,7 +166,7 @@ async function main() {
       // Test immutability
       await callTool(raw, "update_invoice", {
         invoice_id: invoiceId,
-        notes: "should fail — invoice is paid",
+        notes: "should fail. invoice is paid",
       });
 
       // Analytics
@@ -310,7 +310,7 @@ function summarizeStructured(s: unknown): string {
     error?: { code?: string; message?: string };
   };
   if (obj.ok === false && obj.error) {
-    return `error: ${obj.error.code} — ${obj.error.message}`;
+    return `error: ${obj.error.code}. ${obj.error.message}`;
   }
   const d = obj.data as
     | {
@@ -345,7 +345,7 @@ function summarizeStructured(s: unknown): string {
     return `${d.invoice_number} ${d.status} total=${d.total} ${d.currency}`;
   if (d?.url) return d.url;
   if (d?.unit_price)
-    return `${d.name} — ${d.unit_price} ${d.currency} ${d.archived ? "(archived)" : ""}`.trim();
+    return `${d.name}. ${d.unit_price} ${d.currency} ${d.archived ? "(archived)" : ""}`.trim();
   if (d?.name)
     return `${d.name}${d.default_currency ? ` (${d.default_currency})` : ""}${d.archived ? " [archived]" : ""}`;
   return "";

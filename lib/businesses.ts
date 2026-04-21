@@ -5,7 +5,7 @@ import type { EnvoiceCtx } from "@/lib/mcp/context";
 
 /**
  * Fields a client can update on the business profile. `logoUrl` is expected
- * to be an already-resolved URL — the logo upload pipeline runs *before*
+ * to be an already-resolved URL. the logo upload pipeline runs *before*
  * this service is called.
  *
  * Pass `logoUrl: null` to clear the logo.

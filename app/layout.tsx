@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "envoice — invoicing from inside Claude",
+  title: "envoice | invoicing from inside Claude",
   description:
-    "An MCP server that runs your entire invoicing business through natural language in Claude. Clients, invoices, emails, PDFs — all by conversation.",
+    "An MCP server that runs your entire invoicing business through natural language in Claude. Clients, invoices, emails, PDFs, all by conversation.",
 };
 
 export default function RootLayout({

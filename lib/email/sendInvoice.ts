@@ -145,7 +145,7 @@ export async function sendInvoiceByEmail(
       cc: input.cc,
       bcc: input.bcc,
       replyTo: undefined, // Populated from business.email_reply_to if set; see below.
-      subject: `${pdfData.business.name} — Invoice ${sent.invoiceNumber}`,
+      subject: `${pdfData.business.name}. Invoice ${sent.invoiceNumber}`,
       html,
       text: plainText,
       attachments: [

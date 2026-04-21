@@ -22,7 +22,7 @@ export interface AllocatedNumber {
 
 /**
  * Atomically bump businesses.invoice_number_next and format the next
- * invoice number. Safe under concurrency — the row lock on the business
+ * invoice number. Safe under concurrency. the row lock on the business
  * serializes concurrent allocations so each gets a distinct integer.
  *
  * Also returns the business snapshot fields needed to freeze on the invoice

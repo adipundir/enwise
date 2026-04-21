@@ -105,7 +105,7 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Create client",
       description:
-        "Add a new client to the user's business. Name is required; everything else is optional. Returns the created client including its id — remember the id for follow-up tool calls in this session.",
+        "Add a new client to the user's business. Name is required; everything else is optional. Returns the created client including its id. remember the id for follow-up tool calls in this session.",
       inputSchema: createSchema,
     },
     async (args, extra) => {
@@ -162,7 +162,7 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Find client (fuzzy)",
       description:
-        "Search clients by name or email. Returns up to `limit` matches ranked by similarity score (higher = closer match). Use this whenever the user refers to a client by name ('send invoice to Acme') — resolve the name to an id before calling invoice tools. If multiple matches are returned, ask the user which one they meant.",
+        "Search clients by name or email. Returns up to `limit` matches ranked by similarity score (higher = closer match). Use this whenever the user refers to a client by name ('send invoice to Acme'). resolve the name to an id before calling invoice tools. If multiple matches are returned, ask the user which one they meant.",
       inputSchema: {
         query: z.string().min(1).max(200),
         limit: z.number().int().min(1).max(25).optional(),
@@ -231,7 +231,7 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Archive client",
       description:
-        "Archive a client. They stop showing in list_clients and find_client (unless include_archived is set). Existing invoices are untouched. This is a soft action — archived clients can be restored by calling update_client.",
+        "Archive a client. They stop showing in list_clients and find_client (unless include_archived is set). Existing invoices are untouched. This is a soft action. archived clients can be restored by calling update_client.",
       inputSchema: { client_id: clientIdSchema },
     },
     async (args, extra) => {

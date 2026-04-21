@@ -137,7 +137,7 @@ export async function createInvoice(
     return {
       ok: false,
       code: "client_not_found",
-      message: "Business row missing for this token — auth integrity failure.",
+      message: "Business row missing for this token. auth integrity failure.",
     };
   }
 
