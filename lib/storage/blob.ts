@@ -1,3 +1,5 @@
+import { lookup } from "node:dns/promises";
+import net from "node:net";
 import { put } from "@vercel/blob";
 import { fileTypeFromBuffer } from "file-type";
 import { nanoid } from "nanoid";
@@ -71,11 +73,21 @@ async function handleUrl(
       message: "image_url must be http:// or https://",
     };
   }
+  // SSRF guard: resolve hostname and reject private / loopback / link-local / metadata IPs.
+  const ssrfCheck = await verifyHostIsPublic(parsed.hostname);
+  if (!ssrfCheck.ok) {
+    return {
+      ok: false,
+      code: "logo_fetch_failed",
+      message: ssrfCheck.reason,
+    };
+  }
 
   let res: Response;
   try {
     res = await fetch(parsed, {
       method: "GET",
+      redirect: "error", // post-resolution redirects can point anywhere; force clients to pass the final URL
       headers: { accept: "image/png,image/jpeg,image/webp,image/*;q=0.1" },
     });
   } catch (err) {
@@ -243,4 +255,104 @@ function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+/**
+ * Reject any hostname that resolves to a private, loopback, link-local, or
+ * cloud-metadata address. Runs before we fetch so we never hand an
+ * attacker-supplied URL to node's http client.
+ */
+async function verifyHostIsPublic(
+  hostname: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const host = hostname.toLowerCase();
+
+  // Short-circuit obvious hostnames.
+  if (
+    host === "localhost" ||
+    host === "metadata.google.internal" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".internal") ||
+    host.endsWith(".local")
+  ) {
+    return { ok: false, reason: `image_url host ${hostname} is not allowed.` };
+  }
+
+  // If the hostname is already a literal IP, check it.
+  const ipFamily = net.isIP(host);
+  if (ipFamily !== 0) {
+    return ipBlocked(host)
+      ? { ok: false, reason: `image_url host ${hostname} resolves to a non-public address.` }
+      : { ok: true };
+  }
+
+  let resolved: { address: string; family: number }[];
+  try {
+    resolved = await lookup(host, { all: true, verbatim: true });
+  } catch {
+    return { ok: false, reason: `Couldn't resolve image_url host ${hostname}.` };
+  }
+  for (const r of resolved) {
+    if (ipBlocked(r.address)) {
+      return {
+        ok: false,
+        reason: `image_url host ${hostname} resolves to a non-public address.`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+function ipBlocked(addr: string): boolean {
+  const family = net.isIP(addr);
+  if (family === 4) return ipv4Blocked(addr);
+  if (family === 6) return ipv6Blocked(addr);
+  return true;
+}
+
+function ipv4Blocked(addr: string): boolean {
+  const parts = addr.split(".").map((p) => Number(p));
+  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+    return true;
+  }
+  const [a, b] = parts as [number, number, number, number];
+  // 0.0.0.0/8 — current-network / unspecified
+  if (a === 0) return true;
+  // 10.0.0.0/8 — RFC1918 private
+  if (a === 10) return true;
+  // 127.0.0.0/8 — loopback
+  if (a === 127) return true;
+  // 169.254.0.0/16 — link-local, cloud metadata (AWS/GCP IMDS)
+  if (a === 169 && b === 254) return true;
+  // 172.16.0.0/12 — RFC1918 private
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  // 192.168.0.0/16 — RFC1918 private
+  if (a === 192 && b === 168) return true;
+  // 100.64.0.0/10 — CGNAT
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  // 192.0.0.0/24, 192.0.2.0/24, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24 — IANA special
+  if (a === 192 && b === 0) return true;
+  if (a === 198 && (b === 18 || b === 19)) return true;
+  if (a === 198 && b === 51) return true;
+  if (a === 203 && b === 0) return true;
+  // 224.0.0.0/4 — multicast
+  if (a >= 224 && a <= 239) return true;
+  // 240.0.0.0/4 — reserved
+  if (a >= 240) return true;
+  return false;
+}
+
+function ipv6Blocked(addr: string): boolean {
+  const lower = addr.toLowerCase();
+  if (lower === "::" || lower === "::1") return true;
+  // fc00::/7 unique local
+  if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
+  // fe80::/10 link-local
+  if (lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb")) return true;
+  // ff00::/8 multicast
+  if (lower.startsWith("ff")) return true;
+  // IPv4-mapped (::ffff:a.b.c.d) — fall through to IPv4 rules
+  const v4mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (v4mapped) return ipv4Blocked(v4mapped[1]!);
+  return false;
 }

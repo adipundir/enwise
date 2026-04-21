@@ -80,7 +80,8 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
           </div>
         </header>
 
-        <article className="rounded-2xl bg-white p-10 shadow-sm ring-1 ring-zinc-200">
+        <article className="relative rounded-2xl bg-white p-10 shadow-sm ring-1 ring-zinc-200">
+          <StatusBadge status={invoice.status} />
           <section className="flex items-start justify-between gap-6">
             <div>
               {business?.logoUrl ? (
@@ -198,6 +199,29 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
         </article>
       </div>
     </main>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  if (status === "draft" || status === "sent") return null;
+  const { label, cls } =
+    status === "paid"
+      ? {
+          label: "PAID",
+          cls: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        }
+      : status === "void"
+        ? {
+            label: "VOID",
+            cls: "border-zinc-300 bg-zinc-100 text-zinc-500",
+          }
+        : { label: status.toUpperCase(), cls: "border-zinc-300 bg-zinc-100 text-zinc-500" };
+  return (
+    <div
+      className={`pointer-events-none absolute right-8 top-8 rotate-[-8deg] rounded-md border-2 px-3 py-1 text-sm font-bold tracking-[0.15em] ${cls}`}
+    >
+      {label}
+    </div>
   );
 }
 

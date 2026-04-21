@@ -17,7 +17,8 @@ import {
   updateLineItem,
   voidInvoice,
 } from "@/lib/invoices";
-import { sendInvoiceByEmail } from "@/lib/email/sendInvoice";
+import { sendInvoiceByEmail, type SendInvoiceOutcome } from "@/lib/email/sendInvoice";
+import { withIdempotency } from "@/lib/idempotency";
 import { ctxFromAuthInfo } from "@/lib/mcp/context";
 import { toolError, toolOk, zodToToolError, type ErrorCode } from "@/lib/mcp/errors";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -394,22 +395,27 @@ export function registerInvoiceTools(server: McpServer) {
     },
   );
 
+  const nonNegativeAmount = amount.refine(
+    (v) => Number(v) >= 0,
+    "amount must be >= 0",
+  );
+
   server.registerTool(
     "mark_invoice_paid",
     {
       title: "Mark invoice paid",
       description:
-        "Record payment for an invoice. Defaults amount to the invoice total and paid_at to today. Supports partial payments — pass an amount less than total to reflect that.",
+        "Record payment for an invoice. Defaults amount to the invoice total and paid_at to today. Supports partial payments — pass an amount less than total to reflect that. Amount must be >= 0.",
       inputSchema: {
         invoice_id: uuid,
-        amount: amount.optional(),
+        amount: nonNegativeAmount.optional(),
         paid_at: isoDate.optional(),
       },
     },
     async (args, extra) => {
       const schema = z.object({
         invoice_id: uuid,
-        amount: amount.optional(),
+        amount: nonNegativeAmount.optional(),
         paid_at: isoDate.optional(),
       });
       const parsed = schema.safeParse(args);
@@ -510,13 +516,19 @@ export function registerInvoiceTools(server: McpServer) {
       if (!parsed.success) return zodToToolError(parsed.error);
       const ctx = ctxFromAuthInfo(extra.authInfo);
       const d = parsed.data;
-      const result = await sendInvoiceByEmail(ctx, {
-        invoiceId: d.invoice_id,
-        to: d.to,
-        cc: d.cc,
-        bcc: d.bcc,
-        message: d.message ?? null,
-      });
+      const result = await withIdempotency<SendInvoiceOutcome>(
+        ctx,
+        "send_invoice",
+        d.client_request_id ?? null,
+        () =>
+          sendInvoiceByEmail(ctx, {
+            invoiceId: d.invoice_id,
+            to: d.to,
+            cc: d.cc,
+            bcc: d.bcc,
+            message: d.message ?? null,
+          }),
+      );
       if (!result.ok) {
         const code = result.code === "email_not_configured" ? "internal_error"
           : result.code === "resend_failure" ? "internal_error"

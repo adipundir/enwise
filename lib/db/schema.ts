@@ -427,6 +427,22 @@ export const idempotencyKeys = pgTable(
   ],
 );
 
+// Per-token rate limiting. One row per (token, minute-bucket).
+// Cleaned up by the daily cron.
+
+export const rateBuckets = pgTable(
+  "rate_buckets",
+  {
+    tokenId: uuid("token_id").notNull(),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tokenId, t.windowStart] }),
+    index("rate_buckets_window_idx").on(t.windowStart),
+  ],
+);
+
 // Type exports — consumers should import inferred types from here
 
 export type User = typeof users.$inferSelect;
