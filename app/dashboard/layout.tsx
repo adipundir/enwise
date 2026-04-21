@@ -18,7 +18,7 @@ export default async function DashboardLayout({
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <Link
             href="/dashboard"
-            className="font-serif text-xl tracking-tight text-zinc-100"
+            className="text-base font-semibold tracking-tight text-zinc-100"
           >
             envoice
           </Link>

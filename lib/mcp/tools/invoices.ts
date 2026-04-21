@@ -17,6 +17,7 @@ import {
   updateLineItem,
   voidInvoice,
 } from "@/lib/invoices";
+import { sendInvoiceByEmail } from "@/lib/email/sendInvoice";
 import { ctxFromAuthInfo } from "@/lib/mcp/context";
 import { toolError, toolOk, zodToToolError, type ErrorCode } from "@/lib/mcp/errors";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -477,6 +478,57 @@ export function registerInvoiceTools(server: McpServer) {
         url: invoiceShareUrl(inv.shareSlug),
         slug: inv.shareSlug,
         enabled: inv.shareEnabled,
+      });
+    },
+  );
+
+  server.registerTool(
+    "send_invoice",
+    {
+      title: "Email invoice to client",
+      description:
+        "Send an invoice to the client by email. Generates the PDF as an attachment and includes a link to the public share page. Defaults `to` to the client's email; pass `to` to override. Flips the invoice from draft to sent and freezes the client+business snapshot onto the invoice (so later edits to the client don't mutate the sent copy). Safe to call again on an already-sent invoice — it just re-sends without re-snapshotting.",
+      inputSchema: {
+        invoice_id: uuid,
+        to: z.array(z.string().email()).max(10).optional(),
+        cc: z.array(z.string().email()).max(10).optional(),
+        bcc: z.array(z.string().email()).max(10).optional(),
+        message: z.string().max(2000).nullish(),
+        client_request_id: z.string().max(64).optional(),
+      },
+    },
+    async (args, extra) => {
+      const schema = z.object({
+        invoice_id: uuid,
+        to: z.array(z.string().email()).max(10).optional(),
+        cc: z.array(z.string().email()).max(10).optional(),
+        bcc: z.array(z.string().email()).max(10).optional(),
+        message: z.string().max(2000).nullish(),
+        client_request_id: z.string().max(64).optional(),
+      });
+      const parsed = schema.safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const d = parsed.data;
+      const result = await sendInvoiceByEmail(ctx, {
+        invoiceId: d.invoice_id,
+        to: d.to,
+        cc: d.cc,
+        bcc: d.bcc,
+        message: d.message ?? null,
+      });
+      if (!result.ok) {
+        const code = result.code === "email_not_configured" ? "internal_error"
+          : result.code === "resend_failure" ? "internal_error"
+          : result.code === "no_recipient" ? "invalid_input"
+          : mapMutateError(result.code);
+        return toolError(code, result.message, { hint: result.hint });
+      }
+      return toolOk({
+        ...formatInvoiceForMcp(result.invoice),
+        share_url: invoiceShareUrl(result.invoice.shareSlug),
+        sent_to: result.to,
+        resend_id: result.resendId,
       });
     },
   );
