@@ -1,0 +1,54 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { auth } from "@/auth";
+import { createToken, revokeToken } from "@/lib/tokens";
+
+type BusinessUser = { id: string; defaultBusinessId?: string | null };
+
+async function requireContext() {
+  const session = await auth();
+  const user = session?.user as BusinessUser | undefined;
+  if (!user?.id || !user.defaultBusinessId) {
+    throw new Error("Not signed in");
+  }
+  return { userId: user.id, businessId: user.defaultBusinessId };
+}
+
+export type CreateTokenState = {
+  ok: boolean;
+  rawToken?: string;
+  tokenName?: string;
+  error?: string;
+};
+
+export async function createTokenAction(
+  _prev: CreateTokenState | undefined,
+  formData: FormData,
+): Promise<CreateTokenState> {
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) {
+    return { ok: false, error: "Give the token a name (e.g. 'Claude Desktop')." };
+  }
+  if (name.length > 80) {
+    return { ok: false, error: "Name must be 80 characters or fewer." };
+  }
+
+  const { userId, businessId } = await requireContext();
+  const { raw } = await createToken({
+    businessId,
+    createdByUserId: userId,
+    name,
+  });
+
+  revalidatePath("/dashboard/api-tokens");
+  return { ok: true, rawToken: raw, tokenName: name };
+}
+
+export async function revokeTokenAction(formData: FormData): Promise<void> {
+  const tokenId = String(formData.get("tokenId") ?? "");
+  if (!tokenId) return;
+  const { businessId } = await requireContext();
+  await revokeToken({ businessId, tokenId });
+  revalidatePath("/dashboard/api-tokens");
+}
