@@ -3,7 +3,7 @@ import { and, asc, eq, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { clients, recurringInvoiceTemplates, type RecurringInvoiceTemplate } from "@/lib/db/schema";
 import { createInvoice, type LineItemInput } from "@/lib/invoices";
-import type { EnvoiceCtx } from "@/lib/mcp/context";
+import type { EnwiseCtx } from "@/lib/mcp/context";
 import { sendInvoiceByEmail } from "@/lib/email/sendInvoice";
 
 export type Interval = "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
@@ -76,7 +76,7 @@ function clampToAnchor(date: Date, anchorDay: number): Date {
 // ---------- CRUD ----------
 
 export async function createRecurring(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   input: RecurringTemplateInput,
 ): Promise<RecurringResult<RecurringInvoiceTemplate>> {
   if (input.lineItems.length === 0) {
@@ -133,7 +133,7 @@ export interface RecurringPatch {
 }
 
 export async function updateRecurring(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   id: string,
   patch: RecurringPatch,
 ): Promise<RecurringResult<RecurringInvoiceTemplate>> {
@@ -164,7 +164,7 @@ export async function updateRecurring(
 }
 
 export async function listRecurring(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   opts: { clientId?: string; activeOnly?: boolean } = {},
 ): Promise<RecurringInvoiceTemplate[]> {
   const conditions = [eq(recurringInvoiceTemplates.businessId, ctx.businessId)];
@@ -178,7 +178,7 @@ export async function listRecurring(
 }
 
 export async function getRecurring(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   id: string,
 ): Promise<RecurringInvoiceTemplate | null> {
   const [row] = await db
@@ -194,7 +194,7 @@ export async function getRecurring(
 }
 
 export async function setActive(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   id: string,
   active: boolean,
 ): Promise<RecurringResult<RecurringInvoiceTemplate>> {
@@ -213,7 +213,7 @@ export async function setActive(
 }
 
 export async function cancelRecurring(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   id: string,
 ): Promise<RecurringResult<{ deleted: true }>> {
   const [row] = await db
@@ -242,7 +242,7 @@ export interface RunResult {
 export async function runTemplate(
   template: RecurringInvoiceTemplate,
 ): Promise<RunResult> {
-  const ctx: EnvoiceCtx = { businessId: template.businessId, tokenId: "cron" };
+  const ctx: EnwiseCtx = { businessId: template.businessId, tokenId: "cron" };
   const lineItems = template.lineItems as LineItemInput[];
   const issueDate = new Date().toISOString().slice(0, 10);
   const dueDate = template.paymentTermsDays
@@ -334,7 +334,7 @@ export async function runDueNow(opts: { limit?: number } = {}): Promise<RunResul
 }
 
 export async function runTemplateById(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   id: string,
 ): Promise<RecurringResult<RunResult>> {
   const template = await getRecurring(ctx, id);

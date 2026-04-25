@@ -22,7 +22,7 @@ async function main() {
   const [user] = await db
     .insert(users)
     .values({
-      email: `smoke+${Date.now()}@envoice.test`,
+      email: `smoke+${Date.now()}@enwise.test`,
       name: "Smoke Test",
     })
     .returning();

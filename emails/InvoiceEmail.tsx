@@ -98,7 +98,7 @@ export function InvoiceEmail({
                 </>
               ) : null}
             </Text>
-            <Text style={styles.footerText}>Powered by envoice</Text>
+            <Text style={styles.footerText}>Powered by enwise</Text>
           </Section>
         </Container>
       </Body>

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { businesses, type Business } from "@/lib/db/schema";
-import type { EnvoiceCtx } from "@/lib/mcp/context";
+import type { EnwiseCtx } from "@/lib/mcp/context";
 
 /**
  * Fields a client can update on the business profile. `logoUrl` is expected
@@ -31,7 +31,7 @@ export type BusinessPatch = Partial<{
 }>;
 
 export async function getBusinessProfile(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
 ): Promise<Business | null> {
   const [row] = await db
     .select()
@@ -41,7 +41,7 @@ export async function getBusinessProfile(
 }
 
 export async function updateBusinessProfile(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   patch: BusinessPatch,
 ): Promise<Business | null> {
   if (Object.keys(patch).length === 0) {

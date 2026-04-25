@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { products, type Product } from "@/lib/db/schema";
-import type { EnvoiceCtx } from "@/lib/mcp/context";
+import type { EnwiseCtx } from "@/lib/mcp/context";
 
 const DEFAULT_FIND_LIMIT = 5;
 const DEFAULT_LIST_LIMIT = 50;
@@ -19,7 +19,7 @@ export type ProductCreate = {
 export type ProductPatch = Partial<ProductCreate>;
 
 export async function createProduct(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   input: ProductCreate,
 ): Promise<Product> {
   const [row] = await db
@@ -30,7 +30,7 @@ export async function createProduct(
 }
 
 export async function updateProduct(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   productId: string,
   patch: ProductPatch,
 ): Promise<Product | null> {
@@ -48,7 +48,7 @@ export async function updateProduct(
 }
 
 export async function getProduct(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   productId: string,
 ): Promise<Product | null> {
   const [row] = await db
@@ -61,7 +61,7 @@ export async function getProduct(
 }
 
 export async function listProducts(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   opts: { limit?: number; includeArchived?: boolean } = {},
 ): Promise<Product[]> {
   const limit = clamp(opts.limit ?? DEFAULT_LIST_LIMIT, 1, MAX_LIST_LIMIT);
@@ -76,7 +76,7 @@ export async function listProducts(
 }
 
 export async function archiveProduct(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   productId: string,
 ): Promise<Product | null> {
   const [row] = await db
@@ -100,7 +100,7 @@ export type ProductMatch = {
 };
 
 export async function findProducts(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   opts: { query: string; limit?: number; includeArchived?: boolean },
 ): Promise<ProductMatch[]> {
   const query = opts.query.trim();

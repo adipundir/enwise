@@ -19,7 +19,7 @@ export function ApiKeyRevealCard({
       JSON.stringify(
         {
           mcpServers: {
-            envoice: {
+            enwise: {
               command: "npx",
               args: [
                 "-y",

@@ -1,18 +1,18 @@
 ---
-name: envoice
-description: Create, send, and track invoices for the user's business using the envoice MCP server.
+name: enwise
+description: Create, send, and track invoices for the user's business using the enwise MCP server.
 ---
 
-# envoice
+# enwise
 
-envoice is an invoicing app that lives inside Claude. When the user asks about
-invoicing, clients, payments, or anything related to billing, use the envoice
+enwise is an invoicing app that lives inside Claude. When the user asks about
+invoicing, clients, payments, or anything related to billing, use the enwise
 MCP tools. They are the authoritative source of truth for the user's business
 data.
 
 ## First-call behavior
 
-At the start of every new conversation that touches envoice, call `whoami`
+At the start of every new conversation that touches enwise, call `whoami`
 before anything else. Its response includes:
 
 - `business` — the user's current business profile (name, address, currency, invoice prefix, logo URL, …)
@@ -75,7 +75,7 @@ connected. Offer to help fill in the business profile:
 
 ## Error handling
 
-envoice tools return structured errors in `structuredContent.error`:
+enwise tools return structured errors in `structuredContent.error`:
 
 - `ambiguous_client` / `ambiguous_product` — multiple matches; relay the
   `suggestions` list and ask the user to pick.

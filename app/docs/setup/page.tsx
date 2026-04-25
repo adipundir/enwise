@@ -81,7 +81,7 @@ export default async function SetupDocsPage() {
                 <ol className="mt-2 space-y-1 text-sm text-zinc-400 list-decimal list-inside">
                   <li>Settings → Connectors → Add custom connector</li>
                   <li>
-                    Name: <code className="rounded bg-zinc-900 px-1 py-0.5 text-xs">envoice</code>
+                    Name: <code className="rounded bg-zinc-900 px-1 py-0.5 text-xs">enwise</code>
                   </li>
                   <li>
                     URL:{" "}
@@ -109,7 +109,7 @@ export default async function SetupDocsPage() {
                 <pre className="mt-2 overflow-auto rounded-md border border-zinc-800 bg-[#0a0a0a] p-4 font-mono text-xs leading-relaxed text-zinc-100">
 {`{
   "mcpServers": {
-    "envoice": {
+    "enwise": {
       "command": "npx",
       "args": [
         "-y",
@@ -131,21 +131,21 @@ export default async function SetupDocsPage() {
 
           <Step
             n="04"
-            title="Install the envoice skill (optional)"
+            title="Install the enwise skill (optional)"
             body={
               <>
                 <p>
-                  A Claude Skill teaches Claude how to use envoice in
+                  A Claude Skill teaches Claude how to use enwise in
                   conventional workflows (onboarding, sending, analytics). It
                   makes multi-step flows snappier. Not required.
                 </p>
                 <p className="mt-2">
                   <a
-                    href="/envoice.skill.md"
+                    href="/enwise.skill.md"
                     download
                     className="text-zinc-200 underline underline-offset-2 hover:text-white"
                   >
-                    Download envoice.skill.md →
+                    Download enwise.skill.md →
                   </a>
                 </p>
               </>
@@ -162,7 +162,7 @@ export default async function SetupDocsPage() {
                   call the right tools automatically.
                 </p>
                 <ul className="mt-3 space-y-1 text-sm text-zinc-300">
-                  <li>→ &ldquo;What does my envoice business profile look like?&rdquo;</li>
+                  <li>→ &ldquo;What does my enwise business profile look like?&rdquo;</li>
                   <li>→ &ldquo;Set up my business: I&apos;m Acme Design, based in Brooklyn, default currency USD.&rdquo;</li>
                   <li>→ &ldquo;Add a client called Globex, email bill@globex.com.&rdquo;</li>
                   <li>→ &ldquo;Invoice Globex $5,000 for Q2 brand refresh, 8% tax, net 30, and email it.&rdquo;</li>
@@ -176,7 +176,7 @@ export default async function SetupDocsPage() {
 
       <footer className="border-t border-zinc-900">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-8 text-xs text-zinc-600">
-          <span className="text-base font-semibold text-zinc-400">envoice</span>
+          <span className="text-base font-semibold text-zinc-400">enwise</span>
           <span>
             Invoicing from inside Claude. © {new Date().getFullYear()}.
           </span>

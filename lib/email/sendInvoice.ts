@@ -10,7 +10,7 @@ import {
   invoiceShareUrl,
   type InvoiceWithLineItems,
 } from "@/lib/invoices";
-import type { EnvoiceCtx } from "@/lib/mcp/context";
+import type { EnwiseCtx } from "@/lib/mcp/context";
 import { buildInvoicePdfData } from "@/lib/pdf/renderInvoice";
 
 export type SendInvoiceOutcome =
@@ -37,7 +37,7 @@ interface SendInvoiceInput {
 }
 
 export async function sendInvoiceByEmail(
-  ctx: EnvoiceCtx,
+  ctx: EnwiseCtx,
   input: SendInvoiceInput,
 ): Promise<SendInvoiceOutcome> {
   const apiKey = process.env.RESEND_API_KEY;
@@ -135,8 +135,8 @@ export async function sendInvoiceByEmail(
   // 6. Send via Resend.
   const resend = new Resend(apiKey);
   const fromAddress =
-    process.env.RESEND_FROM_ADDRESS || "invoices@envoice.app";
-  const fromDisplay = `${pdfData.business.name} via envoice <${fromAddress}>`;
+    process.env.RESEND_FROM_ADDRESS || "invoices@enwise.app";
+  const fromDisplay = `${pdfData.business.name} via enwise <${fromAddress}>`;
 
   try {
     const result = await resend.emails.send({
@@ -186,7 +186,7 @@ export async function sendInvoiceByEmail(
   }
 }
 
-async function getClientEmail(ctx: EnvoiceCtx, clientId: string): Promise<string | null> {
+async function getClientEmail(ctx: EnwiseCtx, clientId: string): Promise<string | null> {
   const { db } = await import("@/lib/db");
   const { clients } = await import("@/lib/db/schema");
   const { and, eq } = await import("drizzle-orm");
