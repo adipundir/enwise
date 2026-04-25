@@ -5,15 +5,31 @@ import { businesses, clients, invoices } from "@/lib/db/schema";
 import { auth } from "@/auth";
 import { invoiceShareUrl } from "@/lib/invoices";
 import { formatMoney, addAmounts } from "@/lib/money";
+import { createToken, listTokens } from "@/lib/tokens";
+import { FirstTokenReveal } from "./FirstTokenReveal";
 
 export default async function DashboardHome() {
   const session = await auth();
-  const businessId = (session?.user as { defaultBusinessId?: string | null })
-    ?.defaultBusinessId;
+  const user = session?.user as { id?: string; defaultBusinessId?: string | null } | undefined;
+  const businessId = user?.defaultBusinessId;
 
   const [business] = businessId
     ? await db.select().from(businesses).where(eq(businesses.id, businessId))
     : [];
+
+  // Auto-create + reveal a bootstrap token on first visit (zero tokens yet).
+  let bootstrapRawToken: string | null = null;
+  if (businessId && user?.id) {
+    const existingTokens = await listTokens(businessId);
+    if (existingTokens.length === 0) {
+      const created = await createToken({
+        businessId,
+        createdByUserId: user.id,
+        name: "Default",
+      });
+      bootstrapRawToken = created.raw;
+    }
+  }
 
   const [clientCount, allInvoices, recentInvoices] = businessId
     ? await Promise.all([
@@ -40,34 +56,35 @@ export default async function DashboardHome() {
     : [[], [], []];
 
   const outstandingByCurrency = aggregateOutstanding(allInvoices);
+  const baseUrl =
+    process.env.PUBLIC_BASE_URL ||
+    process.env.AUTH_URL ||
+    "http://localhost:3000";
+  const mcpUrl = `${baseUrl}/api/mcp`;
 
   return (
-    <div className="space-y-14">
-      <section className="space-y-5">
+    <div className="space-y-12">
+      <section className="space-y-3">
         <div className="text-xs uppercase tracking-widest text-zinc-500">
           Overview
         </div>
-        <h1 className="display text-3xl leading-tight sm:text-4xl">
-          <span className="text-zinc-100">
-            Welcome
-            {session?.user?.name
-              ? `, ${session.user.name.split(" ")[0]}`
-              : ""}.
-          </span>
-          <br />
-          <span className="text-zinc-500">
-            Your invoicing business lives in Claude from here.
-          </span>
+        <h1 className="display text-3xl leading-tight sm:text-4xl text-zinc-100">
+          Welcome
+          {session?.user?.name ? `, ${session.user.name.split(" ")[0]}` : ""}.
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">
           Business profile:{" "}
           <span className="text-zinc-200">
             {business?.name ?? "(setting up…)"}
           </span>
-          . Edit it, add clients, create invoices, and send PDFs, all via
-          natural language once Claude is connected.
+          . Everything else happens in Claude once you&apos;ve plugged in the
+          key below.
         </p>
       </section>
+
+      {bootstrapRawToken ? (
+        <FirstTokenReveal rawToken={bootstrapRawToken} mcpUrl={mcpUrl} />
+      ) : null}
 
       <section className="grid grid-cols-2 gap-px bg-zinc-900 sm:grid-cols-4">
         <Stat label="Clients" value={String(clientCount.length)} />
@@ -112,9 +129,7 @@ export default async function DashboardHome() {
                 <div className="flex-1 text-sm text-zinc-300">
                   {formatMoney(inv.total, inv.currency)}
                 </div>
-                <div className="text-xs text-zinc-500">
-                  Due {inv.dueDate}
-                </div>
+                <div className="text-xs text-zinc-500">Due {inv.dueDate}</div>
                 <a
                   href={invoiceShareUrl(inv.shareSlug)}
                   target="_blank"
@@ -129,20 +144,22 @@ export default async function DashboardHome() {
         </section>
       ) : null}
 
-      <section className="grid gap-px bg-zinc-900 sm:grid-cols-2">
-        <DashboardCard
-          href="/dashboard/api-tokens"
-          index="01"
-          title="Create an API token"
-          description="Generate a bearer token so Claude can talk to your envoice MCP server."
-        />
-        <DashboardCard
-          href="/dashboard/connect"
-          index="02"
-          title="Connect to Claude"
-          description="Paste the MCP server config into Claude Desktop or Claude.ai and you're live."
-        />
-      </section>
+      {!bootstrapRawToken ? (
+        <section className="grid gap-px bg-zinc-900 sm:grid-cols-2">
+          <DashboardCard
+            href="/dashboard/api-tokens"
+            index="01"
+            title="Manage API tokens"
+            description="Generate new bearer tokens or revoke existing ones."
+          />
+          <DashboardCard
+            href="/dashboard/connect"
+            index="02"
+            title="Connect to Claude"
+            description="Claude Desktop config + Claude.ai custom connector instructions."
+          />
+        </section>
+      ) : null}
     </div>
   );
 }

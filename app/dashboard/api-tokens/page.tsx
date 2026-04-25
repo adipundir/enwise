@@ -30,9 +30,11 @@ export default async function ApiTokensPage() {
       </div>
 
       <section className="rounded-2xl border border-zinc-900 bg-[#0c0c0c] p-6">
-        <h2 className="text-base font-semibold tracking-tight text-zinc-100">Create a token</h2>
+        <h2 className="text-base font-semibold tracking-tight text-zinc-100">
+          Generate a token
+        </h2>
         <p className="mt-1 text-xs text-zinc-500">
-          Name it after where it'll live (e.g. "Claude Desktop. personal").
+          One click. You&apos;ll see the raw token once; store it somewhere safe.
         </p>
         <div className="mt-5">
           <CreateTokenForm />
