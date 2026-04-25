@@ -4,6 +4,7 @@ import { registerBusinessTools } from "@/lib/mcp/tools/business";
 import { registerClientTools } from "@/lib/mcp/tools/clients";
 import { registerInvoiceTools } from "@/lib/mcp/tools/invoices";
 import { registerProductTools } from "@/lib/mcp/tools/products";
+import { registerRecurringTools } from "@/lib/mcp/tools/recurring";
 import { registerWhoami } from "@/lib/mcp/tools/whoami";
 
 export function createMcpServer(): McpServer {
@@ -24,6 +25,7 @@ export function createMcpServer(): McpServer {
   registerProductTools(server);
   registerInvoiceTools(server);
   registerAnalyticsTools(server);
+  registerRecurringTools(server);
 
   return server;
 }
