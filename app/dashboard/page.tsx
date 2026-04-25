@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { businesses } from "@/lib/db/schema";
+import { businesses, clients, invoices } from "@/lib/db/schema";
 import { auth } from "@/auth";
+import { invoiceShareUrl } from "@/lib/invoices";
+import { formatMoney, addAmounts } from "@/lib/money";
 
 export default async function DashboardHome() {
   const session = await auth();
@@ -12,6 +14,32 @@ export default async function DashboardHome() {
   const [business] = businessId
     ? await db.select().from(businesses).where(eq(businesses.id, businessId))
     : [];
+
+  const [clientCount, allInvoices, recentInvoices] = businessId
+    ? await Promise.all([
+        db
+          .select({ id: clients.id })
+          .from(clients)
+          .where(and(eq(clients.businessId, businessId), isNull(clients.archivedAt))),
+        db
+          .select({
+            status: invoices.status,
+            total: invoices.total,
+            amountPaid: invoices.amountPaid,
+            currency: invoices.currency,
+          })
+          .from(invoices)
+          .where(and(eq(invoices.businessId, businessId), isNull(invoices.deletedAt))),
+        db
+          .select()
+          .from(invoices)
+          .where(and(eq(invoices.businessId, businessId), isNull(invoices.deletedAt)))
+          .orderBy(desc(invoices.createdAt))
+          .limit(5),
+      ])
+    : [[], [], []];
+
+  const outstandingByCurrency = aggregateOutstanding(allInvoices);
 
   return (
     <div className="space-y-14">
@@ -41,6 +69,66 @@ export default async function DashboardHome() {
         </p>
       </section>
 
+      <section className="grid grid-cols-2 gap-px bg-zinc-900 sm:grid-cols-4">
+        <Stat label="Clients" value={String(clientCount.length)} />
+        <Stat label="Invoices" value={String(allInvoices.length)} />
+        <Stat
+          label="Outstanding"
+          value={
+            outstandingByCurrency.length === 0
+              ? "—"
+              : outstandingByCurrency
+                  .map((b) => formatMoney(b.outstanding, b.currency))
+                  .join(" · ")
+          }
+          small={outstandingByCurrency.length > 1}
+        />
+        <Stat
+          label="Default currency"
+          value={business?.defaultCurrency ?? "—"}
+        />
+      </section>
+
+      {recentInvoices.length > 0 ? (
+        <section>
+          <div className="mb-4 flex items-baseline justify-between">
+            <h2 className="text-base font-semibold tracking-tight text-zinc-100">
+              Recent invoices
+            </h2>
+            <span className="text-xs text-zinc-600">
+              {recentInvoices.length} of {allInvoices.length}
+            </span>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-zinc-900">
+            {recentInvoices.map((inv) => (
+              <div
+                key={inv.id}
+                className="flex flex-wrap items-center gap-4 border-b border-zinc-900 bg-[#0a0a0a] px-5 py-4 last:border-b-0"
+              >
+                <div className="font-mono text-sm text-zinc-100 min-w-[90px]">
+                  {inv.invoiceNumber}
+                </div>
+                <StatusChip status={inv.status} />
+                <div className="flex-1 text-sm text-zinc-300">
+                  {formatMoney(inv.total, inv.currency)}
+                </div>
+                <div className="text-xs text-zinc-500">
+                  Due {inv.dueDate}
+                </div>
+                <a
+                  href={invoiceShareUrl(inv.shareSlug)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
+                >
+                  Share link →
+                </a>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section className="grid gap-px bg-zinc-900 sm:grid-cols-2">
         <DashboardCard
           href="/dashboard/api-tokens"
@@ -56,6 +144,66 @@ export default async function DashboardHome() {
         />
       </section>
     </div>
+  );
+}
+
+function aggregateOutstanding(
+  invs: Array<{
+    status: "draft" | "sent" | "paid" | "void";
+    total: string;
+    amountPaid: string;
+    currency: string;
+  }>,
+): Array<{ currency: string; outstanding: string }> {
+  const byCurrency = new Map<string, string>();
+  for (const inv of invs) {
+    if (inv.status !== "sent") continue;
+    const open = addAmounts(inv.total, `-${inv.amountPaid}`);
+    const current = byCurrency.get(inv.currency) ?? "0";
+    byCurrency.set(inv.currency, addAmounts(current, open));
+  }
+  return Array.from(byCurrency, ([currency, outstanding]) => ({
+    currency,
+    outstanding,
+  })).filter((b) => Number(b.outstanding) !== 0);
+}
+
+function Stat({
+  label,
+  value,
+  small,
+}: {
+  label: string;
+  value: string;
+  small?: boolean;
+}) {
+  return (
+    <div className="bg-[#0a0a0a] px-5 py-6">
+      <div className="text-[10px] uppercase tracking-widest text-zinc-500">
+        {label}
+      </div>
+      <div
+        className={`mt-2 font-semibold text-zinc-100 tracking-tight ${small ? "text-base" : "text-2xl"}`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function StatusChip({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    draft: "border-zinc-700 text-zinc-400",
+    sent: "border-blue-900/60 text-blue-300",
+    paid: "border-emerald-900/60 text-emerald-300",
+    void: "border-zinc-800 text-zinc-500",
+  };
+  return (
+    <span
+      className={`rounded-full border bg-zinc-950 px-2 py-0.5 text-[10px] uppercase tracking-widest ${styles[status] ?? "border-zinc-700 text-zinc-400"}`}
+    >
+      {status}
+    </span>
   );
 }
 
