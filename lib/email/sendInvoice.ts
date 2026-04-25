@@ -155,7 +155,11 @@ export async function sendInvoiceByEmail(
         },
       ],
       headers: {
-        "List-Unsubscribe": `<${shareUrl}?unsubscribe=1>`,
+        // Gmail/Outlook expect a mailto or https unsubscribe target. The
+        // invoice share URL is a poor target; use the business reply-to
+        // (which we set when configured) so replying is the canonical "please
+        // stop sending" action. Falls back to the from-address.
+        "List-Unsubscribe": `<mailto:${process.env.RESEND_REPLY_TO || fromAddress}?subject=Unsubscribe ${sent.invoiceNumber}>`,
       },
     });
     if (result.error) {
