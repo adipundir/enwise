@@ -86,6 +86,48 @@ async function main() {
     country: "gb",
   });
 
+  // Clients
+  const c1 = await callTool(raw, "create_client", {
+    name: "Acme Corp",
+    email: "ap@acme.example",
+  });
+  await callTool(raw, "create_client", {
+    name: "Ácme Industries",
+  });
+  await callTool(raw, "create_client", {
+    name: "Globex",
+  });
+  await callTool(raw, "find_client", { query: "acme" });
+  await callTool(raw, "find_client", { query: "globex" });
+  await callTool(raw, "find_client", { query: "zzz-nothing" });
+  await callTool(raw, "list_clients", {});
+  if (c1) {
+    await callTool(raw, "update_client", {
+      client_id: c1,
+      phone: "+1-555-0100",
+    });
+  }
+
+  // Products
+  const p1 = await callTool(raw, "create_product", {
+    name: "Logo design",
+    unit_price: "2000",
+    currency: "USD",
+    default_tax_rate: "0.08",
+  });
+  await callTool(raw, "create_product", {
+    name: "Website revisions",
+    unit_price: 500,
+    currency: "usd",
+    sku: "WEB-REV",
+  });
+  await callTool(raw, "find_product", { query: "logo" });
+  await callTool(raw, "find_product", { query: "WEB-REV" });
+  await callTool(raw, "list_products", {});
+  if (p1) {
+    await callTool(raw, "archive_product", { product_id: p1 });
+  }
+
   // 5. Cleanup
   await db.delete(users).where(eq(users.id, user.id));
   console.log("cleaned up");
@@ -95,7 +137,7 @@ async function callTool(
   token: string,
   name: string,
   args: Record<string, unknown>,
-) {
+): Promise<string | null> {
   const resp = await fetch(`${BASE_URL}/api/mcp`, {
     method: "POST",
     headers: {
@@ -120,19 +162,48 @@ async function callTool(
   if (structured) {
     const summary = summarizeStructured(structured);
     if (summary) console.log(`    ${summary}`);
+    const id = (
+      (structured as { data?: { id?: string } | null })?.data ?? null
+    )?.id;
+    return id ?? null;
   }
+  return null;
 }
 
 function summarizeStructured(s: unknown): string {
-  const obj = s as { ok?: boolean; data?: unknown; error?: { code?: string; message?: string } };
+  const obj = s as {
+    ok?: boolean;
+    data?: unknown;
+    error?: { code?: string; message?: string };
+  };
   if (obj.ok === false && obj.error) {
     return `error: ${obj.error.code} — ${obj.error.message}`;
   }
   const d = obj.data as
-    | { business?: { name?: string }; name?: string; default_currency?: string; tax_id?: string | null }
+    | {
+        business?: { name?: string };
+        name?: string;
+        default_currency?: string;
+        currency?: string;
+        tax_id?: string | null;
+        matches?: Array<{ name?: string; score?: number }>;
+        clients?: unknown[];
+        products?: unknown[];
+        unit_price?: string;
+        archived?: boolean;
+        id?: string;
+      }
     | undefined;
   if (d?.business?.name) return `business: ${d.business.name}`;
-  if (d?.name) return `name=${d.name} currency=${d.default_currency} tax_id=${d.tax_id}`;
+  if (d?.matches) {
+    return `matches: [${d.matches.map((m) => `${m.name} (${(m.score ?? 0).toFixed(2)})`).join(", ")}]`;
+  }
+  if (d?.clients) return `${d.clients.length} clients`;
+  if (d?.products) return `${d.products.length} products`;
+  if (d?.unit_price)
+    return `${d.name} — ${d.unit_price} ${d.currency} ${d.archived ? "(archived)" : ""}`.trim();
+  if (d?.name)
+    return `${d.name}${d.default_currency ? ` (${d.default_currency})` : ""}${d.archived ? " [archived]" : ""}`;
   return "";
 }
 
