@@ -26,9 +26,6 @@ export default async function DashboardLayout({
             <Link href="/dashboard" className="hover:text-zinc-100">
               Overview
             </Link>
-            <Link href="/dashboard/api-tokens" className="hover:text-zinc-100">
-              API tokens
-            </Link>
             <Link href="/dashboard/connect" className="hover:text-zinc-100">
               Connect Claude
             </Link>
