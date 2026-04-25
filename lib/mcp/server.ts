@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerAnalyticsTools } from "@/lib/mcp/tools/analytics";
 import { registerBusinessTools } from "@/lib/mcp/tools/business";
 import { registerClientTools } from "@/lib/mcp/tools/clients";
 import { registerInvoiceTools } from "@/lib/mcp/tools/invoices";
@@ -22,6 +23,7 @@ export function createMcpServer(): McpServer {
   registerClientTools(server);
   registerProductTools(server);
   registerInvoiceTools(server);
+  registerAnalyticsTools(server);
 
   return server;
 }

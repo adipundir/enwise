@@ -169,6 +169,11 @@ async function main() {
         notes: "should fail — invoice is paid",
       });
 
+      // Analytics
+      await callTool(raw, "get_client_summary", { client_id: c1 });
+      await callTool(raw, "get_revenue_summary", { period: "month" });
+      await callTool(raw, "get_outstanding_invoices", {});
+
       // Verify PDF endpoint
       const inv = await callTool(raw, "get_invoice", { invoice_id: invoiceId });
       const slug = inv ? await fetchShareSlug(raw, invoiceId) : null;
