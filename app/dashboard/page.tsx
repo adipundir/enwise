@@ -19,7 +19,7 @@ export default async function DashboardHome() {
         <div className="text-xs uppercase tracking-widest text-zinc-500">
           Overview
         </div>
-        <h1 className="font-serif text-5xl leading-tight">
+        <h1 className="display text-3xl leading-tight sm:text-4xl">
           <span className="text-zinc-100">
             Welcome
             {session?.user?.name
@@ -76,10 +76,12 @@ function DashboardCard({
       className="group flex flex-col justify-between bg-[#0a0a0a] p-8 transition-colors hover:bg-[#0d0d0d]"
     >
       <div>
-        <div className="font-serif text-xs uppercase tracking-widest text-zinc-600">
+        <div className="text-xs font-mono uppercase tracking-widest text-zinc-600">
           {index}
         </div>
-        <h2 className="mt-6 font-serif text-2xl text-zinc-100">{title}</h2>
+        <h2 className="mt-6 text-xl font-semibold tracking-tight text-zinc-100">
+          {title}
+        </h2>
         <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-400">
           {description}
         </p>

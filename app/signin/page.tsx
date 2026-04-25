@@ -22,7 +22,7 @@ export default async function SignInPage({
       <main className="flex flex-1 items-center justify-center px-6 py-12">
         <div className="w-full max-w-md space-y-8 rounded-2xl border border-zinc-900 bg-[#0d0d0d] p-10 shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]">
           <div className="space-y-3">
-            <h1 className="font-serif text-3xl leading-tight">
+            <h1 className="display text-2xl leading-tight">
               Sign in to envoice.
             </h1>
             <p className="text-sm text-zinc-500">

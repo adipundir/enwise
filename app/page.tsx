@@ -13,7 +13,7 @@ export default async function Home() {
 
       <main className="flex flex-1 flex-col">
         <section className="mx-auto w-full max-w-6xl px-6 pt-24 pb-28 sm:pt-32 sm:pb-36">
-          <h1 className="font-serif text-5xl leading-[1.05] sm:text-6xl md:text-7xl">
+          <h1 className="display text-4xl leading-[1.08] sm:text-5xl md:text-6xl">
             <span className="text-zinc-100">Invoicing, by conversation.</span>
             <br />
             <span className="text-zinc-500">
@@ -84,7 +84,7 @@ export default async function Home() {
 
       <footer className="mx-auto w-full max-w-6xl px-6 py-10 text-xs text-zinc-600">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <span className="font-serif text-base text-zinc-400">envoice</span>
+          <span className="text-base font-semibold text-zinc-400">envoice</span>
           <span>Invoicing from inside Claude. © {new Date().getFullYear()}.</span>
         </div>
       </footer>
@@ -103,7 +103,7 @@ function Stat({
 }) {
   return (
     <div className="bg-[#070707] px-5 py-8 sm:px-6 sm:py-10">
-      <div className="font-serif text-4xl text-zinc-100 sm:text-5xl">{big}</div>
+      <div className="display text-3xl text-zinc-100 sm:text-4xl">{big}</div>
       <div className="mt-3 text-sm text-zinc-300">{label}</div>
       <div className="mt-1 text-xs text-zinc-500">{note}</div>
     </div>

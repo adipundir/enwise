@@ -33,7 +33,7 @@ export default function ConnectPage() {
         <div className="text-xs uppercase tracking-widest text-zinc-500">
           Setup
         </div>
-        <h1 className="font-serif text-4xl text-zinc-100">Connect to Claude</h1>
+        <h1 className="display text-3xl text-zinc-100 sm:text-4xl">Connect to Claude</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">
           Point Claude at your envoice MCP server. You'll need an API token —{" "}
           <Link
@@ -49,7 +49,7 @@ export default function ConnectPage() {
       <section className="space-y-4 rounded-2xl border border-zinc-900 bg-[#0c0c0c] p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-serif text-lg text-zinc-100">Endpoint</h2>
+            <h2 className="text-base font-semibold tracking-tight text-zinc-100">Endpoint</h2>
             <p className="mt-1 text-xs text-zinc-500">
               Everything goes through a single streamable-HTTP endpoint.
             </p>
@@ -63,7 +63,7 @@ export default function ConnectPage() {
 
       <section className="space-y-4 rounded-2xl border border-zinc-900 bg-[#0c0c0c] p-6">
         <div>
-          <h2 className="font-serif text-lg text-zinc-100">
+          <h2 className="text-base font-semibold tracking-tight text-zinc-100">
             Option A — Claude.ai (web/desktop Connectors)
           </h2>
           <p className="mt-1 text-xs text-zinc-500">
@@ -103,7 +103,7 @@ export default function ConnectPage() {
       <section className="space-y-4 rounded-2xl border border-zinc-900 bg-[#0c0c0c] p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-serif text-lg text-zinc-100">
+            <h2 className="text-base font-semibold tracking-tight text-zinc-100">
               Option B — Claude Desktop (config file)
             </h2>
             <p className="mt-1 text-xs text-zinc-500">
@@ -128,7 +128,7 @@ export default function ConnectPage() {
       </section>
 
       <section className="rounded-2xl border border-zinc-900 bg-[#0c0c0c] p-6">
-        <h2 className="font-serif text-lg text-zinc-100">Smoke-test it</h2>
+        <h2 className="text-base font-semibold tracking-tight text-zinc-100">Smoke-test it</h2>
         <p className="mt-2 text-sm leading-relaxed text-zinc-400">
           Once connected, try these prompts:
         </p>

@@ -512,6 +512,105 @@ export async function removeLineItem(
   return { ok: true, value: (await getInvoice(ctx, inv.id))! };
 }
 
+// ---------- Finalize (take snapshot + flip draft→sent) ----------
+
+/**
+ * Captures client + business snapshots on the invoice row on first finalize,
+ * flips status draft→sent, stamps sent_at. Re-sending an already-sent invoice
+ * only bumps sent_at; snapshots are preserved.
+ *
+ * This is an internal service function, called by the email send pipeline.
+ */
+export async function finalizeInvoice(
+  ctx: EnvoiceCtx,
+  invoiceId: string,
+): Promise<MutateResult<InvoiceWithLineItems>> {
+  const inv = await getInvoice(ctx, invoiceId);
+  if (!inv) return { ok: false, code: "not_found", message: `No invoice with id ${invoiceId}.` };
+  if (inv.status === "void") {
+    return {
+      ok: false,
+      code: "invoice_not_draft",
+      message: `Invoice ${inv.invoiceNumber} is void and cannot be sent.`,
+    };
+  }
+
+  // Re-send: already finalized, just bump sent_at.
+  if (inv.clientNameSnapshot !== null) {
+    await db
+      .update(invoices)
+      .set({ sentAt: new Date(), updatedAt: new Date() })
+      .where(eq(invoices.id, inv.id));
+    await writeEvent(inv.id, "sent", ctx.tokenId, { resend: true });
+    return { ok: true, value: (await getInvoice(ctx, inv.id))! };
+  }
+
+  // First send: snapshot client + business rows onto the invoice.
+  const client = await getClientScoped(ctx, inv.clientId);
+  if (!client) {
+    return {
+      ok: false,
+      code: "client_not_found",
+      message: `No client with id ${inv.clientId}.`,
+    };
+  }
+  const bizRows = await db.execute(sql`
+    select name, logo_url, address_line1, address_line2, city, region, postal_code, country
+    from businesses where id = ${ctx.businessId}
+  `);
+  const biz = bizRows.rows[0] as
+    | {
+        name: string;
+        logo_url: string | null;
+        address_line1: string | null;
+        address_line2: string | null;
+        city: string | null;
+        region: string | null;
+        postal_code: string | null;
+        country: string | null;
+      }
+    | undefined;
+  if (!biz) {
+    return {
+      ok: false,
+      code: "not_found",
+      message: "Business row missing.",
+    };
+  }
+
+  const now = new Date();
+  await db
+    .update(invoices)
+    .set({
+      status: "sent",
+      sentAt: now,
+      updatedAt: now,
+      clientNameSnapshot: client.name,
+      clientEmailSnapshot: client.email,
+      clientAddressSnapshot: {
+        line1: client.addressLine1,
+        line2: client.addressLine2,
+        city: client.city,
+        region: client.region,
+        postal_code: client.postalCode,
+        country: client.country,
+      },
+      businessNameSnapshot: biz.name,
+      businessLogoUrlSnapshot: biz.logo_url,
+      businessAddressSnapshot: {
+        line1: biz.address_line1,
+        line2: biz.address_line2,
+        city: biz.city,
+        region: biz.region,
+        postal_code: biz.postal_code,
+        country: biz.country,
+      },
+    })
+    .where(eq(invoices.id, inv.id));
+  await writeEvent(inv.id, "sent", ctx.tokenId);
+  return { ok: true, value: (await getInvoice(ctx, inv.id))! };
+}
+
 // ---------- Status transitions ----------
 
 export async function markInvoicePaid(

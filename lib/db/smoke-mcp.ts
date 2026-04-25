@@ -159,6 +159,8 @@ async function main() {
       });
       await callTool(raw, "list_invoices", { client_id: c1 });
       await callTool(raw, "get_invoice_share_url", { invoice_id: invoiceId });
+      // send_invoice: expected to fail with email_not_configured unless RESEND_API_KEY is set.
+      await callTool(raw, "send_invoice", { invoice_id: invoiceId });
       await callTool(raw, "mark_invoice_paid", { invoice_id: invoiceId });
       await callTool(raw, "duplicate_invoice", { invoice_id: invoiceId });
       // Test immutability

@@ -21,7 +21,7 @@ export default async function ApiTokensPage() {
         <div className="text-xs uppercase tracking-widest text-zinc-500">
           Settings
         </div>
-        <h1 className="font-serif text-4xl text-zinc-100">API tokens</h1>
+        <h1 className="display text-3xl text-zinc-100 sm:text-4xl">API tokens</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">
           Bearer tokens used by Claude to authenticate with your envoice MCP
           server. Tokens are shown once at creation — copy and paste them into
@@ -30,7 +30,7 @@ export default async function ApiTokensPage() {
       </div>
 
       <section className="rounded-2xl border border-zinc-900 bg-[#0c0c0c] p-6">
-        <h2 className="font-serif text-lg text-zinc-100">Create a token</h2>
+        <h2 className="text-base font-semibold tracking-tight text-zinc-100">Create a token</h2>
         <p className="mt-1 text-xs text-zinc-500">
           Name it after where it'll live (e.g. "Claude Desktop — personal").
         </p>
@@ -41,7 +41,7 @@ export default async function ApiTokensPage() {
 
       <section>
         <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="font-serif text-lg text-zinc-100">Your tokens</h2>
+          <h2 className="text-base font-semibold tracking-tight text-zinc-100">Your tokens</h2>
           <span className="text-xs text-zinc-600">
             {tokens.length} total
           </span>

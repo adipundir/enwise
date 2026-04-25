@@ -4,7 +4,7 @@
   --color-background: #0a0a0a;
   --color-foreground: #fafafa;
   --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-serif), ui-serif, Georgia, serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
 }
 
 html,
@@ -17,9 +17,10 @@ body {
   font-family: var(--font-sans);
 }
 
-.font-serif {
-  font-family: var(--font-serif);
-  letter-spacing: -0.01em;
+.display {
+  font-family: var(--font-sans);
+  letter-spacing: -0.03em;
+  font-weight: 600;
 }
 
 ::selection {
