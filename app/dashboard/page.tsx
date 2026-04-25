@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { invoiceShareUrl } from "@/lib/invoices";
 import { formatMoney, addAmounts } from "@/lib/money";
 import { createToken, listTokens } from "@/lib/tokens";
-import { ApiKeySection } from "./ApiKeySection";
+import { ApiKeyCard, ApiKeyRevealCard } from "./ApiKeySection";
 
 export default async function DashboardHome() {
   const session = await auth();
@@ -88,11 +88,14 @@ export default async function DashboardHome() {
         </p>
       </section>
 
-      <ApiKeySection
-        initialRawToken={bootstrapRawToken}
-        currentPrefix={currentPrefix}
-        mcpUrl={mcpUrl}
-      />
+      {bootstrapRawToken ? (
+        <ApiKeyRevealCard rawToken={bootstrapRawToken} mcpUrl={mcpUrl} />
+      ) : (
+        <section className="grid gap-px bg-zinc-900 sm:grid-cols-2">
+          <ApiKeyCard currentPrefix={currentPrefix} />
+          <ConnectClaudeCard />
+        </section>
+      )}
 
       <section className="grid grid-cols-2 gap-px bg-zinc-900 sm:grid-cols-4">
         <Stat label="Clients" value={String(clientCount.length)} />
@@ -195,6 +198,44 @@ function Stat({
         {value}
       </div>
     </div>
+  );
+}
+
+function ConnectClaudeCard() {
+  return (
+    <Link
+      href="/dashboard/connect"
+      className="group flex flex-col justify-between bg-[#0a0a0a] p-8 transition-colors hover:bg-[#0d0d0d]"
+    >
+      <div>
+        <div className="text-xs font-mono uppercase tracking-widest text-zinc-600">
+          02
+        </div>
+        <h2 className="mt-6 text-xl font-semibold tracking-tight text-zinc-100">
+          Connect to Claude
+        </h2>
+        <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-400">
+          Paste the MCP server URL + bearer header into Claude Desktop or
+          Claude.ai. Full instructions + config JSON on the next page.
+        </p>
+      </div>
+      <div className="mt-8 inline-flex items-center gap-2 text-sm text-zinc-300 group-hover:text-zinc-100">
+        Setup instructions
+        <svg
+          viewBox="0 0 16 16"
+          className="size-4 transition-transform group-hover:translate-x-0.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        >
+          <path
+            d="M3 8h10m0 0-4-4m4 4-4 4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+    </Link>
   );
 }
 
