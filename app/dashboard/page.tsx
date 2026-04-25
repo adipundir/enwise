@@ -64,7 +64,7 @@ export default async function DashboardHome() {
           <span className="text-zinc-200">
             {business?.name ?? "(setting up…)"}
           </span>
-          . Edit it, add clients, create invoices, and send PDFs — all via
+          . Edit it, add clients, create invoices, and send PDFs, all via
           natural language once Claude is connected.
         </p>
       </section>

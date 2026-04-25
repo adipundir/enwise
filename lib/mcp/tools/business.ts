@@ -122,7 +122,7 @@ export function registerBusinessTools(server: McpServer) {
       if (!updated) {
         return toolError(
           "not_found",
-          "Business disappeared during update — this shouldn't happen.",
+          "Business disappeared during update. this shouldn't happen.",
         );
       }
       return toolOk(formatBusinessForMcp(updated));

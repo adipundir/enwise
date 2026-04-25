@@ -45,7 +45,7 @@ export async function uploadLogo(params: {
       code: "logo_storage_unavailable",
       message:
         "Logo upload via base64 requires Vercel Blob storage, which isn't configured on this server yet.",
-      hint: "Use `logo: { image_url: 'https://…' }` instead — pass a public URL and it will be stored verbatim.",
+      hint: "Use `logo: { image_url: 'https://…' }` instead. pass a public URL and it will be stored verbatim.",
     };
   }
   return handleBase64(businessId, input.image_base64, input.mime_type);
@@ -316,28 +316,28 @@ function ipv4Blocked(addr: string): boolean {
     return true;
   }
   const [a, b] = parts as [number, number, number, number];
-  // 0.0.0.0/8 — current-network / unspecified
+  // 0.0.0.0/8. current-network / unspecified
   if (a === 0) return true;
-  // 10.0.0.0/8 — RFC1918 private
+  // 10.0.0.0/8. RFC1918 private
   if (a === 10) return true;
-  // 127.0.0.0/8 — loopback
+  // 127.0.0.0/8. loopback
   if (a === 127) return true;
-  // 169.254.0.0/16 — link-local, cloud metadata (AWS/GCP IMDS)
+  // 169.254.0.0/16. link-local, cloud metadata (AWS/GCP IMDS)
   if (a === 169 && b === 254) return true;
-  // 172.16.0.0/12 — RFC1918 private
+  // 172.16.0.0/12. RFC1918 private
   if (a === 172 && b >= 16 && b <= 31) return true;
-  // 192.168.0.0/16 — RFC1918 private
+  // 192.168.0.0/16. RFC1918 private
   if (a === 192 && b === 168) return true;
-  // 100.64.0.0/10 — CGNAT
+  // 100.64.0.0/10. CGNAT
   if (a === 100 && b >= 64 && b <= 127) return true;
-  // 192.0.0.0/24, 192.0.2.0/24, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24 — IANA special
+  // 192.0.0.0/24, 192.0.2.0/24, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24. IANA special
   if (a === 192 && b === 0) return true;
   if (a === 198 && (b === 18 || b === 19)) return true;
   if (a === 198 && b === 51) return true;
   if (a === 203 && b === 0) return true;
-  // 224.0.0.0/4 — multicast
+  // 224.0.0.0/4. multicast
   if (a >= 224 && a <= 239) return true;
-  // 240.0.0.0/4 — reserved
+  // 240.0.0.0/4. reserved
   if (a >= 240) return true;
   return false;
 }
@@ -351,7 +351,7 @@ function ipv6Blocked(addr: string): boolean {
   if (lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb")) return true;
   // ff00::/8 multicast
   if (lower.startsWith("ff")) return true;
-  // IPv4-mapped (::ffff:a.b.c.d) — fall through to IPv4 rules
+  // IPv4-mapped (::ffff:a.b.c.d). fall through to IPv4 rules
   const v4mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
   if (v4mapped) return ipv4Blocked(v4mapped[1]!);
   return false;

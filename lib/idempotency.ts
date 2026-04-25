@@ -13,7 +13,7 @@ const DEFAULT_TTL_HOURS = 24;
  *
  * Safe under concurrency: the unique index on (business_id, tool_name, client_request_id)
  * causes the second concurrent inserter to throw, which we catch and treat
- * as "the other caller is doing the work" — we then fetch the cached value,
+ * as "the other caller is doing the work". we then fetch the cached value,
  * spinning a few times if it isn't written yet.
  */
 export async function withIdempotency<T>(
@@ -42,7 +42,7 @@ export async function withIdempotency<T>(
       expiresAt,
     });
   } catch {
-    // Concurrent insert — the other caller is running. Wait briefly for the
+    // Concurrent insert. the other caller is running. Wait briefly for the
     // cached response to materialize.
     return waitForCached<T>(ctx.businessId, toolName, clientRequestId, run);
   }

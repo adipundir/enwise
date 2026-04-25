@@ -18,7 +18,7 @@ export function hashToken(raw: string): string {
 }
 
 export function tokenPrefix(raw: string): string {
-  // First 12 chars of the raw token — stored for UI identification.
+  // First 12 chars of the raw token. stored for UI identification.
   return raw.slice(0, 12);
 }
 

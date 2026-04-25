@@ -16,7 +16,7 @@ async function main() {
   await sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`;
 
   // Drizzle's unaccent() call must be IMMUTABLE to be usable in a GENERATED column.
-  // The stock unaccent() is STABLE — wrap it so the column definition is accepted.
+  // The stock unaccent() is STABLE. wrap it so the column definition is accepted.
   await sql`
     CREATE OR REPLACE FUNCTION immutable_unaccent(text)
     RETURNS text

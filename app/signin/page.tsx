@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth, signIn } from "@/auth";
-import { SiteHeader } from "@/components/site-header";
+import { Landing } from "@/components/landing";
+import { SignInModalShell } from "./SignInModalShell";
 
 export default async function SignInPage({
   searchParams,
@@ -16,56 +17,54 @@ export default async function SignInPage({
 
   const redirectTo = callbackUrl ?? "/dashboard";
 
+  async function signInWithGitHub() {
+    "use server";
+    await signIn("github", { redirectTo });
+  }
+
+  async function signInWithGoogle() {
+    "use server";
+    await signIn("google", { redirectTo });
+  }
+
   return (
-    <div className="flex flex-1 flex-col">
-      <SiteHeader ctaHref="/signin" />
-      <main className="flex flex-1 items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md space-y-8 rounded-2xl border border-zinc-900 bg-[#0d0d0d] p-10 shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]">
-          <div className="space-y-3">
-            <h1 className="display text-2xl leading-tight">
-              Sign in to envoice.
-            </h1>
-            <p className="text-sm text-zinc-500">
-              One account. One API key. Then you live in Claude.
-            </p>
-          </div>
-          <div className="space-y-3">
-            <form
-              action={async () => {
-                "use server";
-                await signIn("github", { redirectTo });
-              }}
-            >
-              <button
-                type="submit"
-                className="flex w-full items-center justify-center gap-3 rounded-lg bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-white"
-              >
-                <GitHubIcon />
-                Continue with GitHub
-              </button>
-            </form>
-            <form
-              action={async () => {
-                "use server";
-                await signIn("google", { redirectTo });
-              }}
-            >
-              <button
-                type="submit"
-                className="flex w-full items-center justify-center gap-3 rounded-lg border border-zinc-800 bg-[#0a0a0a] px-4 py-3 text-sm font-medium text-zinc-100 hover:border-zinc-700 hover:bg-zinc-900"
-              >
-                <GoogleIcon />
-                Continue with Google
-              </button>
-            </form>
-          </div>
-          <p className="text-xs text-zinc-600">
-            By continuing you agree to reasonable, not-yet-written terms.
-            We'll do our best.
-          </p>
-        </div>
-      </main>
-    </div>
+    <>
+      <div aria-hidden="true" className="pointer-events-none">
+        <Landing />
+      </div>
+      <SignInModalShell>
+      <div className="space-y-3 pr-6">
+        <h1 className="display text-2xl leading-tight">Sign in to envoice.</h1>
+        <p className="text-sm text-zinc-500">
+          One account. One API key. Then you live in Claude.
+        </p>
+      </div>
+      <div className="mt-6 space-y-3">
+        <form action={signInWithGitHub}>
+          <button
+            type="submit"
+            className="flex w-full items-center justify-center gap-3 rounded-lg bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-950 hover:bg-white"
+          >
+            <GitHubIcon />
+            Continue with GitHub
+          </button>
+        </form>
+        <form action={signInWithGoogle}>
+          <button
+            type="submit"
+            className="flex w-full items-center justify-center gap-3 rounded-lg border border-zinc-800 bg-[#0a0a0a] px-4 py-3 text-sm font-medium text-zinc-100 hover:border-zinc-700 hover:bg-zinc-900"
+          >
+            <GoogleIcon />
+            Continue with Google
+          </button>
+        </form>
+      </div>
+      <p className="mt-6 text-xs text-zinc-600">
+        By continuing you agree to reasonable, not-yet-written terms.
+        We&apos;ll do our best.
+      </p>
+      </SignInModalShell>
+    </>
   );
 }
 

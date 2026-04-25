@@ -34,7 +34,7 @@ export const recurringInterval = pgEnum("recurring_interval", [
   "yearly",
 ]);
 
-// Auth.js tables — shape dictated by @auth/drizzle-adapter
+// Auth.js tables. shape dictated by @auth/drizzle-adapter
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -98,7 +98,7 @@ export const verificationTokens = pgTable(
   (t) => [primaryKey({ columns: [t.identifier, t.token] })],
 );
 
-// Businesses — the tenant unit. One per user in v1.
+// Businesses. the tenant unit. One per user in v1.
 
 export const businesses = pgTable(
   "businesses",
@@ -139,7 +139,7 @@ export const businesses = pgTable(
   (t) => [index("businesses_owner_idx").on(t.ownerUserId)],
 );
 
-// API tokens — issued from web dashboard, presented as Authorization: Bearer <raw>
+// API tokens. issued from web dashboard, presented as Authorization: Bearer <raw>
 
 export const apiTokens = pgTable(
   "api_tokens",
@@ -242,7 +242,7 @@ export const products = pgTable(
   ],
 );
 
-// Recurring invoice templates — must be declared before invoices, which FK-references it
+// Recurring invoice templates. must be declared before invoices, which FK-references it
 
 export const recurringInvoiceTemplates = pgTable(
   "recurring_invoice_templates",
@@ -322,7 +322,7 @@ export const invoices = pgTable(
       () => recurringInvoiceTemplates.id,
       { onDelete: "set null" },
     ),
-    // Snapshots — captured at finalize so later edits to client/business don't mutate sent invoices
+    // Snapshots. captured at finalize so later edits to client/business don't mutate sent invoices
     clientNameSnapshot: text("client_name_snapshot"),
     clientEmailSnapshot: text("client_email_snapshot"),
     clientAddressSnapshot: jsonb("client_address_snapshot"),
@@ -443,7 +443,7 @@ export const rateBuckets = pgTable(
   ],
 );
 
-// Type exports — consumers should import inferred types from here
+// Type exports. consumers should import inferred types from here
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;

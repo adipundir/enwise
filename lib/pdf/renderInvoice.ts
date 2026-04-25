@@ -11,7 +11,7 @@ import { InvoiceDocument, type InvoicePdfData } from "@/components/pdf/InvoiceDo
  *
  * Preference order for client/business fields:
  *   1. Snapshot fields on the invoice (captured on finalize/send)
- *   2. Live rows from the DB (for drafts — there's no snapshot yet)
+ *   2. Live rows from the DB (for drafts. there's no snapshot yet)
  */
 export async function renderInvoicePdf(
   invoice: InvoiceWithLineItems,

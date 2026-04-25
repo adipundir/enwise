@@ -16,7 +16,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const productIdSchema = z.string().uuid();
 
-// Accept amounts as strings or numbers — Claude sometimes sends "5000.00" and
+// Accept amounts as strings or numbers. Claude sometimes sends "5000.00" and
 // sometimes sends 5000. Coerce to a canonical `numeric(14,2)` string.
 const amountSchema = z
   .union([z.string().min(1), z.number()])
@@ -53,7 +53,7 @@ const taxRateSchema = z
         message:
           "Tax rate must be a fraction < 1. Got " +
           raw +
-          " — did you pass a percentage by mistake (e.g. 8 instead of 0.08)?",
+          ". did you pass a percentage by mistake (e.g. 8 instead of 0.08)?",
       });
       return z.NEVER;
     }
@@ -116,7 +116,7 @@ export function registerProductTools(server: McpServer) {
     {
       title: "Create product",
       description:
-        "Add a reusable product or service to the catalog (e.g. 'Logo design — $2000 USD'). Later, invoice line items can reference it by product_id so the user doesn't need to re-type price/description each time.",
+        "Add a reusable product or service to the catalog (e.g. 'Logo design. $2000 USD'). Later, invoice line items can reference it by product_id so the user doesn't need to re-type price/description each time.",
       inputSchema: createSchema,
     },
     async (args, extra) => {
@@ -172,7 +172,7 @@ export function registerProductTools(server: McpServer) {
     {
       title: "Find product (fuzzy)",
       description:
-        "Search catalog products by name (fuzzy) or exact SKU. Use this when the user says 'invoice Acme for logo design' — find 'logo design' first, then use the returned product_id in create_invoice line items.",
+        "Search catalog products by name (fuzzy) or exact SKU. Use this when the user says 'invoice Acme for logo design'. find 'logo design' first, then use the returned product_id in create_invoice line items.",
       inputSchema: {
         query: z.string().min(1).max(200),
         limit: z.number().int().min(1).max(25).optional(),

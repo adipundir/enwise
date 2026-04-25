@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Vercel Cron entry point — fires daily at 09:00 UTC per vercel.json.
+ * Vercel Cron entry point. fires daily at 09:00 UTC per vercel.json.
  *
  * Auth: Vercel sets the `x-vercel-cron` header on legitimate cron invocations
  * AND sends `Authorization: Bearer <CRON_SECRET>`. We require both.
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     return json(401, { ok: false, error: "unauthorized" });
   }
   if (vercelHeader && presentedSecret !== expected) {
-    // Vercel cron header present but secret wrong — suspicious.
+    // Vercel cron header present but secret wrong. suspicious.
     return json(401, { ok: false, error: "unauthorized" });
   }
 

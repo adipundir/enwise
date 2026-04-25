@@ -22,7 +22,7 @@ export function CreateTokenForm() {
       <form action={formAction} className="flex flex-wrap items-center gap-3">
         <input
           name="name"
-          placeholder="Claude Desktop — MacBook"
+          placeholder="Claude Desktop. MacBook"
           className="flex-1 min-w-[260px] rounded-md border border-zinc-800 bg-[#0d0d0d] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
           maxLength={80}
           required

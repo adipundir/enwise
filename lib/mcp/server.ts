@@ -15,7 +15,7 @@ export function createMcpServer(): McpServer {
     },
     {
       instructions:
-        "envoice is an MCP server for running an invoicing business. Every operation — business profile, clients, products, invoices, analytics — is available as a tool. Call `whoami` at the start of a conversation to load the user's business profile into context before doing anything else.",
+        "envoice is an MCP server for running an invoicing business. Every operation. business profile, clients, products, invoices, analytics. is available as a tool. Call `whoami` at the start of a conversation to load the user's business profile into context before doing anything else.",
     },
   );
 

@@ -4,9 +4,9 @@ An MCP server for running an invoicing business entirely through natural languag
 
 ## What it does
 
-- **MCP server** at `/api/mcp` — Claude calls tools to create invoices, manage clients, send emails, and more.
-- **Public invoice page** at `/i/[slug]` — shareable link for recipients with a downloadable PDF.
-- **Web dashboard** at `/dashboard` — exists for sign-in, API token generation, and a quick overview of what Claude has done. Everything else happens in Claude.
+- **MCP server** at `/api/mcp`. Claude calls tools to create invoices, manage clients, send emails, and more.
+- **Public invoice page** at `/i/[slug]`. shareable link for recipients with a downloadable PDF.
+- **Web dashboard** at `/dashboard`. exists for sign-in, API token generation, and a quick overview of what Claude has done. Everything else happens in Claude.
 
 40 MCP tools shipped: `whoami`, business profile (2), clients (6), products (6), invoices (14), analytics (3), recurring (7), `send_invoice`. Share links, PDFs, and emails are automatic.
 
@@ -14,11 +14,11 @@ An MCP server for running an invoicing business entirely through natural languag
 
 ### 1. Prerequisites
 
-- **Node.js** — `~/.local/share/node` (v24.15.0 LTS) with `node`/`npm`/`npx` symlinked into `~/.local/bin`.
-- **Neon Postgres** — free tier. [console.neon.tech](https://console.neon.tech). Use the pooled connection string.
+- **Node.js**. `~/.local/share/node` (v24.15.0 LTS) with `node`/`npm`/`npx` symlinked into `~/.local/bin`.
+- **Neon Postgres**. free tier. [console.neon.tech](https://console.neon.tech). Use the pooled connection string.
 - **At least one OAuth provider**:
-  - **GitHub** — [Developer Settings → OAuth Apps](https://github.com/settings/developers). Callback: `http://localhost:3000/api/auth/callback/github`.
-  - **Google** — [Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials). Redirect: `http://localhost:3000/api/auth/callback/google`. Authorized origin: `http://localhost:3000`.
+  - **GitHub**. [Developer Settings → OAuth Apps](https://github.com/settings/developers). Callback: `http://localhost:3000/api/auth/callback/github`.
+  - **Google**. [Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials). Redirect: `http://localhost:3000/api/auth/callback/google`. Authorized origin: `http://localhost:3000`.
 
 ### 2. Environment
 
@@ -36,7 +36,7 @@ AUTH_GITHUB_SECRET=...
 AUTH_GOOGLE_ID=...
 AUTH_GOOGLE_SECRET=...
 
-# Optional — features degrade gracefully if absent:
+# Optional. features degrade gracefully if absent:
 RESEND_API_KEY=...                  # email sending
 BLOB_READ_WRITE_TOKEN=...           # logo uploads (else URLs stored verbatim)
 PUBLIC_BASE_URL=http://localhost:3000
@@ -79,8 +79,8 @@ Already done (`origin/main`).
 ### 3. Attach storage
 
 In the project dashboard → Storage:
-- **Neon** — connect your existing Neon project. `DATABASE_URL` lands in env vars automatically.
-- **Blob** — create a store. `BLOB_READ_WRITE_TOKEN` lands in env vars automatically.
+- **Neon**. connect your existing Neon project. `DATABASE_URL` lands in env vars automatically.
+- **Blob**. create a store. `BLOB_READ_WRITE_TOKEN` lands in env vars automatically.
 
 ### 4. Add env vars
 
@@ -99,7 +99,7 @@ Project → Settings → Environment Variables (Production + Preview + Developme
 
 ### 5. Update OAuth callback URLs
 
-- **GitHub**: add `https://<your-vercel-domain>/api/auth/callback/github` as Authorization callback URL. (GitHub allows only one per app — create a second OAuth app for prod or edit on deploy.)
+- **GitHub**: add `https://<your-vercel-domain>/api/auth/callback/github` as Authorization callback URL. (GitHub allows only one per app. create a second OAuth app for prod or edit on deploy.)
 - **Google**: add `https://<your-vercel-domain>/api/auth/callback/google` as an Authorized redirect URI. Also add `https://<your-vercel-domain>` as an Authorized JavaScript origin.
 
 ### 6. Run migrations against prod
@@ -150,12 +150,12 @@ vercel.json           # cron schedule
 
 ## Phase status
 
-- [x] **Phase 0** — scaffold, DB, Auth.js Google+GitHub sign-in, gated dashboard
-- [x] **Phase 1** — API tokens + MCP endpoint + bearer auth + `whoami`
-- [x] **Phase 2** — business profile + logo upload (URL/base64, SSRF-guarded)
-- [x] **Phase 3** — clients + products + fuzzy find (pg_trgm)
-- [x] **Phase 4** — invoices, atomic numbering, public share, PDF rendering
-- [x] **Phase 5** — `send_invoice` via Resend with PDF attachment
-- [x] **Phase 6** — analytics (client summary, revenue, outstanding)
-- [x] **Phase 7** — recurring invoices + Vercel cron
-- [x] **Phase 8 (audit pass)** — SSRF guard, per-token rate limit, send idempotency, paid badge, dashboard overview, `/api/health`
+- [x] **Phase 0**. scaffold, DB, Auth.js Google+GitHub sign-in, gated dashboard
+- [x] **Phase 1**. API tokens + MCP endpoint + bearer auth + `whoami`
+- [x] **Phase 2**. business profile + logo upload (URL/base64, SSRF-guarded)
+- [x] **Phase 3**. clients + products + fuzzy find (pg_trgm)
+- [x] **Phase 4**. invoices, atomic numbering, public share, PDF rendering
+- [x] **Phase 5**. `send_invoice` via Resend with PDF attachment
+- [x] **Phase 6**. analytics (client summary, revenue, outstanding)
+- [x] **Phase 7**. recurring invoices + Vercel cron
+- [x] **Phase 8 (audit pass)**. SSRF guard, per-token rate limit, send idempotency, paid badge, dashboard overview, `/api/health`
