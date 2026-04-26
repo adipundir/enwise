@@ -83,8 +83,13 @@ const urlAttachment = z.object({
 });
 const uploadAttachment = z.object({
   label: z.string().min(1).max(120).optional(),
-  image_base64: z.string().min(1),
-  mime_type: z.enum(["image/png", "image/jpeg", "image/webp"]),
+  file_base64: z.string().min(1),
+  mime_type: z.enum([
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "application/pdf",
+  ]),
   filename: z.string().min(1).max(120).optional(),
 });
 const attachmentSchema = z.union([urlAttachment, uploadAttachment]);
@@ -137,7 +142,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Create invoice",
       description:
-        "Create a draft invoice for a client with one or more line items. Every line item description, quantity, unit price, and tax rate MUST come from the user — NEVER invent them. If the user hasn't specified what they're billing for, ask before calling this tool. Each line item can optionally include `attachments`: an array of supporting docs (receipts, photo proofs, spec pages). Each attachment is either (a) a passthrough URL `{url, label?}` or (b) an inline image to upload to enwise's own storage `{image_base64, mime_type, filename?, label?}` where mime_type is png/jpeg/webp (max 8 MB). If the user shares an image in the conversation (e.g. drag-and-dropped photo of a receipt), upload it via (b) rather than asking them to host it elsewhere. Attachments render as clickable links on the invoice and PDF. Invoice number is allocated automatically (e.g. INV-0001). Dates default to today + net-30; currency defaults to the client's default, then the business's. Returns the full invoice including line totals and a share URL. To send it to the client, call send_invoice next.",
+        "Create a draft invoice for a client with one or more line items. Every line item description, quantity, unit price, and tax rate MUST come from the user — NEVER invent them. If the user hasn't specified what they're billing for, ask before calling this tool. Each line item can optionally include `attachments`: an array of supporting docs (receipts, photo proofs, spec pages). Each attachment is either (a) a passthrough URL `{url, label?}` or (b) an inline file to upload to enwise's own storage `{file_base64, mime_type, filename?, label?}` where mime_type is one of `image/png`, `image/jpeg`, `image/webp`, `application/pdf` (max 8 MB). If the user shares a file in the conversation — photo OR pdf receipt — upload it via (b) directly. Do NOT rasterize PDFs into images; pass them through as-is with `mime_type: 'application/pdf'`. Attachments render as clickable links on the invoice and PDF. Invoice number is allocated automatically (e.g. INV-0001). Dates default to today + net-30; currency defaults to the client's default, then the business's. Returns the full invoice including line totals and a share URL. To send it to the client, call send_invoice next.",
       inputSchema: createSchema,
     },
     async (args, extra) => {
@@ -226,7 +231,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Add line item (draft only)",
       description:
-        "Append a line item to a draft invoice. Totals are recomputed automatically. Optional `attachments` accepts an array of supporting docs — each is either `{url, label?}` (passthrough link) or `{image_base64, mime_type, filename?, label?}` (inline PNG/JPEG/WebP, max 8 MB, uploaded to enwise's own storage). If the user shared an image, upload it via base64 rather than asking for a URL.",
+        "Append a line item to a draft invoice. Totals are recomputed automatically. Optional `attachments` accepts an array of supporting docs — each is either `{url, label?}` (passthrough link) or `{file_base64, mime_type, filename?, label?}` (inline upload; mime_type = image/png|jpeg|webp or application/pdf, max 8 MB). If the user shared a file, upload it via base64 — pass PDFs through as-is, don't convert them to images.",
       inputSchema: {
         invoice_id: uuid,
         description: z.string().min(1).max(500),
@@ -269,7 +274,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Update line item (draft only)",
       description:
-        "Update fields on a draft invoice line item. Pass only the fields you want to change. Passing `attachments` REPLACES the whole list (send the full desired array, including any you want to keep — mix of existing `{url}` and new `{image_base64, mime_type}` entries). Pass `attachments: []` to clear.",
+        "Update fields on a draft invoice line item. Pass only the fields you want to change. Passing `attachments` REPLACES the whole list (send the full desired array, including any you want to keep — mix of existing `{url}` and new `{file_base64, mime_type}` entries). Pass `attachments: []` to clear.",
       inputSchema: {
         invoice_id: uuid,
         line_item_id: uuid,

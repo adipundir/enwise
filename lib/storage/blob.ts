@@ -5,12 +5,19 @@ import { fileTypeFromBuffer } from "file-type";
 import { nanoid } from "nanoid";
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB (logo)
-const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8 MB (photo/receipt)
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8 MB (photo / receipt / PDF)
 const ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
+const ALLOWED_ATTACHMENT_MIME = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/pdf",
+]);
 const MIME_EXT: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/webp": "webp",
+  "application/pdf": "pdf",
 };
 
 export type LogoInput =
@@ -219,6 +226,17 @@ async function validateMime(buffer: Uint8Array): Promise<
   return { ok: true, mime: sniffed.mime };
 }
 
+/** Looser mime sniff for attachments — allows PDF in addition to images. */
+async function sniffAttachmentMime(
+  buffer: Uint8Array,
+): Promise<{ ok: true; mime: string } | { ok: false }> {
+  const sniffed = await fileTypeFromBuffer(buffer);
+  if (!sniffed || !ALLOWED_ATTACHMENT_MIME.has(sniffed.mime)) {
+    return { ok: false };
+  }
+  return { ok: true, mime: sniffed.mime };
+}
+
 async function uploadToBlob(
   businessId: string,
   buffer: Buffer,
@@ -258,7 +276,7 @@ export type AttachmentInput =
   | { label?: string; url: string }
   | {
       label?: string;
-      image_base64: string;
+      file_base64: string;
       mime_type: string;
       filename?: string;
     };
@@ -311,12 +329,12 @@ export async function resolveAttachment(params: {
     };
   }
 
-  if (!ALLOWED_MIME.has(input.mime_type)) {
+  if (!ALLOWED_ATTACHMENT_MIME.has(input.mime_type)) {
     return {
       ok: false,
       code: "attachment_invalid_mime",
-      message: "Attachment image must be PNG, JPEG, or WebP.",
-      hint: "PDFs and SVGs aren't supported yet. Host elsewhere and pass `url` instead.",
+      message: "Attachment must be PNG, JPEG, WebP, or PDF.",
+      hint: "Other formats (SVG, DOCX, etc.) aren't supported. Host elsewhere and pass `url` instead.",
     };
   }
 
@@ -326,12 +344,12 @@ export async function resolveAttachment(params: {
       ok: false,
       code: "attachment_storage_unavailable",
       message:
-        "Image uploads require Vercel Blob storage, which isn't configured on this server.",
-      hint: "Host the image elsewhere (Drive, Imgur, Dropbox) and pass `url` instead.",
+        "File uploads require Vercel Blob storage, which isn't configured on this server.",
+      hint: "Host the file elsewhere (Drive, Imgur, Dropbox) and pass `url` instead.",
     };
   }
 
-  const clean = input.image_base64.replace(/^data:[^;]+;base64,/, "");
+  const clean = input.file_base64.replace(/^data:[^;]+;base64,/, "");
   let buffer: Buffer;
   try {
     buffer = Buffer.from(clean, "base64");
@@ -339,23 +357,24 @@ export async function resolveAttachment(params: {
     return {
       ok: false,
       code: "attachment_invalid_mime",
-      message: "image_base64 isn't valid base64.",
+      message: "file_base64 isn't valid base64.",
     };
   }
   if (buffer.byteLength > MAX_ATTACHMENT_BYTES) {
     return {
       ok: false,
       code: "attachment_too_large",
-      message: `Image is ${formatBytes(buffer.byteLength)}, max is ${formatBytes(MAX_ATTACHMENT_BYTES)}.`,
+      message: `File is ${formatBytes(buffer.byteLength)}, max is ${formatBytes(MAX_ATTACHMENT_BYTES)}.`,
     };
   }
 
-  const mimeCheck = await validateMime(buffer);
+  const mimeCheck = await sniffAttachmentMime(buffer);
   if (!mimeCheck.ok) {
     return {
       ok: false,
       code: "attachment_invalid_mime",
-      message: "File content doesn't look like a supported image.",
+      message:
+        "File contents don't match a supported format (PNG/JPEG/WebP/PDF).",
     };
   }
   if (mimeCheck.mime !== input.mime_type) {
