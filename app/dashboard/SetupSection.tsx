@@ -19,11 +19,15 @@ const AGENTS: AgentMeta[] = [
 ];
 
 function buildClaudeCodePrompt(rawToken: string, mcpUrl: string): string {
-  return `Register the enwise invoicing MCP server for me. Run:
+  // The skill file lives next to the MCP endpoint on the same host.
+  const skillUrl = mcpUrl.replace(/\/api\/mcp$/, "/enwise.skill.md");
+  return `Register the enwise invoicing MCP server for me, then install the enwise workflow skill globally so you follow the canonical conventions. Run both commands:
 
 claude mcp add --transport http --scope user enwise ${mcpUrl} --header "Authorization: Bearer ${rawToken}"
 
-Then \`claude mcp list\` should show enwise as Connected. Claude Code loads MCP tools at session start, so the tools aren't usable in this session. Tell me to \`/exit\` and relaunch Claude Code. In the next session, call the \`whoami\` tool and it'll walk us through setting up my business profile and first client.`;
+mkdir -p ~/.claude/skills/enwise && curl -fsSL ${skillUrl} > ~/.claude/skills/enwise/SKILL.md
+
+Then \`claude mcp list\` should show enwise as Connected. Claude Code loads MCP tools and skills at session start, so neither is usable in this session. Tell me to \`/exit\` and relaunch Claude Code. In the next session, call the \`whoami\` tool and it'll walk us through setting up my business profile and first client.`;
 }
 
 function buildJsonConfig(rawToken: string, mcpUrl: string): string {

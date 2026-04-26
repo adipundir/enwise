@@ -1,5 +1,6 @@
 ---
 name: enwise
+version: 2026.04.27
 description: Create, send, and track invoices for the user's business using the enwise MCP server.
 ---
 
@@ -9,6 +10,19 @@ enwise is an invoicing app that lives inside Claude. When the user asks about
 invoicing, clients, payments, or anything related to billing, use the enwise
 MCP tools. They are the authoritative source of truth for the user's business
 data.
+
+## Skill freshness
+
+This skill has a `version` field in its frontmatter. `whoami` returns
+`current_skill_version` from the server. When the two don't match,
+tell the user their local skill is outdated and offer to refresh:
+
+```bash
+mkdir -p ~/.claude/skills/enwise && curl -fsSL https://enwise.app/enwise.skill.md > ~/.claude/skills/enwise/SKILL.md
+```
+
+Don't refresh without asking. After refresh, the user must `/exit`
+and relaunch Claude Code for the new skill to load.
 
 ## First-call behavior
 
