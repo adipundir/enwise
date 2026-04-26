@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { businesses, clients, invoices } from "@/lib/db/schema";
 import { auth } from "@/auth";
@@ -7,6 +7,7 @@ import { invoiceShareUrl } from "@/lib/invoices";
 import { formatMoney, addAmounts } from "@/lib/money";
 import { createToken, getActiveToken } from "@/lib/tokens";
 import { KeyAndConnectSection } from "./KeyAndConnectSection";
+import { BusinessesSection } from "./BusinessesSection";
 
 // Stats depend on fresh DB state that changes via MCP tool calls outside
 // of this route's request context. Force dynamic so every page hit
@@ -18,22 +19,17 @@ export default async function DashboardHome() {
   const user = session?.user as
     | { id?: string; defaultBusinessId?: string | null }
     | undefined;
-  const businessId = user?.defaultBusinessId;
+  const userId = user?.id;
 
-  const [business] = businessId
-    ? await db.select().from(businesses).where(eq(businesses.id, businessId))
-    : [];
-
-  // One key per user. Mint on first visit and reveal the raw once. After
-  // that the raw is unrecoverable; the user must rotate to mint a new one.
+  // One token per user (not per business). Mint on first visit, reveal once.
   let bootstrapRawToken: string | null = null;
   let currentPrefix: string | null = null;
-  if (businessId && user?.id) {
-    const active = await getActiveToken(businessId);
+  if (userId) {
+    const active = await getActiveToken(userId);
     if (!active) {
       const created = await createToken({
-        businessId,
-        createdByUserId: user.id,
+        businessId: user?.defaultBusinessId ?? "",
+        createdByUserId: userId,
         name: "Default",
       });
       bootstrapRawToken = created.raw;
@@ -43,12 +39,22 @@ export default async function DashboardHome() {
     }
   }
 
-  const [clientCount, allInvoices, recentInvoices] = businessId
+  // All businesses this user owns, with their counts and plan.
+  const allBusinesses = userId
+    ? await db
+        .select()
+        .from(businesses)
+        .where(eq(businesses.ownerUserId, userId))
+        .orderBy(asc(businesses.createdAt))
+    : [];
+  const businessIds = allBusinesses.map((b) => b.id);
+
+  const [clientCount, allInvoices, recentInvoices] = businessIds.length > 0
     ? await Promise.all([
         db
           .select({ id: clients.id })
           .from(clients)
-          .where(and(eq(clients.businessId, businessId), isNull(clients.archivedAt))),
+          .where(and(inArray(clients.businessId, businessIds), isNull(clients.archivedAt))),
         db
           .select({
             status: invoices.status,
@@ -57,11 +63,11 @@ export default async function DashboardHome() {
             currency: invoices.currency,
           })
           .from(invoices)
-          .where(and(eq(invoices.businessId, businessId), isNull(invoices.deletedAt))),
+          .where(and(inArray(invoices.businessId, businessIds), isNull(invoices.deletedAt))),
         db
           .select()
           .from(invoices)
-          .where(and(eq(invoices.businessId, businessId), isNull(invoices.deletedAt)))
+          .where(and(inArray(invoices.businessId, businessIds), isNull(invoices.deletedAt)))
           .orderBy(desc(invoices.createdAt))
           .limit(5),
       ])
@@ -85,11 +91,11 @@ export default async function DashboardHome() {
           {session?.user?.name ? `, ${session.user.name.split(" ")[0]}` : ""}.
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">
-          Business profile:{" "}
-          <span className="text-zinc-200">
-            {business?.name ?? "(setting up…)"}
-          </span>
-          . Everything else happens in Claude once your key is plugged in.
+          {allBusinesses.length === 0
+            ? "(setting up…)"
+            : allBusinesses.length === 1
+              ? <>Business: <span className="text-zinc-200">{allBusinesses[0]!.name}</span>. Everything else happens in Claude once your key is plugged in.</>
+              : <>Billing from <span className="text-zinc-200">{allBusinesses.length} businesses</span>. Claude asks which one to use per invoice. Everything happens inside Claude once your key is plugged in.</>}
         </p>
       </section>
 
@@ -108,8 +114,8 @@ export default async function DashboardHome() {
           small={outstandingByCurrency.length > 1}
         />
         <Stat
-          label="Default currency"
-          value={business?.defaultCurrency ?? "—"}
+          label="Businesses"
+          value={String(allBusinesses.length)}
         />
       </section>
 
@@ -117,6 +123,10 @@ export default async function DashboardHome() {
         initialRawToken={bootstrapRawToken}
         currentPrefix={currentPrefix}
         mcpUrl={mcpUrl}
+      />
+
+      <BusinessesSection
+        businesses={await buildBusinessSummaries(allBusinesses, user?.defaultBusinessId ?? null)}
       />
 
       {recentInvoices.length > 0 ? (
@@ -156,6 +166,45 @@ export default async function DashboardHome() {
         </section>
       ) : null}
     </div>
+  );
+}
+
+async function buildBusinessSummaries(
+  bs: Array<{
+    id: string;
+    name: string;
+    plan: "free" | "pro";
+    defaultCurrency: string;
+  }>,
+  defaultBusinessId: string | null,
+) {
+  if (bs.length === 0) return [];
+  return Promise.all(
+    bs.map(async (b) => {
+      const [clientRows, invoiceRows] = await Promise.all([
+        db
+          .select({ id: clients.id })
+          .from(clients)
+          .where(
+            and(eq(clients.businessId, b.id), isNull(clients.archivedAt)),
+          ),
+        db
+          .select({ id: invoices.id })
+          .from(invoices)
+          .where(
+            and(eq(invoices.businessId, b.id), isNull(invoices.deletedAt)),
+          ),
+      ]);
+      return {
+        id: b.id,
+        name: b.name,
+        plan: b.plan,
+        defaultCurrency: b.defaultCurrency,
+        invoiceCount: invoiceRows.length,
+        clientCount: clientRows.length,
+        isDefault: b.id === defaultBusinessId,
+      };
+    }),
   );
 }
 

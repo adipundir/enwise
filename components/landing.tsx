@@ -38,14 +38,14 @@ export async function Landing() {
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <Link
               href={primaryHref}
-              className="group inline-flex items-center gap-2 rounded-full bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-950 hover:bg-white"
+              className="group inline-flex items-center gap-2 rounded-md bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-950 hover:bg-white"
             >
               {primaryLabel}
               <ArrowRight />
             </Link>
             <Link
               href="#how"
-              className="inline-flex items-center gap-2 rounded-full border border-zinc-800 px-5 py-2.5 text-sm text-zinc-200 hover:border-zinc-700 hover:bg-zinc-900"
+              className="inline-flex items-center gap-2 rounded-md border border-zinc-800 px-5 py-2.5 text-sm text-zinc-200 hover:border-zinc-700 hover:bg-zinc-900"
             >
               <Dot /> How it works
             </Link>
@@ -147,7 +147,7 @@ export async function Landing() {
                 </div>
                 <div className="mt-1 flex items-baseline gap-2">
                   <span className="display text-4xl text-zinc-100">$0</span>
-                  <span className="text-sm text-zinc-500">/ month</span>
+                  <span className="text-sm text-zinc-500">/ year</span>
                 </div>
                 <p className="mt-3 text-sm text-zinc-500">
                   Enough to invoice a couple of clients and prove the workflow.
@@ -160,7 +160,7 @@ export async function Landing() {
                 </ul>
                 <Link
                   href={primaryHref}
-                  className="mt-8 inline-flex items-center justify-center gap-2 rounded-full border border-zinc-800 px-5 py-2.5 text-sm text-zinc-100 hover:border-zinc-700 hover:bg-zinc-900"
+                  className="mt-8 inline-flex items-center justify-center gap-2 rounded-md border border-zinc-800 px-5 py-2.5 text-sm text-zinc-100 hover:border-zinc-700 hover:bg-zinc-900"
                 >
                   Start free
                 </Link>
@@ -173,7 +173,7 @@ export async function Landing() {
                 </div>
                 <div className="mt-1 flex items-baseline gap-2">
                   <span className="display text-4xl text-zinc-900">$9</span>
-                  <span className="text-sm text-zinc-500">/ month</span>
+                  <span className="text-sm text-zinc-500">/ year</span>
                 </div>
                 <p className="mt-3 text-sm text-zinc-600">
                   Everything unlocked. One flat price, no usage ladder.
@@ -187,7 +187,7 @@ export async function Landing() {
                 </ul>
                 <Link
                   href={primaryHref}
-                  className="mt-8 inline-flex items-center justify-center gap-2 rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-zinc-50 hover:bg-black"
+                  className="mt-8 inline-flex items-center justify-center gap-2 rounded-md bg-zinc-900 px-5 py-2.5 text-sm font-medium text-zinc-50 hover:bg-black"
                 >
                   Get Pro
                   <ArrowRight />

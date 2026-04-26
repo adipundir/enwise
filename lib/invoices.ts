@@ -10,7 +10,7 @@ import {
   type Invoice,
   type InvoiceLineItem,
 } from "@/lib/db/schema";
-import type { EnwiseCtx } from "@/lib/mcp/context";
+import type { ScopedCtx } from "@/lib/mcp/context";
 import { addAmounts, computeLine, isValidCurrency } from "@/lib/money";
 import { allocateInvoiceNumber } from "@/lib/numbering";
 import {
@@ -33,12 +33,12 @@ export type LineItemInput = {
    *  Whole-invoice context belongs on the invoice's `notes` field. */
   note?: string | null;
   /**
-   * Optional supporting docs. Each attachment is either a passthrough URL
-   * (`{url, label?}`) or a base64-encoded file to upload to our own Blob
-   * storage (`{file_base64, mime_type, filename?, label?}`). Resolved into
-   * `{label, url}` before insert.
+   * Optional supporting docs. External callers (the MCP layer) pass base64
+   * files to upload to our Blob. Internal callers (duplicate_invoice) can
+   * pass already-resolved `{label, url}` entries for attachments that
+   * already live on our Blob — we re-use them instead of re-uploading.
    */
-  attachments?: AttachmentInput[];
+  attachments?: (AttachmentInput | LineItemAttachment)[];
 };
 
 export type CreateInvoiceInput = {
@@ -97,21 +97,20 @@ export type AttachmentResolveError = {
   code:
     | "attachment_too_large"
     | "attachment_invalid_mime"
-    | "attachment_storage_unavailable"
-    | "attachment_invalid_url";
+    | "attachment_storage_unavailable";
   message: string;
   hint?: string;
 };
 
 /**
  * Walk a list of attachment inputs and resolve each to its final
- * `{label, url}` form. Base64 images get uploaded to our Blob bucket;
- * URLs pass through. Fails fast on the first error so callers can surface
+ * `{label, url}` form. Every input is a base64 upload — URL passthrough
+ * was removed. Fails fast on the first error so callers can surface
  * a clean message to Claude without a partial DB write.
  */
 async function resolveAttachments(
   businessId: string,
-  inputs: AttachmentInput[] | undefined,
+  inputs: (AttachmentInput | LineItemAttachment)[] | undefined,
 ): Promise<
   | { ok: true; attachments: LineItemAttachment[] }
   | { ok: false; error: AttachmentResolveError }
@@ -119,6 +118,13 @@ async function resolveAttachments(
   if (!inputs || inputs.length === 0) return { ok: true, attachments: [] };
   const resolved: LineItemAttachment[] = [];
   for (const input of inputs) {
+    // Already-resolved entry (duplicate_invoice hands these through). We
+    // trust them because the url was minted by us during the original
+    // upload — no re-upload needed.
+    if (!("file_base64" in input)) {
+      resolved.push({ label: input.label, url: input.url });
+      continue;
+    }
     const r = await resolveAttachment({ businessId, input });
     if (!r.ok) {
       return { ok: false, error: { code: r.code, message: r.message, hint: r.hint } };
@@ -128,7 +134,7 @@ async function resolveAttachments(
   return { ok: true, attachments: resolved };
 }
 
-async function getClientScoped(ctx: EnwiseCtx, clientId: string) {
+async function getClientScoped(ctx: ScopedCtx, clientId: string) {
   const [row] = await db
     .select()
     .from(clients)
@@ -150,14 +156,13 @@ export type CreateInvoiceResult =
         | "onboarding_required"
         | "attachment_too_large"
         | "attachment_invalid_mime"
-        | "attachment_storage_unavailable"
-        | "attachment_invalid_url";
+        | "attachment_storage_unavailable";
       message: string;
       hint?: string;
     };
 
 export async function createInvoice(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   input: CreateInvoiceInput,
 ): Promise<CreateInvoiceResult> {
   if (input.lineItems.length === 0) {
@@ -363,7 +368,7 @@ export async function createInvoice(
 // ---------- Read ----------
 
 export async function getInvoice(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceId: string,
 ): Promise<InvoiceWithLineItems | null> {
   const [inv] = await db
@@ -416,7 +421,7 @@ export type ListInvoicesOpts = {
 };
 
 export async function listInvoices(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   opts: ListInvoicesOpts = {},
 ): Promise<Invoice[]> {
   const limit = Math.max(1, Math.min(200, opts.limit ?? 25));
@@ -443,7 +448,7 @@ export async function listInvoices(
 }
 
 export async function findInvoiceByNumber(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceNumber: string,
 ): Promise<Invoice | null> {
   const [row] = await db
@@ -491,14 +496,13 @@ export type LineItemMutateResult<T> =
         | "client_not_found"
         | "attachment_too_large"
         | "attachment_invalid_mime"
-        | "attachment_storage_unavailable"
-        | "attachment_invalid_url";
+        | "attachment_storage_unavailable";
       message: string;
       hint?: string;
     };
 
 export async function updateInvoice(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceId: string,
   patch: UpdateInvoiceInput,
 ): Promise<MutateResult<InvoiceWithLineItems>> {
@@ -548,7 +552,7 @@ async function withRecomputedTotals(invoiceId: string) {
 }
 
 export async function addLineItem(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceId: string,
   item: LineItemInput,
 ): Promise<LineItemMutateResult<InvoiceWithLineItems>> {
@@ -594,7 +598,7 @@ export async function addLineItem(
 }
 
 export async function updateLineItem(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceId: string,
   lineItemId: string,
   patch: Partial<LineItemInput>,
@@ -647,7 +651,7 @@ export async function updateLineItem(
 }
 
 export async function removeLineItem(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceId: string,
   lineItemId: string,
 ): Promise<MutateResult<InvoiceWithLineItems>> {
@@ -688,7 +692,7 @@ export async function removeLineItem(
  * This is an internal service function, called by the email send pipeline.
  */
 export async function finalizeInvoice(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceId: string,
 ): Promise<MutateResult<InvoiceWithLineItems>> {
   const inv = await getInvoice(ctx, invoiceId);
@@ -780,7 +784,7 @@ export async function finalizeInvoice(
 // ---------- Status transitions ----------
 
 export async function markInvoicePaid(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceId: string,
   opts: { amount?: string; paidAt?: string } = {},
 ): Promise<MutateResult<InvoiceWithLineItems>> {
@@ -815,7 +819,7 @@ export async function markInvoicePaid(
  * current call — callers must know `wasDraft` beforehand.
  */
 export async function revertFinalizeInvoice(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceId: string,
 ): Promise<void> {
   await db
@@ -837,7 +841,7 @@ export async function revertFinalizeInvoice(
 }
 
 export async function voidInvoice(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceId: string,
   opts: { reason?: string } = {},
 ): Promise<MutateResult<InvoiceWithLineItems>> {
@@ -855,7 +859,7 @@ export async function voidInvoice(
 }
 
 export async function deleteInvoice(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceId: string,
 ): Promise<MutateResult<{ deleted: true }>> {
   const inv = await getInvoice(ctx, invoiceId);
@@ -875,7 +879,7 @@ export async function deleteInvoice(
 }
 
 export async function setShareEnabled(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceId: string,
   enabled: boolean,
 ): Promise<MutateResult<InvoiceWithLineItems>> {
@@ -891,7 +895,7 @@ export async function setShareEnabled(
 // ---------- Duplicate ----------
 
 export async function duplicateInvoice(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   invoiceId: string,
   opts: { clientId?: string; newIssueDate?: string } = {},
 ): Promise<CreateInvoiceResult> {

@@ -10,7 +10,7 @@ import {
   updateRecurring,
   type Interval,
 } from "@/lib/recurring";
-import { ctxFromAuthInfo } from "@/lib/mcp/context";
+import { ctxFromAuthInfo, scopeFromCtx } from "@/lib/mcp/context";
 import { toolError, toolOk, zodToToolError } from "@/lib/mcp/errors";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
@@ -44,6 +44,7 @@ const taxRate = z
   });
 
 const lineItemSchema = z.object({
+  business_id: uuid.optional(),
   description: z.string().min(1).max(500),
   quantity,
   unit_price: amount,
@@ -54,6 +55,7 @@ const lineItemSchema = z.object({
 const intervalSchema = z.enum(["weekly", "biweekly", "monthly", "quarterly", "yearly"]);
 
 const createSchema = {
+  business_id: uuid.optional(),
   client_id: uuid,
   name: z.string().max(200).nullish(),
   line_items: z.array(lineItemSchema).min(1).max(200),
@@ -93,7 +95,10 @@ export function registerRecurringTools(server: McpServer) {
     async (args, extra) => {
       const parsed = z.object(createSchema).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const d = parsed.data;
       const result = await createRecurring(ctx, {
         clientId: d.client_id,
@@ -114,6 +119,7 @@ export function registerRecurringTools(server: McpServer) {
   );
 
   const updateSchema = {
+    business_id: uuid.optional(),
     recurring_id: uuid,
     name: z.string().max(200).nullish(),
     line_items: z.array(lineItemSchema).min(1).max(200).optional(),
@@ -138,7 +144,10 @@ export function registerRecurringTools(server: McpServer) {
     async (args, extra) => {
       const parsed = z.object(updateSchema).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const d = parsed.data;
       const result = await updateRecurring(ctx, d.recurring_id, {
         name: d.name ?? undefined,
@@ -162,6 +171,7 @@ export function registerRecurringTools(server: McpServer) {
     {
       title: "List recurring invoice templates",
       inputSchema: {
+        business_id: uuid.optional(),
         client_id: uuid.optional(),
         active_only: z.boolean().optional(),
       },
@@ -171,7 +181,10 @@ export function registerRecurringTools(server: McpServer) {
         .object({ client_id: uuid.optional(), active_only: z.boolean().optional() })
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const rows = await listRecurring(ctx, {
         clientId: parsed.data.client_id,
         activeOnly: parsed.data.active_only,
@@ -185,12 +198,17 @@ export function registerRecurringTools(server: McpServer) {
     {
       title: "Pause recurring template",
       description: "Set active=false. No more invoices generated until resumed.",
-      inputSchema: { recurring_id: uuid },
+      inputSchema: {
+    business_id: uuid.optional(), recurring_id: uuid },
     },
     async (args, extra) => {
-      const parsed = z.object({ recurring_id: uuid }).safeParse(args);
+      const parsed = z.object({
+      business_id: uuid.optional(), recurring_id: uuid }).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const r = await setActive(ctx, parsed.data.recurring_id, false);
       if (!r.ok) return toolError("not_found", r.message);
       return toolOk(formatRecurringForMcp(r.value));
@@ -201,12 +219,17 @@ export function registerRecurringTools(server: McpServer) {
     "resume_recurring_invoice",
     {
       title: "Resume recurring template",
-      inputSchema: { recurring_id: uuid },
+      inputSchema: {
+    business_id: uuid.optional(), recurring_id: uuid },
     },
     async (args, extra) => {
-      const parsed = z.object({ recurring_id: uuid }).safeParse(args);
+      const parsed = z.object({
+      business_id: uuid.optional(), recurring_id: uuid }).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const r = await setActive(ctx, parsed.data.recurring_id, true);
       if (!r.ok) return toolError("not_found", r.message);
       return toolOk(formatRecurringForMcp(r.value));
@@ -219,12 +242,17 @@ export function registerRecurringTools(server: McpServer) {
       title: "Cancel recurring template",
       description:
         "Permanently delete a recurring template. Invoices already generated from it are unaffected. Use pause_recurring_invoice if you want to temporarily stop.",
-      inputSchema: { recurring_id: uuid },
+      inputSchema: {
+    business_id: uuid.optional(), recurring_id: uuid },
     },
     async (args, extra) => {
-      const parsed = z.object({ recurring_id: uuid }).safeParse(args);
+      const parsed = z.object({
+      business_id: uuid.optional(), recurring_id: uuid }).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const r = await cancelRecurring(ctx, parsed.data.recurring_id);
       if (!r.ok) return toolError("not_found", r.message);
       return toolOk(r.value);
@@ -237,12 +265,17 @@ export function registerRecurringTools(server: McpServer) {
       title: "Run recurring template now (manual)",
       description:
         "Immediately generate the next invoice for a recurring template, regardless of next_run_at. Useful for testing. Advances next_run_at as if the cron had fired.",
-      inputSchema: { recurring_id: uuid },
+      inputSchema: {
+    business_id: uuid.optional(), recurring_id: uuid },
     },
     async (args, extra) => {
-      const parsed = z.object({ recurring_id: uuid }).safeParse(args);
+      const parsed = z.object({
+      business_id: uuid.optional(), recurring_id: uuid }).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const r = await runTemplateById(ctx, parsed.data.recurring_id);
       if (!r.ok) return toolError("not_found", r.message);
       return toolOk(r.value);

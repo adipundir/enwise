@@ -20,7 +20,7 @@ import {
 } from "@/lib/invoices";
 import { sendInvoiceByEmail, type SendInvoiceOutcome } from "@/lib/email/sendInvoice";
 import { withIdempotency } from "@/lib/idempotency";
-import { ctxFromAuthInfo } from "@/lib/mcp/context";
+import { ctxFromAuthInfo, scopeFromCtx } from "@/lib/mcp/context";
 import { toolError, toolOk, zodToToolError, type ErrorCode } from "@/lib/mcp/errors";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
@@ -77,11 +77,8 @@ const currency = z
   .regex(/^[A-Za-z]{3}$/, "3-letter ISO 4217 code like 'USD'")
   .transform((s) => s.toUpperCase());
 
-const urlAttachment = z.object({
-  label: z.string().min(1).max(120).optional(),
-  url: z.string().url().max(2000),
-});
-const uploadAttachment = z.object({
+const attachmentSchema = z.object({
+  business_id: uuid.optional(),
   label: z.string().min(1).max(120).optional(),
   file_base64: z.string().min(1),
   mime_type: z.enum([
@@ -92,10 +89,10 @@ const uploadAttachment = z.object({
   ]),
   filename: z.string().min(1).max(120).optional(),
 });
-const attachmentSchema = z.union([urlAttachment, uploadAttachment]);
 const attachments = z.array(attachmentSchema).max(10).optional();
 
 const lineItemSchema = z.object({
+  business_id: uuid.optional(),
   description: z.string().min(1).max(500),
   quantity,
   unit_price: amount,
@@ -106,6 +103,7 @@ const lineItemSchema = z.object({
 });
 
 const createSchema = {
+  business_id: uuid.optional(),
   client_id: uuid,
   issue_date: isoDate.optional(),
   due_date: isoDate.optional(),
@@ -131,7 +129,6 @@ function mapMutateError(code: string): ErrorCode {
     case "attachment_too_large":
     case "attachment_invalid_mime":
     case "attachment_storage_unavailable":
-    case "attachment_invalid_url":
       return code;
     default:
       return "internal_error";
@@ -144,13 +141,16 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Create invoice",
       description:
-        "Create a draft invoice for a client with one or more line items. Every line item description, quantity, unit price, and tax rate MUST come from the user — NEVER invent them. If the user hasn't specified what they're billing for, ask before calling this tool.\n\nFIELD SEPARATION RULES (follow these):\n- `line_items[].description`: just the product or service name. Keep it short and specific (e.g., `MacBook Pro 14\" M5 Pro (24GB / 1TB)`, `Consulting — April 2026`, `Claude Max subscription`). No 'Reimbursement' prefix, no reference numbers, no conversion math, no 'see attached'.\n- `line_items[].note` (per-item): context for THIS item specifically — conversion math, source invoice number, purchase date, why this specific item is listed. E.g. `Converted from INR 2,46,400 at 93.75 INR/USD (mid-market rate on 2026-04-23). Source: Apple invoice MC65592205, purchased 2026-04-17.`\n- `notes` (invoice-level): context for the WHOLE invoice — payment instructions, thank-yous, reimbursement framing when the entire invoice is one thing, shared terms across items. E.g., `Reimbursement invoice. Please pay via Wise to: …`.\n- `terms` (invoice-level): standing terms like `Payment due within 30 days via bank transfer`.\n- `attachments` on a line item: supporting files (receipts, PDFs, photos). Don't repeat their contents in the description or note.\n\nRule of thumb: if the context is about ONE line item, put it on that line's `note`. If it applies to the whole invoice, put it on `notes`.\n\nATTACHMENTS: each attachment is either (a) passthrough URL `{url, label?}` or (b) inline upload `{file_base64, mime_type, filename?, label?}` where mime_type is `image/png`, `image/jpeg`, `image/webp`, or `application/pdf` (max 8 MB). If the user shares a file, upload via (b). Pass PDFs through as-is — do NOT rasterize them.\n\nInvoice number is allocated automatically (e.g. INV-0001). Dates default to today + net-30; currency defaults to the client's default then the business's. Returns the full invoice including line totals and a share URL. To send it to the client, call send_invoice next.",
+        "Create a draft invoice for a client under a specific business. If the user owns multiple businesses, pass `business_id` — ASK the user which business this invoice is under before calling. If they own one, `business_id` can be omitted. Every line item description, quantity, unit price, and tax rate MUST come from the user — NEVER invent them.\n\nFIELD SEPARATION RULES:\n- `line_items[].description`: just the product or service name. Short and specific (e.g., `MacBook Pro 14\" M5 Pro (24GB / 1TB)`, `Consulting — April 2026`). No 'Reimbursement' prefix, no reference numbers, no conversion math, no 'see attached'.\n- `line_items[].note` (per-item): context for THIS item — conversion math, source invoice number, purchase date.\n- `notes` (invoice-level): context for the WHOLE invoice — payment instructions, thank-yous, reimbursement framing.\n- `terms` (invoice-level): standing terms like `Payment due within 30 days via bank transfer`.\n- `attachments` on a line item: supporting files. Don't repeat their contents in the description or note.\n\nATTACHMENTS: base64 uploads only. `{file_base64, mime_type, filename?, label?}` where mime_type is `image/png`, `image/jpeg`, `image/webp`, or `application/pdf` (max 8 MB, 10 per line item). Pass PDFs through as-is — don't rasterize.\n\nInvoice number is allocated automatically. Dates default to today + net-30; currency defaults to the client's default then the business's. Returns the full invoice + share URL. To email it, call send_invoice next.",
       inputSchema: createSchema,
     },
     async (args, extra) => {
       const parsed = z.object(createSchema).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const d = parsed.data;
       const result = await createInvoice(ctx, {
         clientId: d.client_id,
@@ -189,6 +189,7 @@ export function registerInvoiceTools(server: McpServer) {
       description:
         "Update draft invoice headers (client, dates, notes, terms). Only drafts are editable. To change line items use add_line_item / update_line_item / remove_line_item. For finalized invoices use void_invoice + duplicate_invoice.",
       inputSchema: {
+        business_id: uuid.optional(),
         invoice_id: uuid,
         client_id: uuid.optional(),
         issue_date: isoDate.optional(),
@@ -209,7 +210,10 @@ export function registerInvoiceTools(server: McpServer) {
         })
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const d = parsed.data;
       const r = await updateInvoice(ctx, d.invoice_id, {
         clientId: d.client_id,
@@ -236,6 +240,7 @@ export function registerInvoiceTools(server: McpServer) {
       description:
         "Append a line item to a draft invoice. Totals are recomputed automatically. Optional `attachments` accepts an array of supporting docs — each is either `{url, label?}` (passthrough link) or `{file_base64, mime_type, filename?, label?}` (inline upload; mime_type = image/png|jpeg|webp or application/pdf, max 8 MB). If the user shared a file, upload it via base64 — pass PDFs through as-is, don't convert them to images.",
       inputSchema: {
+        business_id: uuid.optional(),
         invoice_id: uuid,
         description: z.string().min(1).max(500),
         quantity,
@@ -248,6 +253,7 @@ export function registerInvoiceTools(server: McpServer) {
     },
     async (args, extra) => {
       const schema = z.object({
+        business_id: uuid.optional(),
         invoice_id: uuid,
         description: z.string().min(1).max(500),
         quantity,
@@ -259,7 +265,10 @@ export function registerInvoiceTools(server: McpServer) {
       });
       const parsed = schema.safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const d = parsed.data;
       const r = await addLineItem(ctx, d.invoice_id, {
         description: d.description,
@@ -280,8 +289,9 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Update line item (draft only)",
       description:
-        "Update fields on a draft invoice line item. Pass only the fields you want to change. Passing `attachments` REPLACES the whole list (send the full desired array, including any you want to keep — mix of existing `{url}` and new `{file_base64, mime_type}` entries). Pass `attachments: []` to clear.",
+        "Update fields on a draft invoice line item. Pass only the fields you want to change. Passing `attachments` REPLACES the whole list (send every file you want on the line item — any attachment you don't re-send is removed). Pass `attachments: []` to clear.",
       inputSchema: {
+        business_id: uuid.optional(),
         invoice_id: uuid,
         line_item_id: uuid,
         description: z.string().min(1).max(500).optional(),
@@ -295,6 +305,7 @@ export function registerInvoiceTools(server: McpServer) {
     },
     async (args, extra) => {
       const schema = z.object({
+        business_id: uuid.optional(),
         invoice_id: uuid,
         line_item_id: uuid,
         description: z.string().min(1).max(500).optional(),
@@ -307,7 +318,10 @@ export function registerInvoiceTools(server: McpServer) {
       });
       const parsed = schema.safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const d = parsed.data;
       const patch: Parameters<typeof updateLineItem>[3] = {};
       if (d.description !== undefined) patch.description = d.description;
@@ -327,13 +341,18 @@ export function registerInvoiceTools(server: McpServer) {
     "remove_line_item",
     {
       title: "Remove line item (draft only)",
-      inputSchema: { invoice_id: uuid, line_item_id: uuid },
+      inputSchema: {
+    business_id: uuid.optional(), invoice_id: uuid, line_item_id: uuid },
     },
     async (args, extra) => {
-      const schema = z.object({ invoice_id: uuid, line_item_id: uuid });
+      const schema = z.object({
+      business_id: uuid.optional(), invoice_id: uuid, line_item_id: uuid });
       const parsed = schema.safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const r = await removeLineItem(ctx, parsed.data.invoice_id, parsed.data.line_item_id);
       if (!r.ok) return toolError(mapMutateError(r.code), r.message);
       return toolOk(formatInvoiceForMcp(r.value));
@@ -345,12 +364,17 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Get invoice",
       description: "Fetch an invoice by id. full header, line items, and totals.",
-      inputSchema: { invoice_id: uuid },
+      inputSchema: {
+    business_id: uuid.optional(), invoice_id: uuid },
     },
     async (args, extra) => {
-      const parsed = z.object({ invoice_id: uuid }).safeParse(args);
+      const parsed = z.object({
+      business_id: uuid.optional(), invoice_id: uuid }).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const inv = await getInvoice(ctx, parsed.data.invoice_id);
       if (!inv) return toolError("not_found", `No invoice with id ${parsed.data.invoice_id}.`);
       return toolOk({ ...formatInvoiceForMcp(inv), share_url: invoiceShareUrl(inv.shareSlug) });
@@ -364,6 +388,7 @@ export function registerInvoiceTools(server: McpServer) {
       description:
         "List invoices with optional filters. Order: issue_date desc. Use this for 'get the last 10 invoices to this client', 'what's outstanding?', etc. Status 'overdue' is computed (status=sent AND due_date<today).",
       inputSchema: {
+        business_id: uuid.optional(),
         client_id: uuid.optional(),
         status: z.enum(["draft", "sent", "paid", "void", "overdue"]).optional(),
         date_from: isoDate.optional(),
@@ -373,6 +398,7 @@ export function registerInvoiceTools(server: McpServer) {
     },
     async (args, extra) => {
       const schema = z.object({
+        business_id: uuid.optional(),
         client_id: uuid.optional(),
         status: z.enum(["draft", "sent", "paid", "void", "overdue"]).optional(),
         date_from: isoDate.optional(),
@@ -381,7 +407,10 @@ export function registerInvoiceTools(server: McpServer) {
       });
       const parsed = schema.safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const rows = await listInvoices(ctx, {
         clientId: parsed.data.client_id,
         status: parsed.data.status,
@@ -398,12 +427,17 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Find invoice by number",
       description: "Resolve an invoice_number like 'INV-0042' to an invoice id.",
-      inputSchema: { invoice_number: z.string().min(1).max(40) },
+      inputSchema: {
+    business_id: uuid.optional(), invoice_number: z.string().min(1).max(40) },
     },
     async (args, extra) => {
-      const parsed = z.object({ invoice_number: z.string().min(1).max(40) }).safeParse(args);
+      const parsed = z.object({
+      business_id: uuid.optional(), invoice_number: z.string().min(1).max(40) }).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const inv = await findInvoiceByNumber(ctx, parsed.data.invoice_number);
       if (!inv) return toolError("not_found", `No invoice with number ${parsed.data.invoice_number}.`);
       return toolOk(formatInvoiceSummaryForMcp(inv));
@@ -417,6 +451,7 @@ export function registerInvoiceTools(server: McpServer) {
       description:
         "Clone an existing invoice's line items into a new draft. Optionally retarget to a different client. Returns the new draft invoice.",
       inputSchema: {
+        business_id: uuid.optional(),
         invoice_id: uuid,
         client_id: uuid.optional(),
         new_issue_date: isoDate.optional(),
@@ -424,13 +459,17 @@ export function registerInvoiceTools(server: McpServer) {
     },
     async (args, extra) => {
       const schema = z.object({
+        business_id: uuid.optional(),
         invoice_id: uuid,
         client_id: uuid.optional(),
         new_issue_date: isoDate.optional(),
       });
       const parsed = schema.safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const r = await duplicateInvoice(ctx, parsed.data.invoice_id, {
         clientId: parsed.data.client_id,
         newIssueDate: parsed.data.new_issue_date,
@@ -452,6 +491,7 @@ export function registerInvoiceTools(server: McpServer) {
       description:
         "Record payment for an invoice. Defaults amount to the invoice total and paid_at to today. Supports partial payments. pass an amount less than total to reflect that. Amount must be >= 0.",
       inputSchema: {
+        business_id: uuid.optional(),
         invoice_id: uuid,
         amount: nonNegativeAmount.optional(),
         paid_at: isoDate.optional(),
@@ -459,13 +499,17 @@ export function registerInvoiceTools(server: McpServer) {
     },
     async (args, extra) => {
       const schema = z.object({
+        business_id: uuid.optional(),
         invoice_id: uuid,
         amount: nonNegativeAmount.optional(),
         paid_at: isoDate.optional(),
       });
       const parsed = schema.safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const r = await markInvoicePaid(ctx, parsed.data.invoice_id, {
         amount: parsed.data.amount,
         paidAt: parsed.data.paid_at,
@@ -481,12 +525,17 @@ export function registerInvoiceTools(server: McpServer) {
       title: "Void invoice",
       description:
         "Void an invoice (any status). Voided invoices are kept for audit, but can't be paid or edited. Use this when a sent invoice needs correction. then call duplicate_invoice for the replacement.",
-      inputSchema: { invoice_id: uuid, reason: z.string().max(500).optional() },
+      inputSchema: {
+    business_id: uuid.optional(), invoice_id: uuid, reason: z.string().max(500).optional() },
     },
     async (args, extra) => {
-      const parsed = z.object({ invoice_id: uuid, reason: z.string().max(500).optional() }).safeParse(args);
+      const parsed = z.object({
+      business_id: uuid.optional(), invoice_id: uuid, reason: z.string().max(500).optional() }).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const r = await voidInvoice(ctx, parsed.data.invoice_id, { reason: parsed.data.reason });
       if (!r.ok) return toolError(mapMutateError(r.code), r.message);
       return toolOk(formatInvoiceForMcp(r.value));
@@ -499,12 +548,17 @@ export function registerInvoiceTools(server: McpServer) {
       title: "Delete invoice (draft only)",
       description:
         "Soft-delete a draft invoice. Sent/paid/void invoices must be kept for audit. use void_invoice instead.",
-      inputSchema: { invoice_id: uuid },
+      inputSchema: {
+    business_id: uuid.optional(), invoice_id: uuid },
     },
     async (args, extra) => {
-      const parsed = z.object({ invoice_id: uuid }).safeParse(args);
+      const parsed = z.object({
+      business_id: uuid.optional(), invoice_id: uuid }).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const r = await deleteInvoice(ctx, parsed.data.invoice_id);
       if (!r.ok) return toolError(mapMutateError(r.code), r.message);
       return toolOk(r.value);
@@ -517,12 +571,17 @@ export function registerInvoiceTools(server: McpServer) {
       title: "Get invoice share URL",
       description:
         "Return the public share URL for an invoice. The URL is unguessable and public until share_enabled is set to false via set_invoice_share_enabled.",
-      inputSchema: { invoice_id: uuid },
+      inputSchema: {
+    business_id: uuid.optional(), invoice_id: uuid },
     },
     async (args, extra) => {
-      const parsed = z.object({ invoice_id: uuid }).safeParse(args);
+      const parsed = z.object({
+      business_id: uuid.optional(), invoice_id: uuid }).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const inv = await getInvoice(ctx, parsed.data.invoice_id);
       if (!inv) return toolError("not_found", `No invoice with id ${parsed.data.invoice_id}.`);
       return toolOk({
@@ -539,12 +598,17 @@ export function registerInvoiceTools(server: McpServer) {
       title: "Mark invoice as sent (no email)",
       description:
         "Flip a draft invoice to 'sent' status WITHOUT emailing anyone. Use this when the user delivered the invoice some other way (handed it over in person, WhatsApp, Slack, printed and mailed, etc.) or just wants to lock it in for their own records. Takes the client + business snapshot onto the row. For email delivery, use send_invoice instead. Returns the updated invoice. Already-sent / paid / void invoices are left untouched.",
-      inputSchema: { invoice_id: uuid },
+      inputSchema: {
+    business_id: uuid.optional(), invoice_id: uuid },
     },
     async (args, extra) => {
-      const parsed = z.object({ invoice_id: uuid }).safeParse(args);
+      const parsed = z.object({
+      business_id: uuid.optional(), invoice_id: uuid }).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const r = await finalizeInvoice(ctx, parsed.data.invoice_id);
       if (!r.ok) return toolError(mapMutateError(r.code), r.message);
       return toolOk(formatInvoiceForMcp(r.value));
@@ -558,6 +622,7 @@ export function registerInvoiceTools(server: McpServer) {
       description:
         "Send an invoice to the client by email. Generates the PDF as an attachment and includes a link to the public share page. Defaults `to` to the client's email; pass `to` to override. Flips the invoice from draft to sent and freezes the client+business snapshot onto the invoice (so later edits to the client don't mutate the sent copy). Safe to call again on an already-sent invoice. it just re-sends without re-snapshotting.",
       inputSchema: {
+        business_id: uuid.optional(),
         invoice_id: uuid,
         to: z.array(z.string().email()).max(10).optional(),
         cc: z.array(z.string().email()).max(10).optional(),
@@ -568,6 +633,7 @@ export function registerInvoiceTools(server: McpServer) {
     },
     async (args, extra) => {
       const schema = z.object({
+        business_id: uuid.optional(),
         invoice_id: uuid,
         to: z.array(z.string().email()).max(10).optional(),
         cc: z.array(z.string().email()).max(10).optional(),
@@ -577,7 +643,10 @@ export function registerInvoiceTools(server: McpServer) {
       });
       const parsed = schema.safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const d = parsed.data;
       const result = await withIdempotency<SendInvoiceOutcome>(
         ctx,
@@ -614,12 +683,17 @@ export function registerInvoiceTools(server: McpServer) {
       title: "Enable/disable invoice share link",
       description:
         "Revoke (or re-enable) public access to an invoice's share URL. Disabled links return 404.",
-      inputSchema: { invoice_id: uuid, enabled: z.boolean() },
+      inputSchema: {
+    business_id: uuid.optional(), invoice_id: uuid, enabled: z.boolean() },
     },
     async (args, extra) => {
-      const parsed = z.object({ invoice_id: uuid, enabled: z.boolean() }).safeParse(args);
+      const parsed = z.object({
+      business_id: uuid.optional(), invoice_id: uuid, enabled: z.boolean() }).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
       const r = await setShareEnabled(ctx, parsed.data.invoice_id, parsed.data.enabled);
       if (!r.ok) return toolError(mapMutateError(r.code), r.message);
       return toolOk({

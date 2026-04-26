@@ -17,22 +17,28 @@ export function createMcpServer(): McpServer {
       instructions:
         `enwise is an MCP server for running an invoicing business. Every operation — business profile, clients, products, invoices, analytics — is exposed as a tool.
 
+One user can own many businesses (e.g., "Acme LLC" and "Side Project Ltd"). Each business has its own plan, clients, invoices, numbering, and branding.
+
 Rules, in order of priority:
 
-1. Call \`whoami\` first, every conversation. Its \`hint\` field tells you what state the user is in (fresh account, empty profile, has clients, etc.) and what to do next. Do not skip this.
+1. Call \`whoami\` first, every conversation. Its response lists every business the authenticated token can act on (with plan + client/invoice counts) plus a \`hint\` describing what to do next. Do not skip this.
 
-2. Never invent data. Business name, client names, emails, addresses, line items, quantities, amounts, tax rates, due dates — every single value must come from the user. If the user says "demo it", "just make something up", "create a sample invoice", or anything similar, refuse politely and ask for their real details. Hallucinated data pollutes their real database and is almost always wrong.
+2. Pick the right business before acting.
+   - If the user owns one business, tools fall back to it silently.
+   - If the user owns multiple, every mutation / read tool accepts a \`business_id\` parameter. ASK the user which business this action is under before calling — do NOT guess. When Claude invokes a tool without \`business_id\` against a multi-business account, the server refuses with \`multiple_businesses\` and returns the list of options.
+   - If the user says "create a new business", call \`create_business\`. Ask for the name first; address/tax ID/currency can be filled in later via \`update_business_profile\`.
 
-3. Onboard before operating. If \`whoami\` shows the business profile is empty (no address, no tax ID) or there are no clients yet, do NOT jump into creating invoices. Ask the user for:
-   - Their business name (if it's still the default)
+3. Never invent data. Business names, client names, emails, addresses, line items, quantities, amounts, tax rates, due dates — every single value must come from the user. If the user says "demo it", "just make something up", "create a sample invoice", or similar, refuse politely and ask for real details. Hallucinated data pollutes their real database and is almost always wrong.
+
+4. Onboard before operating. If the chosen business has an empty profile (no address, no tax ID) or no clients, do NOT jump into creating invoices. Ask the user for:
    - Address / country
    - Default currency (if not USD)
    - Tax ID (if they have one)
-   Save with \`update_business_profile\`. Only after onboarding should you create clients or invoices.
+   Save with \`update_business_profile\`. Only after onboarding should you create clients or invoices under that business.
 
-4. Ask before assuming. If the user asks to invoice a client but doesn't give you the client's email, address, or line item details, ASK. Don't guess. Don't fill in placeholders.
+5. Ask before assuming. If the user asks to invoice a client but doesn't give you the client's email, address, or line item details, ASK. Don't guess. Don't fill in placeholders.
 
-5. Resolve before acting. When the user refers to a client or product by name, call \`find_client\` / \`find_products\` first. Never pass a name to a tool that expects an id, and never invent an id.`,
+6. Resolve before acting. When the user refers to a client or product by name, call \`find_client\` / \`find_products\` first. Pass \`business_id\` when the user owns multiple. Never pass a name to a tool that expects an id, and never invent an id.`,
     },
   );
 

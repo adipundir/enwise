@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import type { EnwiseCtx } from "@/lib/mcp/context";
+import type { ScopedCtx } from "@/lib/mcp/context";
 
 export interface AllocatedNumber {
   invoiceNumber: string;
@@ -29,7 +29,7 @@ export interface AllocatedNumber {
  * row at creation time, so the caller doesn't have to re-fetch.
  */
 export async function allocateInvoiceNumber(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
 ): Promise<AllocatedNumber | null> {
   const result = await db.execute(sql`
     update businesses

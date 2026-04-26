@@ -9,7 +9,7 @@ import {
   revertFinalizeInvoice,
   type InvoiceWithLineItems,
 } from "@/lib/invoices";
-import type { EnwiseCtx } from "@/lib/mcp/context";
+import type { ScopedCtx } from "@/lib/mcp/context";
 import { buildInvoicePdfData } from "@/lib/pdf/renderInvoice";
 
 export type SendInvoiceOutcome =
@@ -36,7 +36,7 @@ interface SendInvoiceInput {
 }
 
 export async function sendInvoiceByEmail(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   input: SendInvoiceInput,
 ): Promise<SendInvoiceOutcome> {
   const apiKey = process.env.RESEND_API_KEY;
@@ -141,12 +141,15 @@ export async function sendInvoiceByEmail(
 
   // 6. Send via Resend.
   const resend = new Resend(apiKey);
-  // Fallback to Resend's sandbox sender so the pipeline works without a
-  // verified domain. Only delivers to the account owner's address; set
-  // RESEND_FROM_ADDRESS to a verified domain for real sending.
+  // Fallback to Resend's sandbox sender so local dev / unconfigured servers
+  // don't hard-fail. Only delivers to the Resend account owner in that mode.
+  // Prod sets RESEND_FROM_ADDRESS=invoices@enwise.app.
   const fromAddress =
     process.env.RESEND_FROM_ADDRESS || "onboarding@resend.dev";
-  const fromDisplay = `${pdfData.business.name} via enwise <${fromAddress}>`;
+  // Display name is just the business name — the @enwise.app in the address
+  // already tells the recipient which platform sent it, so we don't need
+  // "via enwise" duplicating that signal in the display name.
+  const fromDisplay = `${sanitizeHeaderValue(pdfData.business.name)} <${fromAddress}>`;
 
   try {
     const result = await resend.emails.send({
@@ -155,7 +158,7 @@ export async function sendInvoiceByEmail(
       cc: input.cc,
       bcc: input.bcc,
       replyTo: undefined, // Populated from business.email_reply_to if set; see below.
-      subject: `${pdfData.business.name}. Invoice ${sent.invoiceNumber}`,
+      subject: `${sanitizeHeaderValue(pdfData.business.name)}. Invoice ${sent.invoiceNumber}`,
       html,
       text: plainText,
       headers: {
@@ -198,7 +201,7 @@ export async function sendInvoiceByEmail(
   }
 }
 
-async function getClientEmail(ctx: EnwiseCtx, clientId: string): Promise<string | null> {
+async function getClientEmail(ctx: ScopedCtx, clientId: string): Promise<string | null> {
   const { db } = await import("@/lib/db");
   const { clients } = await import("@/lib/db/schema");
   const { and, eq } = await import("drizzle-orm");
@@ -224,4 +227,14 @@ function buildAddressLines(a: {
   if (cityLine) out.push(cityLine);
   if (a.country) out.push(a.country);
   return out;
+}
+
+/**
+ * Strip anything that could break out of an email header (CR, LF, NUL) or
+ * confuse a display-name parser (unmatched angle brackets, leading/trailing
+ * whitespace). Resend's HTTP API probably sanitizes too, but we should
+ * never rely on the downstream library to enforce our own header integrity.
+ */
+function sanitizeHeaderValue(value: string): string {
+  return value.replace(/[\r\n\0<>]/g, "").trim();
 }

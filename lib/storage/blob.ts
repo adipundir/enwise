@@ -272,14 +272,12 @@ function mimeError(): Extract<LogoResult, { ok: false }> {
 
 // ---------- Line item attachments ----------
 
-export type AttachmentInput =
-  | { label?: string; url: string }
-  | {
-      label?: string;
-      file_base64: string;
-      mime_type: string;
-      filename?: string;
-    };
+export type AttachmentInput = {
+  label?: string;
+  file_base64: string;
+  mime_type: string;
+  filename?: string;
+};
 
 export type AttachmentResolved = { label: string; url: string };
 
@@ -290,51 +288,27 @@ export type AttachmentResult =
       code:
         | "attachment_too_large"
         | "attachment_invalid_mime"
-        | "attachment_storage_unavailable"
-        | "attachment_invalid_url";
+        | "attachment_storage_unavailable";
       message: string;
       hint?: string;
     };
 
+// Base64 uploads only. URL passthrough was intentionally dropped so every
+// attachment is stored on our own Blob and stays immutable for the life of
+// the invoice — matches Stripe / QuickBooks / Xero behaviour, removes the
+// phishing + link-rot surface, and collapses the schema to one code path.
 export async function resolveAttachment(params: {
   businessId: string;
   input: AttachmentInput;
 }): Promise<AttachmentResult> {
   const { businessId, input } = params;
 
-  if ("url" in input) {
-    let u: URL;
-    try {
-      u = new URL(input.url);
-    } catch {
-      return {
-        ok: false,
-        code: "attachment_invalid_url",
-        message: "Attachment URL isn't a valid URL.",
-      };
-    }
-    if (!/^https?:$/.test(u.protocol)) {
-      return {
-        ok: false,
-        code: "attachment_invalid_url",
-        message: "Attachment URL must be http:// or https://.",
-      };
-    }
-    return {
-      ok: true,
-      attachment: {
-        label: input.label?.trim() || u.hostname,
-        url: input.url.trim(),
-      },
-    };
-  }
-
   if (!ALLOWED_ATTACHMENT_MIME.has(input.mime_type)) {
     return {
       ok: false,
       code: "attachment_invalid_mime",
       message: "Attachment must be PNG, JPEG, WebP, or PDF.",
-      hint: "Other formats (SVG, DOCX, etc.) aren't supported. Host elsewhere and pass `url` instead.",
+      hint: "Other formats (SVG, DOCX, etc.) aren't supported — convert first.",
     };
   }
 
@@ -345,7 +319,7 @@ export async function resolveAttachment(params: {
       code: "attachment_storage_unavailable",
       message:
         "File uploads require Vercel Blob storage, which isn't configured on this server.",
-      hint: "Host the file elsewhere (Drive, Imgur, Dropbox) and pass `url` instead.",
+      hint: "Configure BLOB_READ_WRITE_TOKEN on the server.",
     };
   }
 
@@ -435,14 +409,14 @@ async function verifyHostIsPublic(
     host.endsWith(".internal") ||
     host.endsWith(".local")
   ) {
-    return { ok: false, reason: `image_url host ${hostname} is not allowed.` };
+    return { ok: false, reason: `Host ${hostname} is not a public address.` };
   }
 
   // If the hostname is already a literal IP, check it.
   const ipFamily = net.isIP(host);
   if (ipFamily !== 0) {
     return ipBlocked(host)
-      ? { ok: false, reason: `image_url host ${hostname} resolves to a non-public address.` }
+      ? { ok: false, reason: `Host ${hostname} resolves to a non-public address.` }
       : { ok: true };
   }
 
@@ -450,13 +424,13 @@ async function verifyHostIsPublic(
   try {
     resolved = await lookup(host, { all: true, verbatim: true });
   } catch {
-    return { ok: false, reason: `Couldn't resolve image_url host ${hostname}.` };
+    return { ok: false, reason: `Couldn't resolve host ${hostname}.` };
   }
   for (const r of resolved) {
     if (ipBlocked(r.address)) {
       return {
         ok: false,
-        reason: `image_url host ${hostname} resolves to a non-public address.`,
+        reason: `Host ${hostname} resolves to a non-public address.`,
       };
     }
   }

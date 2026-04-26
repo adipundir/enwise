@@ -48,11 +48,11 @@ export async function createToken(params: {
 }
 
 /**
- * Fetch the active (non-revoked) token for a business. Returns only the
- * identifying fields — the raw secret is never persisted and is only in
- * hand at creation time or right after a rotation.
+ * Fetch the active (non-revoked) token for a user. Tokens are now user-scoped
+ * — one token grants access to every business the user owns. Returns only
+ * identifying fields; the raw secret is never persisted.
  */
-export async function getActiveToken(businessId: string): Promise<{
+export async function getActiveToken(userId: string): Promise<{
   tokenId: string;
   tokenPrefix: string;
 } | null> {
@@ -62,14 +62,16 @@ export async function getActiveToken(businessId: string): Promise<{
       tokenPrefix: apiTokens.tokenPrefix,
     })
     .from(apiTokens)
-    .where(and(eq(apiTokens.businessId, businessId), isNull(apiTokens.revokedAt)))
+    .where(
+      and(eq(apiTokens.createdByUserId, userId), isNull(apiTokens.revokedAt)),
+    )
     .orderBy(desc(apiTokens.createdAt))
     .limit(1);
   if (!row) return null;
   return { tokenId: row.id, tokenPrefix: row.tokenPrefix };
 }
 
-export async function listTokens(businessId: string) {
+export async function listTokens(userId: string) {
   return db
     .select({
       id: apiTokens.id,
@@ -80,12 +82,12 @@ export async function listTokens(businessId: string) {
       createdAt: apiTokens.createdAt,
     })
     .from(apiTokens)
-    .where(eq(apiTokens.businessId, businessId))
+    .where(eq(apiTokens.createdByUserId, userId))
     .orderBy(desc(apiTokens.createdAt));
 }
 
 export async function revokeToken(params: {
-  businessId: string;
+  userId: string;
   tokenId: string;
 }) {
   await db
@@ -94,13 +96,13 @@ export async function revokeToken(params: {
     .where(
       and(
         eq(apiTokens.id, params.tokenId),
-        eq(apiTokens.businessId, params.businessId),
+        eq(apiTokens.createdByUserId, params.userId),
       ),
     );
 }
 
 export async function resolveBearer(raw: string): Promise<{
-  businessId: string;
+  userId: string;
   tokenId: string;
 } | null> {
   if (!isValidFormat(raw)) return null;
@@ -109,7 +111,7 @@ export async function resolveBearer(raw: string): Promise<{
   const [row] = await db
     .select({
       id: apiTokens.id,
-      businessId: apiTokens.businessId,
+      createdByUserId: apiTokens.createdByUserId,
       tokenHash: apiTokens.tokenHash,
       revokedAt: apiTokens.revokedAt,
     })
@@ -133,5 +135,5 @@ export async function resolveBearer(raw: string): Promise<{
     .where(eq(apiTokens.id, row.id))
     .catch(() => {});
 
-  return { businessId: row.businessId, tokenId: row.id };
+  return { userId: row.createdByUserId, tokenId: row.id };
 }

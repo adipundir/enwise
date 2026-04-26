@@ -1,9 +1,9 @@
 import { addDays, addMonths, addYears } from "date-fns";
 import { and, asc, eq, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { clients, recurringInvoiceTemplates, type RecurringInvoiceTemplate } from "@/lib/db/schema";
+import { businesses, clients, recurringInvoiceTemplates, type RecurringInvoiceTemplate } from "@/lib/db/schema";
 import { createInvoice, type LineItemInput } from "@/lib/invoices";
-import type { EnwiseCtx } from "@/lib/mcp/context";
+import type { ScopedCtx } from "@/lib/mcp/context";
 import { sendInvoiceByEmail } from "@/lib/email/sendInvoice";
 
 export type Interval = "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
@@ -76,7 +76,7 @@ function clampToAnchor(date: Date, anchorDay: number): Date {
 // ---------- CRUD ----------
 
 export async function createRecurring(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   input: RecurringTemplateInput,
 ): Promise<RecurringResult<RecurringInvoiceTemplate>> {
   if (input.lineItems.length === 0) {
@@ -133,7 +133,7 @@ export interface RecurringPatch {
 }
 
 export async function updateRecurring(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   id: string,
   patch: RecurringPatch,
 ): Promise<RecurringResult<RecurringInvoiceTemplate>> {
@@ -164,7 +164,7 @@ export async function updateRecurring(
 }
 
 export async function listRecurring(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   opts: { clientId?: string; activeOnly?: boolean } = {},
 ): Promise<RecurringInvoiceTemplate[]> {
   const conditions = [eq(recurringInvoiceTemplates.businessId, ctx.businessId)];
@@ -178,7 +178,7 @@ export async function listRecurring(
 }
 
 export async function getRecurring(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   id: string,
 ): Promise<RecurringInvoiceTemplate | null> {
   const [row] = await db
@@ -194,7 +194,7 @@ export async function getRecurring(
 }
 
 export async function setActive(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   id: string,
   active: boolean,
 ): Promise<RecurringResult<RecurringInvoiceTemplate>> {
@@ -213,7 +213,7 @@ export async function setActive(
 }
 
 export async function cancelRecurring(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   id: string,
 ): Promise<RecurringResult<{ deleted: true }>> {
   const [row] = await db
@@ -242,7 +242,28 @@ export interface RunResult {
 export async function runTemplate(
   template: RecurringInvoiceTemplate,
 ): Promise<RunResult> {
-  const ctx: EnwiseCtx = { businessId: template.businessId, tokenId: "cron" };
+  // Cron runs outside a user session. Look up the business owner so the
+  // synthesized ScopedCtx has a real userId — tools downstream that assume
+  // an authenticated user (e.g. any future per-user rate limiting) keep
+  // working against cron-generated invoices.
+  const [owner] = await db
+    .select({ userId: businesses.ownerUserId })
+    .from(businesses)
+    .where(eq(businesses.id, template.businessId));
+  if (!owner) {
+    return {
+      template_id: template.id,
+      invoice_id: null,
+      invoice_number: null,
+      status: "error",
+      error: "Business for this template no longer exists.",
+    };
+  }
+  const ctx: ScopedCtx = {
+    userId: owner.userId,
+    businessId: template.businessId,
+    tokenId: "cron",
+  };
   const lineItems = template.lineItems as LineItemInput[];
   const issueDate = new Date().toISOString().slice(0, 10);
   const dueDate = template.paymentTermsDays
@@ -334,7 +355,7 @@ export async function runDueNow(opts: { limit?: number } = {}): Promise<RunResul
 }
 
 export async function runTemplateById(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   id: string,
 ): Promise<RecurringResult<RunResult>> {
   const template = await getRecurring(ctx, id);

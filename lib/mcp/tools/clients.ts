@@ -10,13 +10,15 @@ import {
   type ClientCreate,
   type ClientPatch,
 } from "@/lib/clients";
-import { ctxFromAuthInfo } from "@/lib/mcp/context";
+import { ctxFromAuthInfo, scopeFromCtx } from "@/lib/mcp/context";
 import { toolError, toolOk, zodToToolError } from "@/lib/mcp/errors";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const clientIdSchema = z.string().uuid();
+const uuid = z.string().uuid();
 
 const createSchema = {
+  business_id: uuid.optional(),
   name: z.string().min(1).max(200),
   email: z.string().email().nullish(),
   phone: z.string().max(32).nullish(),
@@ -41,6 +43,7 @@ const createSchema = {
 };
 
 const updateSchema = {
+  business_id: uuid.optional(),
   client_id: clientIdSchema,
   name: z.string().min(1).max(200).optional(),
   email: z.string().email().nullish(),
@@ -105,14 +108,16 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Create client",
       description:
-        "Add a new client using details the user has explicitly given you. NEVER invent a client name, email, address, or tax ID — if the user hasn't told you these, ASK before calling this tool. Name is required; everything else is optional. Returns the created client including its id. remember the id for follow-up tool calls in this session.",
+        "Add a new client using details the user has explicitly given you. NEVER invent a client name, email, address, or tax ID — if the user hasn't told you these, ASK before calling this tool. Name is required; everything else is optional. Pass `business_id` when the user owns multiple businesses. Returns the created client including its id. Remember the id for follow-up tool calls in this session.",
       inputSchema: createSchema,
     },
     async (args, extra) => {
       const parsed = z.object(createSchema).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const ctx = ctxFromAuthInfo(extra.authInfo);
-      const row = await createClient(ctx, toClientCreate(parsed.data));
+      const scope = await scopeFromCtx(ctx, parsed.data.business_id);
+      if (!scope.ok) return scope.error;
+      const row = await createClient(scope.scoped, toClientCreate(parsed.data));
       return toolOk(formatClientForMcp(row));
     },
   );
@@ -122,15 +127,17 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Update client",
       description:
-        "Partially update a client. Pass the fields you want to change; omit others. Pass null to clear a nullable field. Call find_client first if you only have a name.",
+        "Partially update a client. Pass the fields you want to change; omit others. Pass null to clear a nullable field. Pass `business_id` if the user owns multiple businesses. Call find_client first if you only have a name.",
       inputSchema: updateSchema,
     },
     async (args, extra) => {
       const parsed = z.object(updateSchema).safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const ctx = ctxFromAuthInfo(extra.authInfo);
-      const { client_id, ...rest } = parsed.data;
-      const updated = await updateClient(ctx, client_id, toClientPatch(rest as never));
+      const scope = await scopeFromCtx(ctx, parsed.data.business_id);
+      if (!scope.ok) return scope.error;
+      const { client_id, business_id: _bid, ...rest } = parsed.data;
+      const updated = await updateClient(scope.scoped, client_id, toClientPatch({ ...rest, client_id } as never));
       if (!updated) {
         return toolError("not_found", `No client with id ${client_id}.`);
       }
@@ -142,14 +149,19 @@ export function registerClientTools(server: McpServer) {
     "get_client",
     {
       title: "Get client",
-      description: "Fetch a client by id. Use find_client to resolve a name first.",
-      inputSchema: { client_id: clientIdSchema },
+      description:
+        "Fetch a client by id. Pass `business_id` when the user owns multiple businesses. Use find_client to resolve a name first.",
+      inputSchema: { business_id: uuid.optional(), client_id: clientIdSchema },
     },
     async (args, extra) => {
-      const parsed = z.object({ client_id: clientIdSchema }).safeParse(args);
+      const parsed = z
+        .object({ business_id: uuid.optional(), client_id: clientIdSchema })
+        .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const ctx = ctxFromAuthInfo(extra.authInfo);
-      const row = await getClient(ctx, parsed.data.client_id);
+      const scope = await scopeFromCtx(ctx, parsed.data.business_id);
+      if (!scope.ok) return scope.error;
+      const row = await getClient(scope.scoped, parsed.data.client_id);
       if (!row) {
         return toolError("not_found", `No client with id ${parsed.data.client_id}.`);
       }
@@ -162,8 +174,9 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Find client (fuzzy)",
       description:
-        "Search clients by name or email. Returns up to `limit` matches ranked by similarity score (higher = closer match). Use this whenever the user refers to a client by name ('send invoice to Acme'). resolve the name to an id before calling invoice tools. If multiple matches are returned, ask the user which one they meant.",
+        "Search clients by name or email within a business. Returns up to `limit` matches ranked by similarity score. Pass `business_id` when the user owns multiple businesses. Use this whenever the user refers to a client by name. If multiple matches are returned, ask the user which one they meant.",
       inputSchema: {
+        business_id: uuid.optional(),
         query: z.string().min(1).max(200),
         limit: z.number().int().min(1).max(25).optional(),
         include_archived: z.boolean().optional(),
@@ -172,6 +185,7 @@ export function registerClientTools(server: McpServer) {
     async (args, extra) => {
       const parsed = z
         .object({
+          business_id: uuid.optional(),
           query: z.string().min(1).max(200),
           limit: z.number().int().min(1).max(25).optional(),
           include_archived: z.boolean().optional(),
@@ -179,7 +193,9 @@ export function registerClientTools(server: McpServer) {
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const ctx = ctxFromAuthInfo(extra.authInfo);
-      const matches = await findClients(ctx, {
+      const scope = await scopeFromCtx(ctx, parsed.data.business_id);
+      if (!scope.ok) return scope.error;
+      const matches = await findClients(scope.scoped, {
         query: parsed.data.query,
         limit: parsed.data.limit,
         includeArchived: parsed.data.include_archived,
@@ -203,8 +219,9 @@ export function registerClientTools(server: McpServer) {
     {
       title: "List clients",
       description:
-        "List clients, alphabetical by name. Archived clients are excluded by default.",
+        "List clients for a business, alphabetical by name. Archived clients are excluded by default. Pass `business_id` when the user owns multiple businesses.",
       inputSchema: {
+        business_id: uuid.optional(),
         limit: z.number().int().min(1).max(200).optional(),
         include_archived: z.boolean().optional(),
       },
@@ -212,13 +229,16 @@ export function registerClientTools(server: McpServer) {
     async (args, extra) => {
       const parsed = z
         .object({
+          business_id: uuid.optional(),
           limit: z.number().int().min(1).max(200).optional(),
           include_archived: z.boolean().optional(),
         })
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const ctx = ctxFromAuthInfo(extra.authInfo);
-      const rows = await listClients(ctx, {
+      const scope = await scopeFromCtx(ctx, parsed.data.business_id);
+      if (!scope.ok) return scope.error;
+      const rows = await listClients(scope.scoped, {
         limit: parsed.data.limit,
         includeArchived: parsed.data.include_archived,
       });
@@ -231,14 +251,18 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Archive client",
       description:
-        "Archive a client. They stop showing in list_clients and find_client (unless include_archived is set). Existing invoices are untouched. This is a soft action. archived clients can be restored by calling update_client.",
-      inputSchema: { client_id: clientIdSchema },
+        "Archive a client. They stop showing in list_clients and find_client (unless include_archived is set). Existing invoices are untouched. Soft action — restore by calling update_client. Pass `business_id` when the user owns multiple businesses.",
+      inputSchema: { business_id: uuid.optional(), client_id: clientIdSchema },
     },
     async (args, extra) => {
-      const parsed = z.object({ client_id: clientIdSchema }).safeParse(args);
+      const parsed = z
+        .object({ business_id: uuid.optional(), client_id: clientIdSchema })
+        .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const ctx = ctxFromAuthInfo(extra.authInfo);
-      const row = await archiveClient(ctx, parsed.data.client_id);
+      const scope = await scopeFromCtx(ctx, parsed.data.business_id);
+      if (!scope.ok) return scope.error;
+      const row = await archiveClient(scope.scoped, parsed.data.client_id);
       if (!row) {
         return toolError("not_found", `No client with id ${parsed.data.client_id}.`);
       }

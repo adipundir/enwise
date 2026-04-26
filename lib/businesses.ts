@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { businesses, type Business } from "@/lib/db/schema";
-import type { EnwiseCtx } from "@/lib/mcp/context";
+import { businesses, users, type Business } from "@/lib/db/schema";
+import type { ScopedCtx } from "@/lib/mcp/context";
+import { uniqueSlug } from "@/lib/slug";
 
 /**
  * Fields a client can update on the business profile. `logoUrl` is expected
@@ -31,7 +32,7 @@ export type BusinessPatch = Partial<{
 }>;
 
 export async function getBusinessProfile(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
 ): Promise<Business | null> {
   const [row] = await db
     .select()
@@ -41,7 +42,7 @@ export async function getBusinessProfile(
 }
 
 export async function updateBusinessProfile(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   patch: BusinessPatch,
 ): Promise<Business | null> {
   if (Object.keys(patch).length === 0) {
@@ -65,6 +66,7 @@ export function formatBusinessForMcp(row: Business) {
     id: row.id,
     name: row.name,
     slug: row.slug,
+    plan: row.plan,
     legal_name: row.legalName,
     tax_id: row.taxId,
     address_line1: row.addressLine1,
@@ -82,4 +84,36 @@ export function formatBusinessForMcp(row: Business) {
     default_payment_terms_days: row.defaultPaymentTermsDays,
     default_notes: row.defaultNotes,
   };
+}
+
+/**
+ * Create a new business under `userId`. Every user can own many businesses
+ * and each has its own plan (Free by default; flips to Pro when the Stripe
+ * subscription lands — see Stripe branch).
+ */
+export async function createBusiness(params: {
+  userId: string;
+  name: string;
+  defaultCurrency?: string;
+  setAsDefault?: boolean;
+}): Promise<Business> {
+  const [created] = await db
+    .insert(businesses)
+    .values({
+      ownerUserId: params.userId,
+      name: params.name,
+      slug: uniqueSlug(params.name),
+      defaultCurrency: params.defaultCurrency ?? "USD",
+    })
+    .returning();
+  if (!created) {
+    throw new Error("Failed to create business");
+  }
+  if (params.setAsDefault) {
+    await db
+      .update(users)
+      .set({ defaultBusinessId: created.id })
+      .where(eq(users.id, params.userId));
+  }
+  return created;
 }

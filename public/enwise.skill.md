@@ -15,9 +15,18 @@ data.
 At the start of every new conversation that touches enwise, call `whoami`
 before anything else. Its response includes:
 
-- `business` — the user's current business profile (name, address, currency, invoice prefix, logo URL, …)
-- `stats` — counts of clients and invoices
-- `hint` — a **directive** describing what to do next based on account state. Follow it.
+- `user` — the authenticated user (name, email)
+- `businesses` — every business this user owns, with plan + counts + profile-complete flag
+- `default_business_id` — the user's chosen default (may be null)
+- `hint` — a **directive** describing what to do next. Follow it.
+
+## Multi-business
+
+A user can own many businesses (e.g., "Acme LLC" and "Side Project Ltd"). Every tool that creates or reads business-scoped data takes an optional `business_id`. Rules:
+
+- If the user owns **one** business, tools fall back to it silently. You can omit `business_id`.
+- If the user owns **multiple**, ASK which business before calling any tool that creates or modifies data. Don't guess. If you call without `business_id` on a multi-business account, the server refuses with `multiple_businesses` and returns the list.
+- If the user says "create a new business", call `create_business({name, default_currency?})`. Name is required; everything else can be filled in later via `update_business_profile`.
 
 ## Never invent data
 
@@ -75,12 +84,11 @@ Rule of thumb: context about ONE line item → `line_items[].note`. Context abou
 
 ## Attachments
 
-Each line item can carry supporting files. Pass as either:
+Each line item can carry supporting files. Pass as base64 only:
 
-- `{ url: "https://…", label?: "Amazon receipt" }` — public URL passthrough.
-- `{ file_base64: "…", mime_type: "image/png" | "image/jpeg" | "image/webp" | "application/pdf", filename?: "receipt.pdf", label?: "Hotel receipt" }` — uploads to storage and attaches.
+- `{ file_base64: "…", mime_type: "image/png" | "image/jpeg" | "image/webp" | "application/pdf", filename?: "receipt.pdf", label?: "Hotel receipt" }`
 
-8 MB per file. Attachments render on both the PDF and the public invoice page.
+8 MB per file, 10 files per line item. They're uploaded to our own storage so the invoice stays self-contained — no URL passthrough (matches how Stripe, QuickBooks, and Xero handle invoice evidence). Attachments render on both the PDF and the public invoice page.
 
 ### The user asks about money owed or earned
 

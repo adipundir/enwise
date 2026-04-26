@@ -1,7 +1,7 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { idempotencyKeys } from "@/lib/db/schema";
-import type { EnwiseCtx } from "@/lib/mcp/context";
+import type { ScopedCtx } from "@/lib/mcp/context";
 
 const DEFAULT_TTL_HOURS = 24;
 
@@ -17,7 +17,7 @@ const DEFAULT_TTL_HOURS = 24;
  * spinning a few times if it isn't written yet.
  */
 export async function withIdempotency<T>(
-  ctx: EnwiseCtx,
+  ctx: ScopedCtx,
   toolName: string,
   clientRequestId: string | null | undefined,
   run: () => Promise<T>,

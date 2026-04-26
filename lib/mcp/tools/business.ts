@@ -1,14 +1,17 @@
 import { z } from "zod";
 import {
+  createBusiness,
   formatBusinessForMcp,
   getBusinessProfile,
   updateBusinessProfile,
   type BusinessPatch,
 } from "@/lib/businesses";
-import { ctxFromAuthInfo } from "@/lib/mcp/context";
+import { ctxFromAuthInfo, scopeFromCtx } from "@/lib/mcp/context";
 import { toolError, toolOk, zodToToolError } from "@/lib/mcp/errors";
 import { uploadLogo } from "@/lib/storage/blob";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+const uuid = z.string().uuid();
 
 const logoInput = z.union([
   z.object({
@@ -22,6 +25,7 @@ const logoInput = z.union([
 ]);
 
 const updateInput = {
+  business_id: uuid.optional(),
   name: z.string().min(1).max(200).optional(),
   legal_name: z.string().max(200).nullish(),
   tax_id: z.string().max(64).nullish(),
@@ -50,21 +54,63 @@ const updateInput = {
   client_request_id: z.string().max(64).optional(),
 };
 
+const createBusinessInput = {
+  name: z.string().min(1).max(200),
+  default_currency: z
+    .string()
+    .regex(/^[A-Za-z]{3}$/, "3-letter ISO 4217 code like 'USD' or 'EUR'")
+    .transform((s) => s.toUpperCase())
+    .optional(),
+  set_as_default: z.boolean().optional(),
+};
+
+const getProfileInput = {
+  business_id: uuid.optional(),
+};
+
 export function registerBusinessTools(server: McpServer) {
+  server.registerTool(
+    "create_business",
+    {
+      title: "Create a business",
+      description:
+        "Create a new business profile under the authenticated user. Use when the user says they want to bill from a new entity (different company, side project, freelance pseudonym, etc.). Ask for the name first; everything else (address, tax ID, etc.) can be added later via update_business_profile. Pass `set_as_default: true` if the user says this should be their primary.",
+      inputSchema: createBusinessInput,
+    },
+    async (args, extra) => {
+      const parsed = z.object(createBusinessInput).safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const input = parsed.data;
+      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const created = await createBusiness({
+        userId: ctx.userId,
+        name: input.name,
+        defaultCurrency: input.default_currency,
+        setAsDefault: input.set_as_default ?? false,
+      });
+      return toolOk(formatBusinessForMcp(created));
+    },
+  );
+
   server.registerTool(
     "get_business_profile",
     {
       title: "Get business profile",
       description:
-        "Return the full business profile for the authenticated account. Use this when the user asks 'what's on my business profile' or before a tax/invoice operation where you need the current currency, prefix, or address.",
+        "Return the full profile for a business. If the user owns only one business, `business_id` can be omitted. If they own multiple, pass `business_id`.",
+      inputSchema: getProfileInput,
     },
-    async (extra) => {
+    async (args, extra) => {
+      const parsed = z.object(getProfileInput).safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
       const ctx = ctxFromAuthInfo(extra.authInfo);
-      const profile = await getBusinessProfile(ctx);
+      const scope = await scopeFromCtx(ctx, parsed.data.business_id);
+      if (!scope.ok) return scope.error;
+      const profile = await getBusinessProfile(scope.scoped);
       if (!profile) {
         return toolError(
           "not_found",
-          "Authenticated token has no associated business.",
+          "Business not found.",
         );
       }
       return toolOk(formatBusinessForMcp(profile));
@@ -76,7 +122,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Update business profile",
       description:
-        "Update any subset of the business profile (name, tax ID, address, default currency, invoice number prefix, logo, etc.). Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. Returns the updated profile.",
+        "Update any subset of a business profile (name, tax ID, address, default currency, invoice number prefix, logo, etc.). Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. Pass `business_id` if the user owns multiple businesses.",
       inputSchema: updateInput,
     },
     async (args, extra) => {
@@ -84,6 +130,8 @@ export function registerBusinessTools(server: McpServer) {
       if (!parsed.success) return zodToToolError(parsed.error);
       const input = parsed.data;
       const ctx = ctxFromAuthInfo(extra.authInfo);
+      const scope = await scopeFromCtx(ctx, input.business_id);
+      if (!scope.ok) return scope.error;
 
       const patch: BusinessPatch = {};
       if (input.name !== undefined) patch.name = input.name;
@@ -108,7 +156,7 @@ export function registerBusinessTools(server: McpServer) {
         if (input.logo === null) {
           patch.logoUrl = null;
         } else {
-          const result = await uploadLogo({ businessId: ctx.businessId, input: input.logo });
+          const result = await uploadLogo({ businessId: scope.scoped.businessId, input: input.logo });
           if (!result.ok) {
             return toolError(result.code, result.message, {
               hint: result.hint,
@@ -118,7 +166,7 @@ export function registerBusinessTools(server: McpServer) {
         }
       }
 
-      const updated = await updateBusinessProfile(ctx, patch);
+      const updated = await updateBusinessProfile(scope.scoped, patch);
       if (!updated) {
         return toolError(
           "not_found",
