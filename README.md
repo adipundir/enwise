@@ -95,7 +95,7 @@ Project → Settings → Environment Variables (Production + Preview + Developme
 | `CRON_SECRET` | `openssl rand -hex 32` |
 | `PUBLIC_BASE_URL` | `https://<your-vercel-domain>` |
 | `RESEND_API_KEY` | [resend.com/api-keys](https://resend.com/api-keys). Verify a domain first or Resend will reject sends. |
-| `RESEND_FROM_ADDRESS` | Must live on a verified Resend domain, e.g. `invoices@enwise.app` |
+| `RESEND_FROM_ADDRESS` | Sending address. For testing leave unset. we fall back to Resend's sandbox (`onboarding@resend.dev`), which only delivers to the Resend account owner's address. For production, verify a domain in Resend and set this to e.g. `invoices@yourdomain.com`. |
 
 ### 5. Update OAuth callback URLs
 

@@ -134,8 +134,11 @@ export async function sendInvoiceByEmail(
 
   // 6. Send via Resend.
   const resend = new Resend(apiKey);
+  // Fallback to Resend's sandbox sender so the pipeline works without a
+  // verified domain. Only delivers to the account owner's address; set
+  // RESEND_FROM_ADDRESS to a verified domain for real sending.
   const fromAddress =
-    process.env.RESEND_FROM_ADDRESS || "invoices@enwise.app";
+    process.env.RESEND_FROM_ADDRESS || "onboarding@resend.dev";
   const fromDisplay = `${pdfData.business.name} via enwise <${fromAddress}>`;
 
   try {
