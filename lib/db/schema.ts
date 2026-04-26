@@ -151,15 +151,19 @@ export const businesses = pgTable(
   (t) => [index("businesses_owner_idx").on(t.ownerUserId)],
 );
 
-// API tokens. issued from web dashboard, presented as Authorization: Bearer <raw>
+// API tokens. issued from web dashboard, presented as Authorization: Bearer <raw>.
+// Tokens are user-scoped (createdByUserId is the auth subject); businessId
+// is a legacy hint kept nullable for back-compat but has no semantic
+// weight — `resolveBearer` returns userId and the rest is figured out per
+// tool call via `business_id` arg or owner-level fallback.
 
 export const apiTokens = pgTable(
   "api_tokens",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    businessId: uuid("business_id")
-      .notNull()
-      .references(() => businesses.id, { onDelete: "cascade" }),
+    businessId: uuid("business_id").references(() => businesses.id, {
+      onDelete: "set null",
+    }),
     createdByUserId: uuid("created_by_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -275,7 +279,7 @@ export const recurringInvoiceTemplates = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     businessId: uuid("business_id")
       .notNull()
-      .references(() => businesses.id, { onDelete: "cascade" }),
+      .references(() => businesses.id, { onDelete: "restrict" }),
     clientId: uuid("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "restrict" }),
@@ -358,6 +362,8 @@ export const invoices = pgTable(
     clientEmailSnapshot: text("client_email_snapshot"),
     clientAddressSnapshot: jsonb("client_address_snapshot"),
     businessNameSnapshot: text("business_name_snapshot"),
+    businessLegalNameSnapshot: text("business_legal_name_snapshot"),
+    businessTaxIdSnapshot: text("business_tax_id_snapshot"),
     businessAddressSnapshot: jsonb("business_address_snapshot"),
     businessLogoUrlSnapshot: text("business_logo_url_snapshot"),
     createdAt: timestamp("created_at", { withTimezone: true })

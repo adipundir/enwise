@@ -771,8 +771,15 @@ export async function finalizeInvoice(
       message: `Invoice ${inv.invoiceNumber} is void and cannot be sent.`,
     };
   }
+  if (inv.status === "paid") {
+    return {
+      ok: false,
+      code: "invoice_not_draft",
+      message: `Invoice ${inv.invoiceNumber} is already paid; re-finalizing would flip its status back to sent.`,
+    };
+  }
 
-  // Re-send: already finalized, just bump sent_at.
+  // Re-send: already finalized, just bump sent_at. Snapshots are preserved.
   if (inv.clientNameSnapshot !== null) {
     await db
       .update(invoices)
@@ -796,12 +803,14 @@ export async function finalizeInvoice(
   // finalize must capture the business it's actually rendered under at
   // send time.
   const bizRows = await db.execute(sql`
-    select name, logo_url, address_line1, address_line2, city, region, postal_code, country
+    select name, legal_name, tax_id, logo_url, address_line1, address_line2, city, region, postal_code, country
     from businesses where id = ${inv.businessId}
   `);
   const biz = bizRows.rows[0] as
     | {
         name: string;
+        legal_name: string | null;
+        tax_id: string | null;
         logo_url: string | null;
         address_line1: string | null;
         address_line2: string | null;
@@ -837,6 +846,8 @@ export async function finalizeInvoice(
         country: client.country,
       },
       businessNameSnapshot: biz.name,
+      businessLegalNameSnapshot: biz.legal_name,
+      businessTaxIdSnapshot: biz.tax_id,
       businessLogoUrlSnapshot: biz.logo_url,
       businessAddressSnapshot: {
         line1: biz.address_line1,
@@ -868,18 +879,31 @@ export async function markInvoicePaid(
       message: `Invoice ${inv.invoiceNumber} is void and cannot be marked paid.`,
     };
   }
-  const amount = opts.amount ?? inv.total;
+
+  // ACCUMULATE: each call adds to amountPaid (matches the tool description's
+  // "supports partial payments"). Pass no `amount` to mark fully paid by
+  // applying the remaining balance.
+  const remaining = addAmounts(inv.total, `-${inv.amountPaid}`);
+  const delta = opts.amount ?? remaining;
+  const newAmountPaid = addAmounts(inv.amountPaid, delta);
+  // Status flips to paid only once the total is covered. Otherwise the
+  // invoice stays "sent" with a partial amountPaid recorded.
+  const fullyPaid =
+    Number(addAmounts(inv.total, `-${newAmountPaid}`)) <= 0;
   const paidAt = opts.paidAt ? new Date(opts.paidAt) : new Date();
   await db
     .update(invoices)
     .set({
-      status: "paid",
-      amountPaid: amount,
-      paidAt,
+      status: fullyPaid ? "paid" : inv.status,
+      amountPaid: newAmountPaid,
+      paidAt: fullyPaid ? paidAt : inv.paidAt,
       updatedAt: new Date(),
     })
     .where(eq(invoices.id, inv.id));
-  await writeEvent(inv.id, "paid", ctx.tokenId, { amount });
+  await writeEvent(inv.id, fullyPaid ? "paid" : "partial_paid", ctx.tokenId, {
+    delta,
+    amount_paid: newAmountPaid,
+  });
   return { ok: true, value: (await getInvoice(ctx, inv.id))! };
 }
 

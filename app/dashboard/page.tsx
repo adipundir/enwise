@@ -28,7 +28,7 @@ export default async function DashboardHome() {
     const active = await getActiveToken(userId);
     if (!active) {
       const created = await createToken({
-        businessId: user?.defaultBusinessId ?? "",
+        businessId: user?.defaultBusinessId ?? null,
         createdByUserId: userId,
         name: "Default",
       });
@@ -39,7 +39,7 @@ export default async function DashboardHome() {
     }
   }
 
-  // All businesses this user owns, with their counts and plan.
+  // All businesses this user owns.
   const allBusinesses = userId
     ? await db
         .select()

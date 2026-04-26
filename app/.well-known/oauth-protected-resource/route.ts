@@ -15,7 +15,7 @@ export function GET(req: NextRequest): Response {
     {
       resource: `${baseUrl}/api/mcp`,
       bearer_methods_supported: ["header"],
-      resource_documentation: `${baseUrl}/dashboard/connect`,
+      resource_documentation: `${baseUrl}/docs/setup`,
     },
     {
       headers: {

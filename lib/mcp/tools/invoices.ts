@@ -225,7 +225,7 @@ export function registerInvoiceTools(server: McpServer) {
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const __u = ctxFromAuthInfo(extra.authInfo);
-      const __s = await scopeFromCtx(__u, undefined);
+      const __s = await scopeFromCtx(__u, parsed.data.business_id);
       if (!__s.ok) return __s.error;
       const ctx = __s.scoped;
       const d = parsed.data;

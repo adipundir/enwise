@@ -29,7 +29,9 @@ function isValidFormat(raw: string): boolean {
 }
 
 export async function createToken(params: {
-  businessId: string;
+  /** Optional business hint. Tokens are user-scoped now; pass null when
+   *  there's no specific business to attach. Empty strings would FK-fail. */
+  businessId?: string | null;
   createdByUserId: string;
   name: string;
 }) {
@@ -37,7 +39,7 @@ export async function createToken(params: {
   const [row] = await db
     .insert(apiTokens)
     .values({
-      businessId: params.businessId,
+      businessId: params.businessId || null,
       createdByUserId: params.createdByUserId,
       name: params.name,
       tokenHash: hashToken(raw),

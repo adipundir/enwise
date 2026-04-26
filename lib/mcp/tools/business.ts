@@ -145,7 +145,23 @@ export function registerBusinessTools(server: McpServer) {
       if (input.country !== undefined) patch.country = input.country;
       if (input.default_currency !== undefined) patch.defaultCurrency = input.default_currency;
       if (input.invoice_number_prefix !== undefined) patch.invoiceNumberPrefix = input.invoice_number_prefix;
-      if (input.invoice_number_next !== undefined) patch.invoiceNumberNext = input.invoice_number_next;
+      if (input.invoice_number_next !== undefined) {
+        // Refuse to lower the invoice number sequence below what's already
+        // been allocated. The unique index (business_id, invoice_number)
+        // would throw on the next create_invoice and surface as a generic
+        // internal_error to the user.
+        const current = await getBusinessProfile(scope.scoped);
+        if (current && input.invoice_number_next < current.invoiceNumberNext) {
+          return toolError(
+            "invalid_input",
+            `invoice_number_next (${input.invoice_number_next}) is below the current allocator value (${current.invoiceNumberNext}). Setting it lower would collide on the next create_invoice.`,
+            {
+              hint: `Pass a value >= ${current.invoiceNumberNext}, or leave it unset.`,
+            },
+          );
+        }
+        patch.invoiceNumberNext = input.invoice_number_next;
+      }
       if (input.brand_color !== undefined) patch.brandColor = input.brand_color ?? null;
       if (input.email_reply_to !== undefined) patch.emailReplyTo = input.email_reply_to ?? null;
       if (input.default_payment_terms_days !== undefined)

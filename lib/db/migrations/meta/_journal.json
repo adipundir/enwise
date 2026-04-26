@@ -57,6 +57,13 @@
       "when": 1777226288982,
       "tag": "0007_tranquil_pepper_potts",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777243940836,
+      "tag": "0008_sleepy_betty_ross",
+      "breakpoints": true
     }
   ]
 }

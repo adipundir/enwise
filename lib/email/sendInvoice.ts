@@ -143,22 +143,28 @@ export async function sendInvoiceByEmail(
   // "via enwise" duplicating that signal in the display name.
   const fromDisplay = `${sanitizeHeaderValue(pdfData.business.name)} <${fromAddress}>`;
 
+  // Look up the business's configured reply-to (where the recipient's
+  // replies should land) for this specific invoice's rendering business.
+  const replyToAddress = await getBusinessReplyTo(sent.businessId);
+  const unsubscribeAddress =
+    replyToAddress || process.env.RESEND_REPLY_TO || fromAddress;
+
   try {
     const result = await resend.emails.send({
       from: fromDisplay,
       to: toArray,
       cc: input.cc,
       bcc: input.bcc,
-      replyTo: undefined, // Populated from business.email_reply_to if set; see below.
+      replyTo: replyToAddress ?? undefined,
       subject: `${sanitizeHeaderValue(pdfData.business.name)}. Invoice ${sent.invoiceNumber}`,
       html,
       text: plainText,
       headers: {
         // Gmail/Outlook expect a mailto or https unsubscribe target. The
         // invoice share URL is a poor target; use the business reply-to
-        // (which we set when configured) so replying is the canonical "please
-        // stop sending" action. Falls back to the from-address.
-        "List-Unsubscribe": `<mailto:${process.env.RESEND_REPLY_TO || fromAddress}?subject=Unsubscribe ${sent.invoiceNumber}>`,
+        // (or the configured server-wide one) so replying is the canonical
+        // "please stop sending" action.
+        "List-Unsubscribe": `<mailto:${unsubscribeAddress}?subject=Unsubscribe ${sent.invoiceNumber}>`,
       },
     });
     if (result.error) {
@@ -202,6 +208,22 @@ async function getClientEmail(ctx: ScopedCtx, clientId: string): Promise<string 
     .from(clients)
     .where(and(eq(clients.id, clientId), eq(clients.ownerUserId, ctx.userId)));
   return row?.email ?? null;
+}
+
+/**
+ * Look up the business's configured reply-to address for this invoice.
+ * Used as the `replyTo` header on the outbound email so recipients reply
+ * to the user's actual inbox instead of our `RESEND_FROM_ADDRESS`.
+ */
+async function getBusinessReplyTo(businessId: string): Promise<string | null> {
+  const { db } = await import("@/lib/db");
+  const { businesses } = await import("@/lib/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const [row] = await db
+    .select({ emailReplyTo: businesses.emailReplyTo })
+    .from(businesses)
+    .where(eq(businesses.id, businessId));
+  return row?.emailReplyTo ?? null;
 }
 
 function buildAddressLines(a: {

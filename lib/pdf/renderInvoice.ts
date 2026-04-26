@@ -63,7 +63,7 @@ export async function buildInvoicePdfData(
       region: businessSnapshot?.region ?? business?.region ?? null,
       postalCode: businessSnapshot?.postal_code ?? business?.postalCode ?? null,
       country: businessSnapshot?.country ?? business?.country ?? null,
-      taxId: business?.taxId ?? null,
+      taxId: invoice.businessTaxIdSnapshot ?? business?.taxId ?? null,
     },
   };
 }

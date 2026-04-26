@@ -96,6 +96,7 @@ Project → Settings → Environment Variables (Production + Preview + Developme
 | `PUBLIC_BASE_URL` | `https://<your-vercel-domain>` |
 | `RESEND_API_KEY` | [resend.com/api-keys](https://resend.com/api-keys). Verify a domain first or Resend will reject sends. |
 | `RESEND_FROM_ADDRESS` | Sending address. For testing leave unset. we fall back to Resend's sandbox (`onboarding@resend.dev`), which only delivers to the Resend account owner's address. For production, verify a domain in Resend and set this to e.g. `invoices@yourdomain.com`. |
+| `RESEND_REPLY_TO` | Optional. Server-wide fallback for the `List-Unsubscribe` mailto target when a business hasn't configured its own `email_reply_to`. Defaults to `RESEND_FROM_ADDRESS`. |
 
 ### 5. Update OAuth callback URLs
 

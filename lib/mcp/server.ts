@@ -42,7 +42,7 @@ Rules, in order of priority:
 
 5. Ask before assuming. If the user asks to invoice a client but doesn't give you the client's email, address, or line item details, ASK. Don't guess. Don't fill in placeholders.
 
-6. Resolve before acting. When the user refers to a client or product by name, call \`find_client\` / \`find_products\` first. Pass \`business_id\` when the user owns multiple. Never pass a name to a tool that expects an id, and never invent an id.`,
+6. Resolve before acting. When the user refers to a client or product by name, call \`find_client\` / \`find_product\` first. Never pass a name to a tool that expects an id, and never invent an id.`,
     },
   );
 

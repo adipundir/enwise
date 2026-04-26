@@ -241,9 +241,14 @@ async function fetchShareSlug(token: string, invoiceId: string): Promise<string 
     }),
   });
   const body = (await resp.json()) as {
-    result?: { structuredContent?: { data?: { slug?: string } } };
+    result?: { structuredContent?: { data?: { url?: string } } };
   };
-  return body.result?.structuredContent?.data?.slug ?? null;
+  // The tool now returns { url, enabled } and never the bare slug. Parse
+  // the slug back out of the URL for the smoke test's PDF assertion.
+  const url = body.result?.structuredContent?.data?.url;
+  if (!url) return null;
+  const m = url.match(/\/i\/([^/?]+)/);
+  return m?.[1] ?? null;
 }
 
 async function callTool(

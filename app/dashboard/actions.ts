@@ -46,7 +46,7 @@ export async function rotateKeyAction(): Promise<RotateResult> {
   // api_tokens.businessId column stays populated for back-compat but has
   // no semantic weight anymore.
   const { raw } = await createToken({
-    businessId: user.defaultBusinessId ?? "",
+    businessId: user.defaultBusinessId ?? null,
     createdByUserId: user.id,
     name: "Default",
   });

@@ -35,7 +35,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
         {
           name: invoice.businessNameSnapshot,
           logoUrl: invoice.businessLogoUrlSnapshot,
-          taxId: null as string | null,
+          taxId: invoice.businessTaxIdSnapshot,
           snapshot: invoice.businessAddressSnapshot,
         },
       ]

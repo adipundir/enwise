@@ -1,6 +1,6 @@
 ---
 name: enwise
-version: 2026.04.27.2
+version: 2026.04.27.3
 description: Create, send, and track invoices for the user's business using the enwise MCP server.
 ---
 

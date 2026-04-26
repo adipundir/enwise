@@ -11,11 +11,19 @@ export default async function SignInPage({
   const session = await auth();
   const { callbackUrl } = await searchParams;
 
+  // Open-redirect guard: only accept same-origin paths.
+  // Reject absolute URLs (`https://…`), protocol-relative (`//…`), and
+  // anything that doesn't start with a single `/`.
+  const safeCallback =
+    callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")
+      ? callbackUrl
+      : "/dashboard";
+
   if (session) {
-    redirect(callbackUrl ?? "/dashboard");
+    redirect(safeCallback);
   }
 
-  const redirectTo = callbackUrl ?? "/dashboard";
+  const redirectTo = safeCallback;
 
   async function signInWithGitHub() {
     "use server";
