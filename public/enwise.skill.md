@@ -1,6 +1,6 @@
 ---
 name: enwise
-version: 2026.04.27
+version: 2026.04.27.2
 description: Create, send, and track invoices for the user's business using the enwise MCP server.
 ---
 
@@ -113,11 +113,35 @@ Rule of thumb: context about ONE line item that isn't visible from the attachmen
 
 ## Attachments
 
-Each line item can carry supporting files. Pass as base64 only:
+**Supported types**: PNG, JPEG, WebP, PDF only. 4 MB per file, 10 files per line item. They're uploaded to our own storage so the invoice stays self-contained (matches how Stripe, QuickBooks, and Xero handle invoice evidence). Attachments render on both the PDF and the public invoice page.
 
-- `{ file_base64: "…", mime_type: "image/png" | "image/jpeg" | "image/webp" | "application/pdf", filename?: "receipt.pdf", label?: "Hotel receipt" }`
+**Two ways to attach** — pick based on where the bytes live:
 
-8 MB per file, 10 files per line item. They're uploaded to our own storage so the invoice stays self-contained. no URL passthrough (matches how Stripe, QuickBooks, and Xero handle invoice evidence). Attachments render on both the PDF and the public invoice page.
+### (a) Pre-uploaded URL — preferred for any file the user has on disk
+
+```bash
+curl -X POST https://enwise.app/api/upload \
+  -H "Authorization: Bearer <THE_USER_KEY>" \
+  -F "file=@/path/to/receipt.pdf"
+```
+
+Returns `{url, mime_type, size_bytes, filename}`. Pass the `url` to the MCP tool as:
+
+```json
+{ "attachment_url": "https://...blob.vercel-storage.com/...", "label": "Hotel receipt" }
+```
+
+The bytes never enter your context — works for any file size up to 4 MB without bumping into the Read tool's token limit.
+
+### (b) Inline base64 — only for tiny screenshots / clipboard images you generated
+
+```json
+{ "file_base64": "…", "mime_type": "image/png", "filename": "screenshot.png", "label": "Screenshot" }
+```
+
+Practical limit ~20 KB because the base64 lives in your context window.
+
+**Default to (a)** whenever the user has a file on disk. (b) is only for the rare case where you have raw bytes already in memory.
 
 ### The user asks about money owed or earned
 

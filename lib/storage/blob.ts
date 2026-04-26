@@ -272,12 +272,18 @@ function mimeError(): Extract<LogoResult, { ok: false }> {
 
 // ---------- Line item attachments ----------
 
-export type AttachmentInput = {
-  label?: string;
-  file_base64: string;
-  mime_type: string;
-  filename?: string;
-};
+export type AttachmentInput =
+  | {
+      label?: string;
+      file_base64: string;
+      mime_type: string;
+      filename?: string;
+    }
+  | {
+      label?: string;
+      /** URL returned by POST /api/upload. Must be on our own Blob host. */
+      attachment_url: string;
+    };
 
 export type AttachmentResolved = { label: string; url: string };
 
@@ -293,20 +299,56 @@ export type AttachmentResult =
       hint?: string;
     };
 
-// Base64 uploads only. URL passthrough was intentionally dropped so every
-// attachment is stored on our own Blob and stays immutable for the life of
-// the invoice. matches Stripe / QuickBooks / Xero behaviour, removes the
-// phishing + link-rot surface, and collapses the schema to one code path.
+/** Hosts we mint our own URLs on (Vercel Blob serves under these domains). */
+const TRUSTED_BLOB_HOSTS = [
+  ".public.blob.vercel-storage.com",
+  ".blob.vercel-storage.com",
+];
+
+function isTrustedBlobUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return false;
+    return TRUSTED_BLOB_HOSTS.some((h) => u.hostname.endsWith(h));
+  } catch {
+    return false;
+  }
+}
+
+// Two input variants:
+// - file_base64: small files inlined in the tool call (≤25 KB practical
+//   limit because the base64 lives in the model's context window).
+// - attachment_url: pre-uploaded via POST /api/upload, only enwise's own
+//   Blob host accepted (host check defends against the old URL passthrough
+//   surface where attackers could inject arbitrary phishing links).
 export async function resolveAttachment(params: {
   businessId: string;
   input: AttachmentInput;
-  /** Per-file size cap in bytes. Caller passes the plan-aware value
-   *  (FREE_ATTACHMENT_BYTES vs PRO_ATTACHMENT_BYTES). Defaults to the
-   *  Pro cap so existing internal callers don't accidentally tighten. */
+  /** Per-file size cap in bytes (only enforced for the base64 path). */
   maxBytes?: number;
 }): Promise<AttachmentResult> {
   const { businessId, input } = params;
   const sizeCap = params.maxBytes ?? MAX_ATTACHMENT_BYTES;
+
+  // attachment_url path (pre-uploaded via /api/upload)
+  if ("attachment_url" in input) {
+    if (!isTrustedBlobUrl(input.attachment_url)) {
+      return {
+        ok: false,
+        code: "attachment_invalid_mime",
+        message:
+          "attachment_url must be a URL returned by POST /api/upload (only enwise blob hosts accepted).",
+        hint: "Upload the file first: curl -X POST -H \"Authorization: Bearer …\" -F \"file=@/path/to/file.pdf\" https://enwise.app/api/upload — then pass the returned `url` as `attachment_url`.",
+      };
+    }
+    return {
+      ok: true,
+      attachment: {
+        label: input.label?.trim() || "Attachment",
+        url: input.attachment_url,
+      },
+    };
+  }
 
   if (!ALLOWED_ATTACHMENT_MIME.has(input.mime_type)) {
     return {

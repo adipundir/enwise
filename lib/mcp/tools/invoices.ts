@@ -77,18 +77,29 @@ const currency = z
   .regex(/^[A-Za-z]{3}$/, "3-letter ISO 4217 code like 'USD'")
   .transform((s) => s.toUpperCase());
 
-const attachmentSchema = z.object({
-  business_id: uuid.optional(),
-  label: z.string().min(1).max(120).optional(),
-  file_base64: z.string().min(1),
-  mime_type: z.enum([
-    "image/png",
-    "image/jpeg",
-    "image/webp",
-    "application/pdf",
-  ]),
-  filename: z.string().min(1).max(120).optional(),
-});
+// Two ways to attach a file:
+//   1. file_base64 — inline the bytes in the tool call. Practical limit
+//      ~25 KB because the base64 string lives in the model's context.
+//   2. attachment_url — pre-upload via POST /api/upload (curl from disk),
+//      then pass the returned URL. Required for anything bigger than a
+//      small screenshot. Bytes never enter the model's context.
+const attachmentSchema = z.union([
+  z.object({
+    label: z.string().min(1).max(120).optional(),
+    file_base64: z.string().min(1),
+    mime_type: z.enum([
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "application/pdf",
+    ]),
+    filename: z.string().min(1).max(120).optional(),
+  }),
+  z.object({
+    label: z.string().min(1).max(120).optional(),
+    attachment_url: z.string().url(),
+  }),
+]);
 const attachments = z.array(attachmentSchema).max(10).optional();
 
 const lineItemSchema = z.object({
@@ -143,7 +154,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Create invoice",
       description:
-        "Create a draft invoice for a client under a specific business. If the user owns multiple businesses, pass `business_id`. ASK the user which business this invoice is under before calling. If they own one, `business_id` can be omitted. Every line item description, quantity, unit price, and tax rate MUST come from the user. NEVER invent them.\n\nFIELD SEPARATION RULES:\n- `line_items[].description`: just the product or service name. Short and specific (e.g., `MacBook Pro 14\" M5 Pro (24GB / 1TB)`, `Consulting. April 2026`). No 'Reimbursement' prefix, no reference numbers, no conversion math, no 'see attached'.\n- `line_items[].note` (per-item): context that ISN'T already shown elsewhere on the invoice. Conversion math, FX rates, billing periods, dates the recipient can't see otherwise. **Do NOT include 'Source: Invoice X' or filenames in the note when you've also attached the source PDF. the attachment label is the citation. Repeating it as text is visual noise.** Keep it terse.\n- `notes` (invoice-level): context for the WHOLE invoice. payment instructions, thank-yous, reimbursement framing.\n- `terms` (invoice-level): standing terms like `Payment due within 30 days via bank transfer`.\n- `attachments` on a line item: supporting files. The label IS the source citation. name them naturally (`Apple receipt`, `Hotel folio`). Don't repeat their contents in the description or note.\n\nATTACHMENTS: base64 uploads only. `{file_base64, mime_type, filename?, label?}` where mime_type is `image/png`, `image/jpeg`, `image/webp`, or `application/pdf` (max 8 MB, 10 per line item). Pass PDFs through as-is. don't rasterize.\n\nInvoice number is allocated automatically. Dates default to today + net-30; currency defaults to the client's default then the business's. Returns the full invoice + share URL. To email it, call send_invoice next.",
+        "Create a draft invoice for a client under a specific business. If the user owns multiple businesses, pass `business_id`. ASK the user which business this invoice is under before calling. If they own one, `business_id` can be omitted. Every line item description, quantity, unit price, and tax rate MUST come from the user. NEVER invent them.\n\nFIELD SEPARATION RULES:\n- `line_items[].description`: just the product or service name. Short and specific (e.g., `MacBook Pro 14\" M5 Pro (24GB / 1TB)`, `Consulting April 2026`). No 'Reimbursement' prefix, no reference numbers, no conversion math, no 'see attached'.\n- `line_items[].note` (per-item): context that ISN'T already shown elsewhere on the invoice. Conversion math, FX rates, billing periods, dates the recipient can't see otherwise. **Do NOT include 'Source: Invoice X' or filenames in the note when you've also attached the source PDF — the attachment label is the citation, repeating it as text is visual noise.** Keep it terse.\n- `notes` (invoice-level): context for the WHOLE invoice — payment instructions, thank-yous, reimbursement framing.\n- `terms` (invoice-level): standing terms like `Payment due within 30 days via bank transfer`.\n- `attachments` on a line item: supporting files. The label IS the source citation; name them naturally (`Apple receipt`, `Hotel folio`).\n\nATTACHMENTS — supported types: PNG, JPEG, WebP, PDF only. Max 4 MB per file, 10 files per line item. Two ways to attach:\n\n  (a) For tiny screenshots / clipboard images (< 20 KB): inline the bytes:\n      `{file_base64, mime_type, filename?, label?}`\n\n  (b) For ANYTHING on disk or > 20 KB: upload first, reference by URL.\n      Step 1 — upload from disk via curl (file bytes never enter your context):\n        curl -X POST https://enwise.app/api/upload \\\n          -H \"Authorization: Bearer <YOUR_TOKEN>\" \\\n          -F \"file=@/path/to/receipt.pdf\"\n      Returns `{url, mime_type, size_bytes, filename}`.\n      Step 2 — pass the url as attachment_url on the line item:\n        `{attachment_url: \"https://...blob.vercel-storage.com/...\", label?}`\n\n  Use (b) by default for any user-supplied file. Only use (a) for tiny inline images you generated in the chat. Pass PDFs through as-is — don't rasterize.\n\nInvoice number is allocated automatically. Dates default to today + net-30; currency defaults to the client's default then the business's. Returns the full invoice + share URL. To email it, call send_invoice next.",
       inputSchema: createSchema,
     },
     async (args, extra) => {
@@ -244,7 +255,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Add line item (draft only)",
       description:
-        "Append a line item to a draft invoice. Totals are recomputed automatically. Optional `attachments` accepts an array of supporting docs. each is either `{url, label?}` (passthrough link) or `{file_base64, mime_type, filename?, label?}` (inline upload; mime_type = image/png|jpeg|webp or application/pdf, max 8 MB). If the user shared a file, upload it via base64. pass PDFs through as-is, don't convert them to images.",
+        "Append a line item to a draft invoice. Totals are recomputed automatically. Optional `attachments` (PNG/JPEG/WebP/PDF, max 4 MB each, up to 10): for files on disk or > 20 KB, upload first via `curl -X POST -H \"Authorization: Bearer <TOKEN>\" -F \"file=@/path/to/file.pdf\" https://enwise.app/api/upload` and pass the returned `url` as `{attachment_url, label?}`. For tiny inline images you generated, use `{file_base64, mime_type, filename?, label?}`. Pass PDFs through as-is, don't rasterize.",
       inputSchema: {
         business_id: uuid.optional(),
         invoice_id: uuid,
@@ -295,7 +306,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Update line item (draft only)",
       description:
-        "Update fields on a draft invoice line item. Pass only the fields you want to change. Passing `attachments` REPLACES the whole list (send every file you want on the line item. any attachment you don't re-send is removed). Pass `attachments: []` to clear.",
+        "Update fields on a draft invoice line item. Pass only the fields you want to change. Passing `attachments` REPLACES the whole list (send every file you want on the line item; anything you don't re-send is removed). Pass `attachments: []` to clear. Attachment shape: `{attachment_url}` (preferred — upload via POST /api/upload first) or `{file_base64, mime_type, filename?}` (small files only, < 20 KB). PNG / JPEG / WebP / PDF, 4 MB cap each.",
       inputSchema: {
         business_id: uuid.optional(),
         invoice_id: uuid,

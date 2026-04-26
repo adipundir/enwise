@@ -132,10 +132,12 @@ async function resolveAttachments(
 
   const resolved: LineItemAttachment[] = [];
   for (const input of inputs) {
-    // Already-resolved entry (duplicate_invoice hands these through). We
-    // trust them because the url was minted by us during the original
-    // upload. no re-upload needed.
-    if (!("file_base64" in input)) {
+    // Already-resolved entry (duplicate_invoice hands these through with
+    // the LineItemAttachment shape `{label, url}`). We trust them because
+    // the url was minted by us during the original upload — no re-upload
+    // needed. Distinguish from user-supplied `{attachment_url}` by which
+    // field is present.
+    if ("url" in input) {
       resolved.push({ label: input.label, url: input.url });
       continue;
     }
