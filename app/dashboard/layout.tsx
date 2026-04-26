@@ -23,9 +23,6 @@ export default async function DashboardLayout({
             enwise
           </Link>
           <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-zinc-400">
-            <Link href="/dashboard" className="hover:text-zinc-100">
-              Dashboard
-            </Link>
             <form
               action={async () => {
                 "use server";

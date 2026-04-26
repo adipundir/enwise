@@ -72,16 +72,22 @@ export function SetupSection({
   initialRawToken,
   currentPrefix,
   mcpUrl,
+  hasInvoices,
 }: {
   initialRawToken: string | null;
   currentPrefix: string | null;
   mcpUrl: string;
+  hasInvoices: boolean;
 }) {
   const [rawToken, setRawToken] = useState<string | null>(initialRawToken);
   const [agent, setAgent] = useState<AgentId>("claude-code");
   const [primaryCopied, setPrimaryCopied] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  // Once the user has at least one invoice, the setup steps are noise on
+  // every dashboard visit. Collapse by default; user can re-open to switch
+  // agent or fetch a fresh prompt.
+  const [expanded, setExpanded] = useState(!hasInvoices);
 
   const tokenForCopy = rawToken ?? "<YOUR_KEY>";
 
@@ -150,18 +156,46 @@ export function SetupSection({
             Set up enwise
           </h2>
           <p className="mt-1 text-sm text-zinc-400">
-            Three steps. You only need to do this once.
+            {expanded
+              ? "Three steps. You only need to do this once."
+              : "Already connected. Open to switch agents or get a fresh setup payload."}
           </p>
         </div>
-        <AgentPicker
-          value={agent}
-          onChange={(next) => {
-            setAgent(next);
-            setPrimaryCopied(false);
-          }}
-        />
+        <div className="flex items-center gap-3">
+          {expanded ? (
+            <AgentPicker
+              value={agent}
+              onChange={(next) => {
+                setAgent(next);
+                setPrimaryCopied(false);
+              }}
+            />
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 focus:outline-none"
+            aria-expanded={expanded}
+          >
+            {expanded ? "Hide" : "Show"}
+            <svg
+              viewBox="0 0 16 16"
+              className={`size-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+            >
+              <path
+                d="M4 6l4 4 4-4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
 
+      {!expanded ? null : (
       <div className="grid gap-px overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900 md:grid-cols-3">
         {/* STEP 1 */}
         <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
@@ -251,10 +285,11 @@ export function SetupSection({
             <em className="text-zinc-200">
               &ldquo;use enwise to show my account&rdquo;
             </em>
-            . You should see your business profile.
+            . {step3Tail(agent)}
           </p>
         </div>
       </div>
+      )}
     </section>
   );
 }
@@ -292,7 +327,7 @@ function step2Title(agent: AgentId): string {
 function step2Body(agent: AgentId): string {
   switch (agent) {
     case "claude-code":
-      return "Claude Code only loads MCP tools at session start. This step is required. Most 'it isn\\'t working' reports are because of this.";
+      return "Claude Code only loads MCP tools at session start. This step is required. Most 'it isn't working' reports are because of this.";
     case "claude-ai":
       return "Once saved, the enwise connector is live in any new chat. No restart needed. The settings page should show enwise with a green Connected badge.";
     case "cursor":
@@ -331,6 +366,21 @@ function step2Hint(agent: AgentId): string {
       return "Quit and reopen the CLI.";
     case "windsurf":
       return "Quit fully and reopen.";
+  }
+}
+
+function step3Tail(agent: AgentId): string {
+  switch (agent) {
+    case "claude-code":
+      return "Claude will walk you through setting up your business so you can start invoicing.";
+    case "claude-ai":
+      return "Claude will walk you through setting up your business so you can start invoicing.";
+    case "cursor":
+      return "Cursor will walk you through setting up your business so you can start invoicing.";
+    case "codex":
+      return "Codex will walk you through setting up your business so you can start invoicing.";
+    case "windsurf":
+      return "Windsurf will walk you through setting up your business so you can start invoicing.";
   }
 }
 

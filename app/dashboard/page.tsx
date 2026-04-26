@@ -7,6 +7,7 @@ import { invoiceShareUrl } from "@/lib/invoices";
 import { formatMoney, addAmounts } from "@/lib/money";
 import { createToken, getActiveToken } from "@/lib/tokens";
 import { SetupSection } from "./SetupSection";
+import { OutstandingStat } from "./OutstandingStat";
 
 // Stats depend on fresh DB state that changes via MCP tool calls outside
 // of this route's request context. Force dynamic so every page hit
@@ -101,8 +102,7 @@ export default async function DashboardHome() {
       <section className="grid grid-cols-2 gap-px bg-zinc-900 sm:grid-cols-4">
         <Stat label="Clients" value={String(clientCount.length)} />
         <Stat label="Invoices" value={String(allInvoices.length)} />
-        <Stat
-          label="Outstanding"
+        <OutstandingStat
           value={
             outstandingByCurrency.length === 0
               ? "(none)"
@@ -122,6 +122,7 @@ export default async function DashboardHome() {
         initialRawToken={bootstrapRawToken}
         currentPrefix={currentPrefix}
         mcpUrl={mcpUrl}
+        hasInvoices={allInvoices.length > 0}
       />
 
       {recentInvoices.length > 0 ? (
