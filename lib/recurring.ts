@@ -5,6 +5,7 @@ import { businesses, clients, recurringInvoiceTemplates, type RecurringInvoiceTe
 import { createInvoice, type LineItemInput } from "@/lib/invoices";
 import type { ScopedCtx } from "@/lib/mcp/context";
 import { sendInvoiceByEmail } from "@/lib/email/sendInvoice";
+import { getUserPlan } from "@/lib/plan";
 
 export type Interval = "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
 
@@ -24,7 +25,16 @@ export interface RecurringTemplateInput {
 
 export type RecurringResult<T> =
   | { ok: true; value: T }
-  | { ok: false; code: "not_found" | "client_not_found" | "invalid_input"; message: string };
+  | {
+      ok: false;
+      code:
+        | "not_found"
+        | "client_not_found"
+        | "invalid_input"
+        | "pro_required";
+      message: string;
+      hint?: string;
+    };
 
 // ---------- Interval math ----------
 
@@ -79,6 +89,18 @@ export async function createRecurring(
   ctx: ScopedCtx,
   input: RecurringTemplateInput,
 ): Promise<RecurringResult<RecurringInvoiceTemplate>> {
+  // Pro-only feature.
+  const plan = await getUserPlan(ctx.userId);
+  if (plan !== "pro") {
+    return {
+      ok: false,
+      code: "pro_required",
+      message:
+        "Recurring invoices are a Pro feature. Free accounts can create one-off invoices.",
+      hint: "Tell the user this is Pro-only and link them to https://enwise.app/dashboard to upgrade. Don't retry until they confirm they upgraded.",
+    };
+  }
+
   if (input.lineItems.length === 0) {
     return { ok: false, code: "invalid_input", message: "At least one line item required." };
   }

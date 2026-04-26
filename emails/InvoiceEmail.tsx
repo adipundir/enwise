@@ -23,6 +23,10 @@ export interface InvoiceEmailProps {
   shareUrl: string;
   customMessage: string | null;
   businessAddressLines: string[];
+  /** Pro accounts hide the "Powered by enwise" footer. Default true (Free). */
+  showWatermark?: boolean;
+  /** Pro accounts render the business logo. Default false (Free). */
+  showLogo?: boolean;
 }
 
 /**
@@ -45,6 +49,8 @@ export function InvoiceEmail({
   shareUrl,
   customMessage,
   businessAddressLines,
+  showWatermark = true,
+  showLogo = false,
 }: InvoiceEmailProps) {
   const formattedTotal = formatMoney(total, currency);
   const previewText = `${businessName} sent you invoice ${invoiceNumber} for ${formattedTotal}`;
@@ -60,7 +66,7 @@ export function InvoiceEmail({
         <Container style={styles.container}>
           {/* Letterhead: logo + business */}
           <Section style={styles.letterhead}>
-            {logoUrl ? (
+            {showLogo && logoUrl ? (
               <Img
                 src={logoUrl}
                 alt={businessName}
@@ -141,7 +147,9 @@ export function InvoiceEmail({
                 {businessAddressLines.join(" · ")}
               </Text>
             ) : null}
-            <Text style={styles.footerMuted}>Powered by enwise</Text>
+            {showWatermark ? (
+              <Text style={styles.footerMuted}>Powered by enwise</Text>
+            ) : null}
           </Section>
         </Container>
       </Body>

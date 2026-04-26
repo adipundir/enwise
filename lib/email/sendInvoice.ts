@@ -2,6 +2,7 @@ import { render } from "@react-email/components";
 import { createElement } from "react";
 import { Resend } from "resend";
 import { InvoiceEmail } from "@/emails/InvoiceEmail";
+import { getUserPlan } from "@/lib/plan";
 import {
   finalizeInvoice,
   getInvoice,
@@ -113,35 +114,30 @@ export async function sendInvoiceByEmail(
     country: pdfData.business.country,
   });
 
-  const html = await render(
-    createElement(InvoiceEmail, {
-      invoiceNumber: sent.invoiceNumber,
-      clientName: pdfData.client.name,
-      businessName: pdfData.business.name,
-      logoUrl: pdfData.business.logoUrl,
-      total: sent.total,
-      currency: sent.currency,
-      dueDate: sent.dueDate,
-      shareUrl,
-      customMessage: input.message ?? null,
-      businessAddressLines: addressLines,
-    }),
-  );
-  const plainText = await render(
-    createElement(InvoiceEmail, {
-      invoiceNumber: sent.invoiceNumber,
-      clientName: pdfData.client.name,
-      businessName: pdfData.business.name,
-      logoUrl: pdfData.business.logoUrl,
-      total: sent.total,
-      currency: sent.currency,
-      dueDate: sent.dueDate,
-      shareUrl,
-      customMessage: input.message ?? null,
-      businessAddressLines: addressLines,
-    }),
-    { plainText: true },
-  );
+  // Plan-gated rendering: Pro hides watermark + shows logo; Free shows
+  // watermark + falls back to default header.
+  const plan = await getUserPlan(ctx.userId);
+  const isPro = plan === "pro";
+
+  const emailProps = {
+    invoiceNumber: sent.invoiceNumber,
+    clientName: pdfData.client.name,
+    businessName: pdfData.business.name,
+    logoUrl: pdfData.business.logoUrl,
+    total: sent.total,
+    currency: sent.currency,
+    dueDate: sent.dueDate,
+    shareUrl,
+    customMessage: input.message ?? null,
+    businessAddressLines: addressLines,
+    showWatermark: !isPro,
+    showLogo: isPro,
+  };
+
+  const html = await render(createElement(InvoiceEmail, emailProps));
+  const plainText = await render(createElement(InvoiceEmail, emailProps), {
+    plainText: true,
+  });
 
   // 6. Send via Resend.
   const resend = new Resend(apiKey);

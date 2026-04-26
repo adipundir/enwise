@@ -113,7 +113,15 @@ export function registerRecurringTools(server: McpServer) {
         paymentTermsDays: d.payment_terms_days ?? null,
         autoSend: d.auto_send,
       });
-      if (!result.ok) return toolError(result.code === "client_not_found" ? "not_found" : "invalid_input", result.message);
+      if (!result.ok) {
+        const code =
+          result.code === "client_not_found"
+            ? "not_found"
+            : result.code === "pro_required"
+              ? "pro_required"
+              : "invalid_input";
+        return toolError(code, result.message, { hint: result.hint });
+      }
       return toolOk(formatRecurringForMcp(result.value));
     },
   );

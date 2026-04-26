@@ -131,6 +131,8 @@ function mapMutateError(code: string): ErrorCode {
     case "attachment_too_large":
     case "attachment_invalid_mime":
     case "attachment_storage_unavailable":
+    case "attachment_count_exceeded":
+    case "monthly_limit_reached":
       return code;
     default:
       return "internal_error";

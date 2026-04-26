@@ -300,8 +300,13 @@ export type AttachmentResult =
 export async function resolveAttachment(params: {
   businessId: string;
   input: AttachmentInput;
+  /** Per-file size cap in bytes. Caller passes the plan-aware value
+   *  (FREE_ATTACHMENT_BYTES vs PRO_ATTACHMENT_BYTES). Defaults to the
+   *  Pro cap so existing internal callers don't accidentally tighten. */
+  maxBytes?: number;
 }): Promise<AttachmentResult> {
   const { businessId, input } = params;
+  const sizeCap = params.maxBytes ?? MAX_ATTACHMENT_BYTES;
 
   if (!ALLOWED_ATTACHMENT_MIME.has(input.mime_type)) {
     return {
@@ -334,11 +339,11 @@ export async function resolveAttachment(params: {
       message: "file_base64 isn't valid base64.",
     };
   }
-  if (buffer.byteLength > MAX_ATTACHMENT_BYTES) {
+  if (buffer.byteLength > sizeCap) {
     return {
       ok: false,
       code: "attachment_too_large",
-      message: `File is ${formatBytes(buffer.byteLength)}, max is ${formatBytes(MAX_ATTACHMENT_BYTES)}.`,
+      message: `File is ${formatBytes(buffer.byteLength)}, max is ${formatBytes(sizeCap)}.`,
     };
   }
 

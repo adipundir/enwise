@@ -14,6 +14,12 @@ import type { ScopedCtx } from "@/lib/mcp/context";
 import { addAmounts, computeLine, isValidCurrency } from "@/lib/money";
 import { allocateInvoiceNumber } from "@/lib/numbering";
 import {
+  FREE_MONTHLY_INVOICE_LIMIT,
+  attachmentByteCap,
+  attachmentCountCap,
+  getUserPlan,
+} from "@/lib/plan";
+import {
   resolveAttachment,
   type AttachmentInput,
   type AttachmentResolved,
@@ -97,7 +103,8 @@ export type AttachmentResolveError = {
   code:
     | "attachment_too_large"
     | "attachment_invalid_mime"
-    | "attachment_storage_unavailable";
+    | "attachment_storage_unavailable"
+        | "attachment_count_exceeded";
   message: string;
   hint?: string;
 };
@@ -109,13 +116,35 @@ export type AttachmentResolveError = {
  * a clean message to Claude without a partial DB write.
  */
 async function resolveAttachments(
-  businessId: string,
+  ctx: ScopedCtx,
   inputs: (AttachmentInput | LineItemAttachment)[] | undefined,
 ): Promise<
   | { ok: true; attachments: LineItemAttachment[] }
-  | { ok: false; error: AttachmentResolveError }
+  | {
+      ok: false;
+      error: AttachmentResolveError | { code: "attachment_count_exceeded"; message: string; hint?: string };
+    }
 > {
   if (!inputs || inputs.length === 0) return { ok: true, attachments: [] };
+
+  const plan = await getUserPlan(ctx.userId);
+  const countCap = attachmentCountCap(plan);
+  const sizeCap = attachmentByteCap(plan);
+
+  if (inputs.length > countCap) {
+    return {
+      ok: false,
+      error: {
+        code: "attachment_count_exceeded",
+        message: `${plan === "pro" ? "Pro" : "Free"} accounts allow up to ${countCap} attachment${countCap === 1 ? "" : "s"} per line item${plan === "pro" ? "" : ". Upgrade to Pro for 10"}.`,
+        hint:
+          plan === "pro"
+            ? "Reduce the attachment count and retry."
+            : "Tell the user this is a Pro-only limit and link them to https://enwise.app/dashboard.",
+      },
+    };
+  }
+
   const resolved: LineItemAttachment[] = [];
   for (const input of inputs) {
     // Already-resolved entry (duplicate_invoice hands these through). We
@@ -125,7 +154,11 @@ async function resolveAttachments(
       resolved.push({ label: input.label, url: input.url });
       continue;
     }
-    const r = await resolveAttachment({ businessId, input });
+    const r = await resolveAttachment({
+      businessId: ctx.businessId,
+      input,
+      maxBytes: sizeCap,
+    });
     if (!r.ok) {
       return { ok: false, error: { code: r.code, message: r.message, hint: r.hint } };
     }
@@ -156,7 +189,9 @@ export type CreateInvoiceResult =
         | "onboarding_required"
         | "attachment_too_large"
         | "attachment_invalid_mime"
-        | "attachment_storage_unavailable";
+        | "attachment_storage_unavailable"
+        | "attachment_count_exceeded"
+        | "monthly_limit_reached";
       message: string;
       hint?: string;
     };
@@ -171,6 +206,30 @@ export async function createInvoice(
       code: "no_line_items",
       message: "An invoice needs at least one line item.",
     };
+  }
+
+  // Plan gate: Free accounts are capped at FREE_MONTHLY_INVOICE_LIMIT
+  // invoices created in any rolling 30-day window. Pro is unlimited.
+  const plan = await getUserPlan(ctx.userId);
+  if (plan !== "pro") {
+    const [{ value: createdLast30 }] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.ownerUserId, ctx.userId),
+          isNull(invoices.deletedAt),
+          sql`${invoices.createdAt} > now() - interval '30 days'`,
+        ),
+      );
+    if (Number(createdLast30 ?? 0) >= FREE_MONTHLY_INVOICE_LIMIT) {
+      return {
+        ok: false,
+        code: "monthly_limit_reached",
+        message: `Free accounts are capped at ${FREE_MONTHLY_INVOICE_LIMIT} invoices in any 30-day window. Upgrade to Pro for unlimited.`,
+        hint: "Tell the user this is a Pro-only limit and link them to https://enwise.app/dashboard. Don't retry until they confirm they've upgraded.",
+      };
+    }
   }
 
   // Gate: refuse to create invoices until the business profile is set up.
@@ -254,7 +313,7 @@ export async function createInvoice(
   // allocate an invoice number or write anything.
   const resolvedPerLine: LineItemAttachment[][] = [];
   for (const li of input.lineItems) {
-    const r = await resolveAttachments(ctx.businessId, li.attachments);
+    const r = await resolveAttachments(ctx, li.attachments);
     if (!r.ok) {
       return {
         ok: false,
@@ -503,7 +562,8 @@ export type LineItemMutateResult<T> =
         | "client_not_found"
         | "attachment_too_large"
         | "attachment_invalid_mime"
-        | "attachment_storage_unavailable";
+        | "attachment_storage_unavailable"
+        | "attachment_count_exceeded";
       message: string;
       hint?: string;
     };
@@ -612,7 +672,7 @@ export async function addLineItem(
       message: `Invoice ${inv.invoiceNumber} is ${inv.status}; only drafts are editable.`,
     };
   }
-  const att = await resolveAttachments(ctx.businessId, item.attachments);
+  const att = await resolveAttachments(ctx, item.attachments);
   if (!att.ok) {
     return {
       ok: false,
@@ -664,7 +724,7 @@ export async function updateLineItem(
 
   let nextAttachments: LineItemAttachment[];
   if (patch.attachments !== undefined) {
-    const att = await resolveAttachments(ctx.businessId, patch.attachments);
+    const att = await resolveAttachments(ctx, patch.attachments);
     if (!att.ok) {
       return {
         ok: false,
