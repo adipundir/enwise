@@ -139,7 +139,6 @@ lib/
 ├─ storage/           # Vercel Blob helpers + SSRF guard
 ├─ analytics.ts       # client/revenue/outstanding aggregates
 ├─ recurring.ts       # recurring-invoice service + runner
-├─ ratelimit.ts       # DB-backed per-token rate limiter
 ├─ idempotency.ts     # withIdempotency() wrapper
 └─ *.ts               # service layer per entity
 
@@ -158,4 +157,4 @@ vercel.json           # cron schedule
 - [x] **Phase 5**. `send_invoice` via Resend with PDF attachment
 - [x] **Phase 6**. analytics (client summary, revenue, outstanding)
 - [x] **Phase 7**. recurring invoices + Vercel cron
-- [x] **Phase 8 (audit pass)**. SSRF guard, per-token rate limit, send idempotency, paid badge, dashboard overview, `/api/health`
+- [x] **Phase 8 (audit pass)**. SSRF guard, send idempotency, paid badge, dashboard overview, `/api/health`

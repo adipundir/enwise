@@ -18,16 +18,17 @@ async function requireContext() {
   return { userId: user.id, businessId: user.defaultBusinessId };
 }
 
-export type RegenerateResult = {
+export type RotateResult = {
   ok: true;
   rawToken: string;
 };
 
 /**
- * Revoke every active token on the user's business and mint exactly one new
- * one. Returns the raw token once; it is never persisted in plaintext.
+ * Rotate: revoke every active token on the user's business and mint exactly
+ * one new one. Returns the raw token once; it is never persisted in
+ * plaintext.
  */
-export async function regenerateKeyAction(): Promise<RegenerateResult> {
+export async function rotateKeyAction(): Promise<RotateResult> {
   const { userId, businessId } = await requireContext();
 
   // Revoke all active tokens on this business.

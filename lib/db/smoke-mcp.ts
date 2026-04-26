@@ -220,26 +220,6 @@ async function main() {
     logo: { image_url: "http://localhost:3000/api/mcp" },
   });
 
-  // Rate limit: flood tools/list in parallel, count 429s.
-  const bursts = await Promise.all(
-    Array.from({ length: 220 }, () =>
-      fetch(`${BASE_URL}/api/mcp`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${raw}`,
-          accept: "application/json, text/event-stream",
-        },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
-      }).then((r) => r.status),
-    ),
-  );
-  const ok = bursts.filter((s) => s === 200).length;
-  const throttled = bursts.filter((s) => s === 429).length;
-  console.log(
-    `${throttled > 0 ? "✓" : "✗"} rate_limit burst          ${ok} 200s / ${throttled} 429s (limit 180/min)`,
-  );
-
   // 5. Cleanup
   await db.delete(users).where(eq(users.id, user.id));
   console.log("cleaned up");

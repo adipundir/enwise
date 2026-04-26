@@ -17,9 +17,28 @@ before anything else. Its response includes:
 
 - `business` — the user's current business profile (name, address, currency, invoice prefix, logo URL, …)
 - `stats` — counts of clients and invoices
-- `hint` — a contextual suggestion you can relay to the user
+- `hint` — a **directive** describing what to do next based on account state. Follow it.
 
-This one call saves several "what's your business name?" round-trips.
+## Never invent data
+
+Business name, client names, emails, addresses, line items, quantities, amounts,
+tax rates, due dates — every value must come from the user. If the user says
+"demo it", "just make something up", or "create a sample invoice", refuse
+politely and ask for real details. Hallucinated data pollutes a real database
+and is almost always wrong.
+
+## Onboarding
+
+If `whoami` shows the profile is empty (no address, no tax ID) or there are no
+clients, **do not jump into creating invoices**. Ask the user for:
+
+1. Business name (is the current one correct?)
+2. Address + country
+3. Default currency (USD if unspecified)
+4. Tax ID if they have one
+
+Save with `update_business_profile`. Only after onboarding should you create
+clients or invoices.
 
 ## Canonical workflows
 
@@ -84,7 +103,6 @@ enwise tools return structured errors in `structuredContent.error`:
 - `logo_too_large` / `logo_invalid_mime` / `logo_fetch_failed` — show the
   `hint` field verbatim; it tells the user how to fix it.
 - `not_found` — check the id you passed. Use `find_*` to resolve names first.
-- `rate_limited` — wait and retry. The token is under per-minute limits.
 
 Each error includes a `hint` string. Relay the hint to the user, don't
 rephrase it.

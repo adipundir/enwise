@@ -105,7 +105,7 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Create client",
       description:
-        "Add a new client to the user's business. Name is required; everything else is optional. Returns the created client including its id. remember the id for follow-up tool calls in this session.",
+        "Add a new client using details the user has explicitly given you. NEVER invent a client name, email, address, or tax ID — if the user hasn't told you these, ASK before calling this tool. Name is required; everything else is optional. Returns the created client including its id. remember the id for follow-up tool calls in this session.",
       inputSchema: createSchema,
     },
     async (args, extra) => {

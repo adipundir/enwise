@@ -117,7 +117,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Create invoice",
       description:
-        "Create a draft invoice for a client with one or more line items. Invoice number is allocated automatically (e.g. INV-0001). Dates default to today + net-30; currency defaults to the client's default, then the business's. Returns the full invoice including line totals and a share URL. To send it to the client, call send_invoice next (Phase 5).",
+        "Create a draft invoice for a client with one or more line items. Every line item description, quantity, unit price, and tax rate MUST come from the user — NEVER invent them. If the user hasn't specified what they're billing for, ask before calling this tool. Invoice number is allocated automatically (e.g. INV-0001). Dates default to today + net-30; currency defaults to the client's default, then the business's. Returns the full invoice including line totals and a share URL. To send it to the client, call send_invoice next.",
       inputSchema: createSchema,
     },
     async (args, extra) => {

@@ -1,5 +1,4 @@
 import { authInfoForCtx, type EnwiseCtx } from "@/lib/mcp/context";
-import { hitRateLimit } from "@/lib/ratelimit";
 import { resolveBearer } from "@/lib/tokens";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 
@@ -22,12 +21,6 @@ export async function authenticateMcpRequest(
     return { ok: false, response: unauthorized("invalid_token") };
   }
 
-  // Per-token rate limit. Cheap: single indexed UPSERT.
-  const rl = await hitRateLimit(resolved.tokenId);
-  if (!rl.allowed) {
-    return { ok: false, response: rateLimited(rl.limit, rl.retryAfterSeconds) };
-  }
-
   return {
     ok: true,
     ctx: resolved,
@@ -41,6 +34,12 @@ function unauthorized(code: "missing_bearer" | "invalid_token"): Response {
     code === "missing_bearer"
       ? "Missing Authorization: Bearer <token> header"
       : "Invalid or revoked API token";
+  // Point clients (Claude Code, etc.) at our OAuth Protected Resource
+  // Metadata document so their reconnect flow doesn't 404 on discovery.
+  const baseUrl = process.env.PUBLIC_BASE_URL ?? process.env.AUTH_URL ?? "";
+  const resourceMetadata = baseUrl
+    ? `${baseUrl.replace(/\/$/, "")}/.well-known/oauth-protected-resource`
+    : "/.well-known/oauth-protected-resource";
   return new Response(
     JSON.stringify({
       jsonrpc: "2.0",
@@ -51,29 +50,9 @@ function unauthorized(code: "missing_bearer" | "invalid_token"): Response {
       status: 401,
       headers: {
         "content-type": "application/json",
-        "www-authenticate": 'Bearer realm="enwise"',
+        "www-authenticate": `Bearer realm="enwise", resource_metadata="${resourceMetadata}"`,
       },
     },
   );
 }
 
-function rateLimited(limit: number, retryAfter: number): Response {
-  return new Response(
-    JSON.stringify({
-      jsonrpc: "2.0",
-      error: {
-        code: -32002,
-        message: `Rate limit exceeded: ${limit} requests per minute per token.`,
-        data: { reason: "rate_limited", retry_after_seconds: retryAfter },
-      },
-      id: null,
-    }),
-    {
-      status: 429,
-      headers: {
-        "content-type": "application/json",
-        "retry-after": String(retryAfter),
-      },
-    },
-  );
-}

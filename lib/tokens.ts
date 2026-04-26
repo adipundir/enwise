@@ -47,6 +47,28 @@ export async function createToken(params: {
   return { raw, token: row! };
 }
 
+/**
+ * Fetch the active (non-revoked) token for a business. Returns only the
+ * identifying fields — the raw secret is never persisted and is only in
+ * hand at creation time or right after a rotation.
+ */
+export async function getActiveToken(businessId: string): Promise<{
+  tokenId: string;
+  tokenPrefix: string;
+} | null> {
+  const [row] = await db
+    .select({
+      id: apiTokens.id,
+      tokenPrefix: apiTokens.tokenPrefix,
+    })
+    .from(apiTokens)
+    .where(and(eq(apiTokens.businessId, businessId), isNull(apiTokens.revokedAt)))
+    .orderBy(desc(apiTokens.createdAt))
+    .limit(1);
+  if (!row) return null;
+  return { tokenId: row.id, tokenPrefix: row.tokenPrefix };
+}
+
 export async function listTokens(businessId: string) {
   return db
     .select({

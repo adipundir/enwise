@@ -18,7 +18,6 @@ export type ErrorCode =
   | "logo_fetch_failed"
   | "logo_storage_unavailable"
   | "duplicate_invoice_number"
-  | "rate_limited"
   | "internal_error";
 
 export interface ToolErrorBody {

@@ -24,11 +24,10 @@ export async function Landing() {
               Claude.
             </span>
           </h1>
-          <p className="mt-8 max-w-xl text-sm leading-relaxed text-zinc-600">
+          <p className="mt-8 max-w-xl text-sm leading-relaxed text-zinc-400">
             enwise plugs into Claude over the Model Context Protocol. Tell it
             who to bill and what for. It creates the invoice, attaches a PDF,
-            emails the client, and records the payment when it comes in. The
-            web app exists for one thing: creating an API key.
+            emails the client, and records the payment when it comes in.
           </p>
 
           <div className="mt-10 flex flex-wrap items-center gap-3">
@@ -179,7 +178,6 @@ export async function Landing() {
                   <LiDark>No enwise branding on PDFs</LiDark>
                   <LiDark>Recurring invoices + auto-send</LiDark>
                   <LiDark>Custom brand color + logo on PDFs</LiDark>
-                  <LiDark>Higher rate limit (600 / min / token)</LiDark>
                   <LiDark>Priority support</LiDark>
                 </ul>
                 <Link

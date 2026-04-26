@@ -5,8 +5,8 @@ import { businesses, clients, invoices } from "@/lib/db/schema";
 import { auth } from "@/auth";
 import { invoiceShareUrl } from "@/lib/invoices";
 import { formatMoney, addAmounts } from "@/lib/money";
-import { createToken, listTokens } from "@/lib/tokens";
-import { ApiKeyCard, ApiKeyRevealCard } from "./ApiKeySection";
+import { createToken, getActiveToken } from "@/lib/tokens";
+import { KeyAndConnectSection } from "./KeyAndConnectSection";
 
 export default async function DashboardHome() {
   const session = await auth();
@@ -19,13 +19,13 @@ export default async function DashboardHome() {
     ? await db.select().from(businesses).where(eq(businesses.id, businessId))
     : [];
 
-  // One key per user. If none exists, mint it now and reveal the raw once.
+  // One key per user. Mint on first visit and reveal the raw once. After
+  // that the raw is unrecoverable; the user must rotate to mint a new one.
   let bootstrapRawToken: string | null = null;
   let currentPrefix: string | null = null;
   if (businessId && user?.id) {
-    const existingTokens = await listTokens(businessId);
-    const active = existingTokens.filter((t) => !t.revokedAt);
-    if (active.length === 0) {
+    const active = await getActiveToken(businessId);
+    if (!active) {
       const created = await createToken({
         businessId,
         createdByUserId: user.id,
@@ -34,7 +34,7 @@ export default async function DashboardHome() {
       bootstrapRawToken = created.raw;
       currentPrefix = created.token.tokenPrefix;
     } else {
-      currentPrefix = active[0]!.tokenPrefix;
+      currentPrefix = active.tokenPrefix;
     }
   }
 
@@ -108,14 +108,11 @@ export default async function DashboardHome() {
         />
       </section>
 
-      {bootstrapRawToken ? (
-        <ApiKeyRevealCard rawToken={bootstrapRawToken} mcpUrl={mcpUrl} />
-      ) : (
-        <section className="grid gap-px bg-zinc-900 sm:grid-cols-2">
-          <ApiKeyCard currentPrefix={currentPrefix} />
-          <ConnectClaudeCard />
-        </section>
-      )}
+      <KeyAndConnectSection
+        initialRawToken={bootstrapRawToken}
+        currentPrefix={currentPrefix}
+        mcpUrl={mcpUrl}
+      />
 
       {recentInvoices.length > 0 ? (
         <section>
@@ -198,44 +195,6 @@ function Stat({
         {value}
       </div>
     </div>
-  );
-}
-
-function ConnectClaudeCard() {
-  return (
-    <Link
-      href="/dashboard/connect"
-      className="group flex flex-col justify-between bg-[#0a0a0a] p-8 transition-colors hover:bg-[#0d0d0d]"
-    >
-      <div>
-        <div className="text-xs font-mono uppercase tracking-widest text-zinc-600">
-          02
-        </div>
-        <h2 className="mt-6 text-xl font-semibold tracking-tight text-zinc-100">
-          Connect to Claude
-        </h2>
-        <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-400">
-          Paste the MCP server URL + bearer header into Claude Desktop or
-          Claude.ai. Full instructions + config JSON on the next page.
-        </p>
-      </div>
-      <div className="mt-8 inline-flex items-center gap-2 text-sm text-zinc-300 group-hover:text-zinc-100">
-        Setup instructions
-        <svg
-          viewBox="0 0 16 16"
-          className="size-4 transition-transform group-hover:translate-x-0.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <path
-            d="M3 8h10m0 0-4-4m4 4-4 4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
-    </Link>
   );
 }
 

@@ -74,7 +74,7 @@ export function registerWhoami(server: McpServer) {
           client_count: Number(clientCount ?? 0),
           invoice_count: Number(invoiceCount ?? 0),
         },
-        hint: buildHint(business.name, Number(clientCount ?? 0)),
+        hint: buildHint(business, Number(clientCount ?? 0)),
       };
 
       return {
@@ -90,11 +90,34 @@ export function registerWhoami(server: McpServer) {
   );
 }
 
-function buildHint(name: string, clientCount: number): string {
-  if (clientCount === 0) {
-    return `Business "${name}" is set up but has no clients or invoices yet. Offer to help the user fill in their business profile (update_business_profile) or add their first client (create_client).`;
+function buildHint(
+  business: { name: string; addressLine1: string | null; country: string | null; taxId: string | null },
+  clientCount: number,
+): string {
+  const profileEmpty =
+    !business.addressLine1 && !business.country && !business.taxId;
+
+  if (profileEmpty && clientCount === 0) {
+    return `FRESH ACCOUNT. Walk the user through setup, step by step, in this order:
+
+STEP 1 — Business profile. Ask for: (a) business name (current: "${business.name}" — confirm or change), (b) address + country, (c) default currency (USD if unspecified), (d) tax ID if applicable. Save with update_business_profile.
+
+STEP 2 — First client. After the profile is saved, offer to add their first client. Ask for: client name, email, and address. Save with create_client. Do NOT add a client before the business profile is saved.
+
+STEP 3 — After both are done, tell the user they're ready to invoice. Ask what they'd like to bill the client for (description, quantity, unit price). Only then call create_invoice.
+
+Do NOT invent data at any step. Do NOT create a sample/demo invoice. If the user says "just demo it" or "make something up", refuse and explain that invoices are real business records — ask for real details instead.`;
   }
-  return `Business "${name}" has ${clientCount} client${clientCount === 1 ? "" : "s"}. Ask what they'd like to do next.`;
+
+  if (profileEmpty) {
+    return `Business profile "${business.name}" is incomplete (no address/tax ID). Before sending any invoices, ask the user to fill in their address and tax ID so real invoices look right. Use update_business_profile.`;
+  }
+
+  if (clientCount === 0) {
+    return `Business "${business.name}" is configured but has no clients yet. Offer to add the user's first client — ask for name, email, and address, then use create_client. Do not invent a client. After the client is saved, ask what they'd like to bill for and call create_invoice.`;
+  }
+
+  return `Business "${business.name}" has ${clientCount} client${clientCount === 1 ? "" : "s"}. Ask the user what they'd like to do. Use find_client to resolve names they mention.`;
 }
 
 function toolError(message: string) {

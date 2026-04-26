@@ -1,4 +1,3 @@
-import { pruneRateBuckets } from "@/lib/ratelimit";
 import { runDueNow } from "@/lib/recurring";
 import type { NextRequest } from "next/server";
 
@@ -35,14 +34,12 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 
   const results = await runDueNow();
-  const pruned = await pruneRateBuckets(60).catch(() => 0);
   const summary = {
     ok: true,
     processed: results.length,
     generated: results.filter((r) => r.status === "generated").length,
     auto_sent: results.filter((r) => r.status === "auto_sent").length,
     errors: results.filter((r) => r.status === "error").length,
-    rate_buckets_pruned: pruned,
     results,
   };
   return json(200, summary);
