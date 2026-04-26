@@ -1,8 +1,6 @@
 import { render } from "@react-email/components";
-import { renderToBuffer, type DocumentProps } from "@react-pdf/renderer";
-import { createElement, type ReactElement } from "react";
+import { createElement } from "react";
 import { Resend } from "resend";
-import { InvoiceDocument } from "@/components/pdf/InvoiceDocument";
 import { InvoiceEmail } from "@/emails/InvoiceEmail";
 import {
   finalizeInvoice,
@@ -92,10 +90,13 @@ export async function sendInvoiceByEmail(
   }
   const sent = finalized.value;
 
-  // 4. Render PDF to Buffer (uses the same data function as the public /i/[slug]/pdf route).
+  // 4. Build PDF-render data (used by the email template for business/client
+  //    info) but don't render the PDF into the email itself — we no longer
+  //    attach it. Email clients auto-preview PDF attachments inline, which
+  //    makes the email feel like a dumped invoice rather than a clean
+  //    transactional notice. Instead we link to /i/[slug] which has a
+  //    prominent Download PDF button.
   const pdfData = await buildInvoicePdfData(sent);
-  const pdfElement = createElement(InvoiceDocument, pdfData) as unknown as ReactElement<DocumentProps>;
-  const pdfBuffer = await renderToBuffer(pdfElement);
 
   // 5. Render HTML email.
   const shareUrl = invoiceShareUrl(sent.shareSlug);
@@ -157,12 +158,6 @@ export async function sendInvoiceByEmail(
       subject: `${pdfData.business.name}. Invoice ${sent.invoiceNumber}`,
       html,
       text: plainText,
-      attachments: [
-        {
-          filename: `${sent.invoiceNumber}.pdf`,
-          content: pdfBuffer,
-        },
-      ],
       headers: {
         // Gmail/Outlook expect a mailto or https unsubscribe target. The
         // invoice share URL is a poor target; use the business reply-to

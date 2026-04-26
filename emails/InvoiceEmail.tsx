@@ -79,11 +79,11 @@ export function InvoiceEmail({
           </Section>
 
           <Text style={styles.muted}>
-            A PDF copy is attached. If the button doesn't work, open the
-            invoice directly:{" "}
+            Download the PDF from that page, or open it directly at{" "}
             <a href={shareUrl} style={styles.link}>
               {shareUrl}
             </a>
+            .
           </Text>
 
           <Hr style={styles.hr} />
