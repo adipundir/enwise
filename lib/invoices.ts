@@ -2,6 +2,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "@/lib/db";
 import {
+  businesses,
   clients,
   invoiceEvents,
   invoiceLineItems,
@@ -143,6 +144,7 @@ export type CreateInvoiceResult =
         | "invalid_currency"
         | "no_line_items"
         | "invalid_amount"
+        | "onboarding_required"
         | "attachment_too_large"
         | "attachment_invalid_mime"
         | "attachment_storage_unavailable"
@@ -160,6 +162,30 @@ export async function createInvoice(
       ok: false,
       code: "no_line_items",
       message: "An invoice needs at least one line item.",
+    };
+  }
+
+  // Gate: refuse to create invoices until the business profile is set up.
+  // Anything we put on the invoice (name on PDF, address, tax ID) would be
+  // placeholders otherwise. This catches the case where Claude skipped the
+  // whoami/onboarding step and jumped straight to create_invoice.
+  const [biz] = await db
+    .select({
+      name: businesses.name,
+      addressLine1: businesses.addressLine1,
+      country: businesses.country,
+      taxId: businesses.taxId,
+    })
+    .from(businesses)
+    .where(eq(businesses.id, ctx.businessId));
+  const profileEmpty =
+    !biz?.addressLine1 && !biz?.country && !biz?.taxId;
+  if (profileEmpty) {
+    return {
+      ok: false,
+      code: "onboarding_required",
+      message: `Business profile for "${biz?.name ?? "this account"}" is empty — no address, no tax ID. An invoice created right now would have placeholders on it.`,
+      hint: "Before creating any invoice, call update_business_profile with the user's real details: (a) business name, (b) address + country, (c) default currency, (d) tax ID if they have one. Ask the user for values you don't know. Do NOT invent them.",
     };
   }
 

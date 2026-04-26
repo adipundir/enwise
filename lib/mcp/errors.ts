@@ -18,6 +18,7 @@ export type ErrorCode =
   | "logo_fetch_failed"
   | "logo_storage_unavailable"
   | "duplicate_invoice_number"
+  | "onboarding_required"
   | "attachment_too_large"
   | "attachment_invalid_mime"
   | "attachment_storage_unavailable"

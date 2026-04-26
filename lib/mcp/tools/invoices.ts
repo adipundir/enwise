@@ -126,6 +126,7 @@ function mapMutateError(code: string): ErrorCode {
     case "invalid_amount":
     case "no_line_items":
       return "invalid_input";
+    case "onboarding_required":
     case "attachment_too_large":
     case "attachment_invalid_mime":
     case "attachment_storage_unavailable":
