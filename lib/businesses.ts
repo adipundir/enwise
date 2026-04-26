@@ -66,7 +66,6 @@ export function formatBusinessForMcp(row: Business) {
     id: row.id,
     name: row.name,
     slug: row.slug,
-    plan: row.plan,
     legal_name: row.legalName,
     tax_id: row.taxId,
     address_line1: row.addressLine1,
@@ -87,9 +86,8 @@ export function formatBusinessForMcp(row: Business) {
 }
 
 /**
- * Create a new business under `userId`. Every user can own many businesses
- * and each has its own plan (Free by default; flips to Pro when the Stripe
- * subscription lands — see Stripe branch).
+ * Create a new business under `userId`. A user can own many businesses;
+ * the plan (Free / Pro) is account-level, not per-business.
  */
 export async function createBusiness(params: {
   userId: string;

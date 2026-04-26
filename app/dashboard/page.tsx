@@ -7,7 +7,6 @@ import { invoiceShareUrl } from "@/lib/invoices";
 import { formatMoney, addAmounts } from "@/lib/money";
 import { createToken, getActiveToken } from "@/lib/tokens";
 import { KeyAndConnectSection } from "./KeyAndConnectSection";
-import { BusinessesSection } from "./BusinessesSection";
 
 // Stats depend on fresh DB state that changes via MCP tool calls outside
 // of this route's request context. Force dynamic so every page hit
@@ -125,10 +124,6 @@ export default async function DashboardHome() {
         mcpUrl={mcpUrl}
       />
 
-      <BusinessesSection
-        businesses={await buildBusinessSummaries(allBusinesses, user?.defaultBusinessId ?? null)}
-      />
-
       {recentInvoices.length > 0 ? (
         <section>
           <div className="mb-4 flex items-baseline justify-between">
@@ -166,45 +161,6 @@ export default async function DashboardHome() {
         </section>
       ) : null}
     </div>
-  );
-}
-
-async function buildBusinessSummaries(
-  bs: Array<{
-    id: string;
-    name: string;
-    plan: "free" | "pro";
-    defaultCurrency: string;
-  }>,
-  defaultBusinessId: string | null,
-) {
-  if (bs.length === 0) return [];
-  return Promise.all(
-    bs.map(async (b) => {
-      const [clientRows, invoiceRows] = await Promise.all([
-        db
-          .select({ id: clients.id })
-          .from(clients)
-          .where(
-            and(eq(clients.businessId, b.id), isNull(clients.archivedAt)),
-          ),
-        db
-          .select({ id: invoices.id })
-          .from(invoices)
-          .where(
-            and(eq(invoices.businessId, b.id), isNull(invoices.deletedAt)),
-          ),
-      ]);
-      return {
-        id: b.id,
-        name: b.name,
-        plan: b.plan,
-        defaultCurrency: b.defaultCurrency,
-        invoiceCount: invoiceRows.length,
-        clientCount: clientRows.length,
-        isDefault: b.id === defaultBusinessId,
-      };
-    }),
   );
 }
 

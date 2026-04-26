@@ -4,9 +4,8 @@ import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { apiTokens, businesses, users } from "@/lib/db/schema";
+import { apiTokens } from "@/lib/db/schema";
 import { createToken } from "@/lib/tokens";
-import { createBusiness } from "@/lib/businesses";
 
 type SessionUser = { id: string; defaultBusinessId?: string | null };
 
@@ -54,65 +53,4 @@ export async function rotateKeyAction(): Promise<RotateResult> {
 
   revalidatePath("/dashboard");
   return { ok: true, rawToken: raw };
-}
-
-export type CreateBusinessResult =
-  | { ok: true; businessId: string }
-  | { ok: false; error: string };
-
-/**
- * Create a new business under the authenticated user. If the user has no
- * default business yet (edge case — signup flow already mints one), the
- * new one is set as default.
- */
-export async function createBusinessAction(formData: FormData): Promise<CreateBusinessResult> {
-  const user = await requireUser();
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) {
-    return { ok: false, error: "Name is required." };
-  }
-  if (name.length > 200) {
-    return { ok: false, error: "Name is too long (max 200 chars)." };
-  }
-
-  const shouldBeDefault = !user.defaultBusinessId;
-  const created = await createBusiness({
-    userId: user.id,
-    name,
-    setAsDefault: shouldBeDefault,
-  });
-
-  revalidatePath("/dashboard");
-  return { ok: true, businessId: created.id };
-}
-
-export type SetDefaultBusinessResult =
-  | { ok: true }
-  | { ok: false; error: string };
-
-export async function setDefaultBusinessAction(
-  businessId: string,
-): Promise<SetDefaultBusinessResult> {
-  const user = await requireUser();
-  // Verify ownership before flipping the pointer.
-  const [owned] = await db
-    .select({ id: businesses.id })
-    .from(businesses)
-    .where(
-      and(
-        eq(businesses.id, businessId),
-        eq(businesses.ownerUserId, user.id),
-      ),
-    );
-  if (!owned) {
-    return { ok: false, error: "Business not found." };
-  }
-
-  await db
-    .update(users)
-    .set({ defaultBusinessId: businessId })
-    .where(eq(users.id, user.id));
-
-  revalidatePath("/dashboard");
-  return { ok: true };
 }

@@ -51,9 +51,13 @@ export const users = pgTable("users", {
     (): AnyPgColumn => businesses.id,
     { onDelete: "set null" },
   ),
-  // One Stripe customer per user — every business this user owns is a
-  // separate subscription on this customer. Wired in the Stripe branch.
+  // Plan is account-level: one Pro subscription covers every business the
+  // user owns. Makes pricing honest (a solo freelancer with Acme + a side
+  // project shouldn't pay twice) and matches the one-token-one-account
+  // auth model.
+  plan: businessPlan("plan").notNull().default("free"),
   stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -104,8 +108,9 @@ export const verificationTokens = pgTable(
 );
 
 // Businesses. the tenant unit. A user can own many — they bill clients
-// from each one independently. Plan is per-business: each Pro business
-// is its own Stripe subscription.
+// from each one independently. Plan is account-level (on users), not
+// per-business — Pro unlocks Pro features across every business the
+// user owns.
 
 export const businesses = pgTable(
   "businesses",
@@ -136,11 +141,6 @@ export const businesses = pgTable(
     emailReplyTo: text("email_reply_to"),
     defaultPaymentTermsDays: integer("default_payment_terms_days").default(30),
     defaultNotes: text("default_notes"),
-    plan: businessPlan("plan").notNull().default("free"),
-    // Stripe subscription that gates this business's Pro features. Null
-    // until the user upgrades; cleared when they cancel. Wired in the
-    // Stripe branch.
-    stripeSubscriptionId: text("stripe_subscription_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

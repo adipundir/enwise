@@ -17,11 +17,11 @@ export function createMcpServer(): McpServer {
       instructions:
         `enwise is an MCP server for running an invoicing business. Every operation — business profile, clients, products, invoices, analytics — is exposed as a tool.
 
-One user can own many businesses (e.g., "Acme LLC" and "Side Project Ltd"). Each business has its own plan, clients, invoices, numbering, and branding.
+One user can own many businesses (e.g., "Acme LLC" and "Side Project Ltd"). Each business has its own clients, invoices, numbering, and branding. Plan (Free / Pro) is account-level — Pro unlocks its features across every business the user owns.
 
 Rules, in order of priority:
 
-1. Call \`whoami\` first, every conversation. Its response lists every business the authenticated token can act on (with plan + client/invoice counts) plus a \`hint\` describing what to do next. Do not skip this.
+1. Call \`whoami\` first, every conversation. Its response returns the user (with plan), every business the token can act on (with client/invoice counts), and a \`hint\` describing what to do next. Do not skip this.
 
 2. Pick the right business before acting.
    - If the user owns one business, tools fall back to it silently.
