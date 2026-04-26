@@ -138,20 +138,22 @@ export default async function DashboardHome() {
             {recentInvoices.map((inv) => (
               <div
                 key={inv.id}
-                className="flex flex-wrap items-center gap-4 border-b border-zinc-900 bg-[#0a0a0a] px-5 py-4 last:border-b-0"
+                className="flex flex-col gap-3 border-b border-zinc-900 bg-[#0a0a0a] px-4 py-4 last:border-b-0 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4 sm:px-5"
               >
-                <div className="font-mono text-sm text-zinc-100 min-w-[90px]">
-                  {inv.invoiceNumber}
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="font-mono text-sm text-zinc-100">
+                    {inv.invoiceNumber}
+                  </div>
+                  <StatusChip status={inv.status} />
                 </div>
-                <StatusChip status={inv.status} />
-                <div className="flex-1 text-sm text-zinc-300">
-                  {formatMoney(inv.total, inv.currency)}
+                <div className="flex flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-zinc-300">
+                  <span>{formatMoney(inv.total, inv.currency)}</span>
+                  <span className="text-xs text-zinc-500">Due {inv.dueDate}</span>
                 </div>
-                <div className="text-xs text-zinc-500">Due {inv.dueDate}</div>
                 <Link
                   href={invoiceShareUrl(inv.shareSlug)}
                   target="_blank"
-                  className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
+                  className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-center text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
                 >
                   Share link →
                 </Link>

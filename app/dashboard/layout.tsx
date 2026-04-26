@@ -15,14 +15,14 @@ export default async function DashboardLayout({
   return (
     <div className="flex flex-col flex-1">
       <header className="border-b border-zinc-900">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
           <Link
             href="/dashboard"
             className="text-base font-semibold tracking-tight text-zinc-100"
           >
             enwise
           </Link>
-          <nav className="flex items-center gap-6 text-sm text-zinc-400">
+          <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-zinc-400">
             <Link href="/dashboard" className="hover:text-zinc-100">
               Dashboard
             </Link>
@@ -46,7 +46,7 @@ export default async function DashboardLayout({
         </div>
       </header>
       <main className="flex-1">
-        <div className="mx-auto max-w-6xl px-6 py-14">{children}</div>
+        <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">{children}</div>
       </main>
     </div>
   );

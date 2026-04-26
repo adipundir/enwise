@@ -11,7 +11,7 @@ export function SiteHeader({
     ctaLabel ?? (ctaHref === "/dashboard" ? "Dashboard" : "Sign in");
   return (
     <header className="w-full">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 sm:py-5">
         <Link
           href="/"
           className="text-base font-semibold tracking-tight text-zinc-100"

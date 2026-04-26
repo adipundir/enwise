@@ -55,18 +55,18 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
   const businessAddr = buildAddressLines(business as AddressSource | undefined);
 
   return (
-    <main className="min-h-screen bg-zinc-100 px-4 py-10 text-zinc-900">
+    <main className="min-h-screen bg-zinc-100 px-3 py-6 text-zinc-900 sm:px-4 sm:py-10">
       <div className="mx-auto max-w-3xl">
-        <header className="flex items-center justify-between mb-6 text-sm text-zinc-500">
+        <header className="mb-4 flex flex-col gap-3 text-sm text-zinc-500 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             Invoice{" "}
             <span className="font-mono text-zinc-900">{invoice.invoiceNumber}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <a
               href={`/i/${slug}/pdf`}
               download={`${invoice.invoiceNumber}.pdf`}
-              className="rounded-md bg-zinc-900 text-zinc-50 px-3.5 py-1.5 hover:bg-zinc-800"
+              className="rounded-md bg-zinc-900 px-3.5 py-1.5 text-zinc-50 hover:bg-zinc-800"
             >
               Download PDF
             </a>
@@ -81,9 +81,9 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
           </div>
         </header>
 
-        <article className="relative rounded-2xl bg-white p-10 shadow-sm ring-1 ring-zinc-200">
+        <article className="relative rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200 sm:p-10">
           <StatusBadge status={invoice.status} />
-          <section className="flex items-start justify-between gap-6">
+          <section className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
               {business?.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -99,7 +99,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                 <div className="mt-1 text-xs text-zinc-500">Tax ID: {business.taxId}</div>
               ) : null}
             </div>
-            <div className="text-right">
+            <div className="sm:text-right">
               <div className="text-[10px] uppercase tracking-widest text-zinc-500">
                 Invoice
               </div>
@@ -113,7 +113,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                   <DlRow
                     label="Status"
                     value={
-                      <span className="uppercase tracking-widest text-[10px] rounded-full border border-zinc-300 px-2 py-0.5 text-zinc-700">
+                      <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-[10px] uppercase tracking-widest text-zinc-700">
                         {invoice.status}
                       </span>
                     }
@@ -123,7 +123,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
             </div>
           </section>
 
-          <section className="mt-10">
+          <section className="mt-8 sm:mt-10">
             <div className="text-[10px] uppercase tracking-widest text-zinc-500">
               Bill to
             </div>
@@ -136,65 +136,115 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
             </div>
           </section>
 
-          <section className="mt-10 overflow-hidden rounded-xl ring-1 ring-zinc-200">
-            <table className="w-full text-sm">
-              <thead className="bg-zinc-50 text-left text-[10px] uppercase tracking-widest text-zinc-500">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Description</th>
-                  <th className="px-4 py-2 font-medium text-right">Qty</th>
-                  <th className="px-4 py-2 font-medium text-right">Unit price</th>
-                  <th className="px-4 py-2 font-medium text-right">Tax</th>
-                  <th className="px-4 py-2 font-medium text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200">
-                {invoice.lineItems.map((li) => {
-                  const atts = (li.attachments ?? []) as Array<{
-                    label: string;
-                    url: string;
-                  }>;
-                  return (
-                    <tr key={li.id}>
-                      <td className="px-4 py-3">
-                        <div>{li.description}</div>
-                        {li.note ? (
-                          <div className="mt-1 text-xs leading-relaxed text-zinc-500 whitespace-pre-wrap">
-                            {li.note}
-                          </div>
-                        ) : null}
-                        {atts.length > 0 ? (
-                          <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                            {atts.map((a, i) => (
-                              <li key={i}>
-                                <a
-                                  href={a.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-zinc-600 underline underline-offset-2 hover:text-zinc-900"
-                                >
-                                  <AttachmentIcon />
-                                  {a.label}
-                                </a>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3 text-right align-top">
-                        {stripTrailingZeros(li.quantity)}
-                      </td>
-                      <td className="px-4 py-3 text-right align-top">{fmt(li.unitPrice)}</td>
-                      <td className="px-4 py-3 text-right align-top">{percent(li.taxRate)}</td>
-                      <td className="px-4 py-3 text-right align-top">{fmt(li.lineTotal)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          {/* Line items: stacked cards on mobile, table on sm+ */}
+          <section className="mt-8 sm:mt-10">
+            {/* Mobile: stacked cards */}
+            <ul className="space-y-3 sm:hidden">
+              {invoice.lineItems.map((li) => {
+                const atts = (li.attachments ?? []) as Array<{
+                  label: string;
+                  url: string;
+                }>;
+                return (
+                  <li
+                    key={li.id}
+                    className="rounded-xl ring-1 ring-zinc-200 px-4 py-3 text-sm"
+                  >
+                    <div className="font-medium">{li.description}</div>
+                    {li.note ? (
+                      <div className="mt-1 text-xs leading-relaxed text-zinc-500 whitespace-pre-wrap">
+                        {li.note}
+                      </div>
+                    ) : null}
+                    {atts.length > 0 ? (
+                      <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                        {atts.map((a, i) => (
+                          <li key={i}>
+                            <a
+                              href={a.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-zinc-600 underline underline-offset-2 hover:text-zinc-900"
+                            >
+                              <AttachmentIcon />
+                              {a.label}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-zinc-100 pt-3 text-xs">
+                      <CardCell label="Qty" value={stripTrailingZeros(li.quantity)} />
+                      <CardCell label="Unit price" value={fmt(li.unitPrice)} />
+                      <CardCell label="Tax" value={percent(li.taxRate)} />
+                      <CardCell label="Total" value={fmt(li.lineTotal)} bold />
+                    </dl>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* sm+: traditional table */}
+            <div className="hidden overflow-hidden rounded-xl ring-1 ring-zinc-200 sm:block">
+              <table className="w-full text-sm">
+                <thead className="bg-zinc-50 text-left text-[10px] uppercase tracking-widest text-zinc-500">
+                  <tr>
+                    <th className="px-4 py-2 font-medium">Description</th>
+                    <th className="px-4 py-2 font-medium text-right">Qty</th>
+                    <th className="px-4 py-2 font-medium text-right">Unit price</th>
+                    <th className="px-4 py-2 font-medium text-right">Tax</th>
+                    <th className="px-4 py-2 font-medium text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200">
+                  {invoice.lineItems.map((li) => {
+                    const atts = (li.attachments ?? []) as Array<{
+                      label: string;
+                      url: string;
+                    }>;
+                    return (
+                      <tr key={li.id}>
+                        <td className="px-4 py-3">
+                          <div>{li.description}</div>
+                          {li.note ? (
+                            <div className="mt-1 text-xs leading-relaxed text-zinc-500 whitespace-pre-wrap">
+                              {li.note}
+                            </div>
+                          ) : null}
+                          {atts.length > 0 ? (
+                            <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                              {atts.map((a, i) => (
+                                <li key={i}>
+                                  <a
+                                    href={a.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-zinc-600 underline underline-offset-2 hover:text-zinc-900"
+                                  >
+                                    <AttachmentIcon />
+                                    {a.label}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 text-right align-top">
+                          {stripTrailingZeros(li.quantity)}
+                        </td>
+                        <td className="px-4 py-3 text-right align-top">{fmt(li.unitPrice)}</td>
+                        <td className="px-4 py-3 text-right align-top">{percent(li.taxRate)}</td>
+                        <td className="px-4 py-3 text-right align-top">{fmt(li.lineTotal)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </section>
 
-          <section className="mt-6 flex justify-end">
-            <dl className="w-72 space-y-1 text-sm">
+          <section className="mt-6 flex sm:justify-end">
+            <dl className="w-full space-y-1 text-sm sm:w-72">
               <DlRow label="Subtotal" value={fmt(invoice.subtotal)} />
               <DlRow label="Tax" value={fmt(invoice.taxTotal)} />
               <div className="mt-3 flex justify-between border-t border-zinc-200 pt-3 text-base font-semibold">
@@ -251,7 +301,7 @@ function StatusBadge({ status }: { status: string }) {
         : { label: status.toUpperCase(), cls: "border-zinc-300 bg-zinc-100 text-zinc-500" };
   return (
     <div
-      className={`pointer-events-none absolute right-8 top-8 rotate-[-8deg] rounded-md border-2 px-3 py-1 text-sm font-bold tracking-[0.15em] ${cls}`}
+      className={`pointer-events-none absolute right-4 top-4 rotate-[-8deg] rounded-md border-2 px-2 py-0.5 text-xs font-bold tracking-[0.15em] sm:right-8 sm:top-8 sm:px-3 sm:py-1 sm:text-sm ${cls}`}
     >
       {label}
     </div>
@@ -263,6 +313,25 @@ function DlRow({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex justify-between gap-6">
       <dt className="text-zinc-500">{label}</dt>
       <dd className="text-zinc-900">{value}</dd>
+    </div>
+  );
+}
+
+function CardCell({
+  label,
+  value,
+  bold,
+}: {
+  label: string;
+  value: string;
+  bold?: boolean;
+}) {
+  return (
+    <div className="flex justify-between gap-2">
+      <dt className="text-zinc-500">{label}</dt>
+      <dd className={bold ? "font-semibold text-zinc-900" : "text-zinc-700"}>
+        {value}
+      </dd>
     </div>
   );
 }
