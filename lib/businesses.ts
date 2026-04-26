@@ -1,8 +1,10 @@
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { businesses, users, type Business } from "@/lib/db/schema";
 import type { ScopedCtx } from "@/lib/mcp/context";
 import { uniqueSlug } from "@/lib/slug";
+
+const FREE_BUSINESS_LIMIT = 1;
 
 /**
  * Fields a client can update on the business profile. `logoUrl` is expected
@@ -85,16 +87,51 @@ export function formatBusinessForMcp(row: Business) {
   };
 }
 
+export type CreateBusinessResult =
+  | { ok: true; business: Business }
+  | {
+      ok: false;
+      code: "business_limit_reached";
+      message: string;
+      hint: string;
+    };
+
 /**
  * Create a new business under `userId`. A user can own many businesses;
- * the plan (Free / Pro) is account-level, not per-business.
+ * the plan (Free / Pro) is account-level, not per-business. Free is
+ * capped at one business — every additional business requires Pro.
+ *
+ * The very first business at signup is created via this function before
+ * the user has any plan friction, but the auth.ts createUser hook calls
+ * `db.insert(businesses)` directly (not this function), so the cap only
+ * fires when a *signed-in* user tries to add a second business.
  */
 export async function createBusiness(params: {
   userId: string;
   name: string;
   defaultCurrency?: string;
   setAsDefault?: boolean;
-}): Promise<Business> {
+}): Promise<CreateBusinessResult> {
+  // Plan + count gate — Free users can have one business max.
+  const [user] = await db
+    .select({ plan: users.plan })
+    .from(users)
+    .where(eq(users.id, params.userId));
+  if (user?.plan === "free") {
+    const [{ value: existingCount }] = await db
+      .select({ value: count() })
+      .from(businesses)
+      .where(eq(businesses.ownerUserId, params.userId));
+    if (Number(existingCount) >= FREE_BUSINESS_LIMIT) {
+      return {
+        ok: false,
+        code: "business_limit_reached",
+        message: `Free accounts are limited to ${FREE_BUSINESS_LIMIT} business. Upgrade to Pro to add more.`,
+        hint: "Tell the user this is a Pro-only feature and link them to https://enwise.app/dashboard to upgrade. Don't try again until they confirm they've upgraded.",
+      };
+    }
+  }
+
   const [created] = await db
     .insert(businesses)
     .values({
@@ -113,5 +150,5 @@ export async function createBusiness(params: {
       .set({ defaultBusinessId: created.id })
       .where(eq(users.id, params.userId));
   }
-  return created;
+  return { ok: true, business: created };
 }

@@ -953,7 +953,10 @@ export function formatInvoiceForMcp(inv: InvoiceWithLineItems) {
     outstanding: addAmounts(inv.total, `-${inv.amountPaid}`),
     notes: inv.notes,
     terms: inv.terms,
-    share_slug: inv.shareSlug,
+    // Full URL — never expose the bare slug. Models will guess the
+    // domain ("envoice.app" vs "enwise.app") if they see only a slug
+    // without a domain in context.
+    share_url: invoiceShareUrl(inv.shareSlug),
     share_enabled: inv.shareEnabled,
     sent_at: inv.sentAt?.toISOString() ?? null,
     viewed_at: inv.viewedAt?.toISOString() ?? null,
@@ -988,7 +991,9 @@ export function formatInvoiceSummaryForMcp(inv: Invoice) {
     total: inv.total,
     amount_paid: inv.amountPaid,
     outstanding: addAmounts(inv.total, `-${inv.amountPaid}`),
-    share_slug: inv.shareSlug,
+    // Full URL — never expose the bare slug. Models will guess the
+    // domain if they see only a slug without a domain in context.
+    share_url: invoiceShareUrl(inv.shareSlug),
     share_enabled: inv.shareEnabled,
   };
 }

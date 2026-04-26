@@ -74,7 +74,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Create a business",
       description:
-        "Create a new business profile under the authenticated user. Use when the user says they want to bill from a new entity (different company, side project, freelance pseudonym, etc.). Ask for the name first; everything else (address, tax ID, etc.) can be added later via update_business_profile. Pass `set_as_default: true` if the user says this should be their primary.",
+        "Create a new business profile under the authenticated user. Use when the user says they want to bill from a new entity (different company, side project, freelance pseudonym, etc.). Ask for the name first; everything else (address, tax ID, etc.) can be added later via update_business_profile. Pass `set_as_default: true` if the user says this should be their primary.\n\nFREE PLAN LIMIT: free accounts get one business. Calling this on a free account that already has a business returns `business_limit_reached` — surface the message verbatim and link the user to https://enwise.app/dashboard to upgrade. Don't retry until they confirm they upgraded.",
       inputSchema: createBusinessInput,
     },
     async (args, extra) => {
@@ -82,13 +82,16 @@ export function registerBusinessTools(server: McpServer) {
       if (!parsed.success) return zodToToolError(parsed.error);
       const input = parsed.data;
       const ctx = ctxFromAuthInfo(extra.authInfo);
-      const created = await createBusiness({
+      const result = await createBusiness({
         userId: ctx.userId,
         name: input.name,
         defaultCurrency: input.default_currency,
         setAsDefault: input.set_as_default ?? false,
       });
-      return toolOk(formatBusinessForMcp(created));
+      if (!result.ok) {
+        return toolError(result.code, result.message, { hint: result.hint });
+      }
+      return toolOk(formatBusinessForMcp(result.business));
     },
   );
 

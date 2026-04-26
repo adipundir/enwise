@@ -123,11 +123,11 @@ export function registerWhoami(server: McpServer) {
 
 const WRITING_STYLE = `Invoice writing style — each field has its own lane:
 - line item description = product or service name only (e.g. "MacBook Pro 14\\" M5 Pro (24GB/1TB)", "Claude Max subscription"). No "Reimbursement:" prefix, no reference numbers, no dates, no conversion math.
-- line item note (per-item) = context for THIS item only — conversion math, source invoice number, purchase date, why this item is listed.
+- line item note (per-item) = context that ISN'T already visible elsewhere on the invoice. Things like billing periods, conversion math, FX rates, why this item is listed. DO NOT include the source invoice number, source filename, or "Source: …" text if you've also uploaded the source as an attachment — the attachment label already shows that. Repeating the same info as text + paperclip is visual noise.
 - invoice notes (invoice-level) = context for the WHOLE invoice — payment instructions, thank-yous, reimbursement framing when the entire invoice is one thing.
-- attachments = the actual receipt/PDF. Don't retype its contents.
+- attachments = the actual receipt/PDF/screenshot. Label them naturally (e.g. "Apple receipt", "Hotel folio") — that label IS the source citation. Don't retype the attachment's contents into the note.
 
-Rule of thumb: context about ONE line item → line_items[].note. Context about the whole invoice → notes. When you convert currency, put the rate + source in the line's note (or the invoice note if the whole invoice uses one FX rate).`;
+Rule of thumb: context about ONE line item that the recipient can't see from the attachment → line_items[].note. Context about the whole invoice → notes. When you convert currency, put the rate + source in the line's note (or the invoice note if the whole invoice uses one FX rate). Keep notes terse — a single short line is usually enough.`;
 
 const MULTI_BUSINESS_NOTE = `MULTI-BUSINESS: this user owns more than one business. Every tool that creates or modifies data takes an optional \`business_id\`. Before calling those tools, ask the user which business to act under — do not guess. If they say "the one for Acme" or similar, pick the matching business by name. Pass the chosen id as \`business_id\`.`;
 

@@ -25,6 +25,7 @@ export type ErrorCode =
   | "multiple_businesses"
   | "no_businesses"
   | "business_not_found"
+  | "business_limit_reached"
   | "internal_error";
 
 export interface ToolErrorBody {

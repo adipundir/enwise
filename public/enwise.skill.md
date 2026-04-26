@@ -76,11 +76,11 @@ literals and strings with commas / currency symbols and normalizes them.
 ## Writing style — each field has its own lane
 
 - `line_items[].description` → product or service name only (e.g. `"MacBook Pro 14" M5 Pro (24GB/1TB)"`, `"Claude Max subscription"`). No `"Reimbursement:"` prefix, no reference numbers, no dates, no conversion math.
-- `line_items[].note` → context for THIS item only — currency conversion math, source invoice number, purchase date, why this item is listed.
+- `line_items[].note` → context the recipient can't see from the attachment. Billing periods, FX rates, conversion math. **Do NOT include `"Source: Invoice X"` or filenames in the note when you've attached the source PDF — the attachment label is the citation. Repeating it is noise.** Keep notes terse, single-line when possible.
 - `notes` (invoice-level) → context for the WHOLE invoice — payment instructions, thank-yous, reimbursement framing when the entire invoice is one thing.
-- `line_items[].attachments` → the actual receipt/PDF/screenshot. Don't retype its contents into the description or note.
+- `line_items[].attachments` → the actual receipt/PDF/screenshot. The label is the source citation — name them naturally (`Apple receipt`, `Hotel folio`). Don't retype their contents into the description or note.
 
-Rule of thumb: context about ONE line item → `line_items[].note`. Context about the whole invoice → `notes`. When you convert currency, put the rate + source in the line's note (or the invoice note if the whole invoice uses one FX rate).
+Rule of thumb: context about ONE line item that isn't visible from the attachment → `line_items[].note`. Context about the whole invoice → `notes`. Currency conversions → put the rate + amount in the note (or in the invoice-level note if the whole invoice uses one FX rate).
 
 ## Attachments
 
