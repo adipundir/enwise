@@ -47,21 +47,14 @@ export default async function SetupDocsPage() {
 
           <Step
             n="02"
-            title="Generate an API token"
+            title="Grab your API key"
             body={
               <>
                 <p>
-                  On the dashboard, go to{" "}
-                  <Link
-                    href="/dashboard/api-tokens"
-                    className="text-zinc-200 underline underline-offset-2 hover:text-white"
-                  >
-                    API tokens
-                  </Link>
-                  , create one, and copy the raw value. Tokens are shown once;
-                  store them somewhere safe.
+                  Your key is minted and shown once on the dashboard the first
+                  time you sign in. Copy it then; it&apos;s never shown again.
+                  If you lost it, rotate from the dashboard to mint a new one.
                 </p>
-                <CodeLine value="env_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
               </>
             }
           />
@@ -72,8 +65,25 @@ export default async function SetupDocsPage() {
             body={
               <>
                 <p>
-                  Two options. Pick whichever your Claude client supports.
+                  Pick whichever client you use. Claude Code is the primary
+                  flow — the dashboard gives you a one-shot copy-paste prompt
+                  that registers the server for you.
                 </p>
+
+                <h3 className="mt-5 text-sm font-semibold text-zinc-200">
+                  Claude Code (CLI)
+                </h3>
+                <p className="mt-1 text-sm text-zinc-400">
+                  From the dashboard, click <strong>Copy Claude Code prompt</strong>.
+                  Paste it into Claude Code — Claude registers the server at
+                  user scope and you restart once to pick up the new tools. Or
+                  run it manually:
+                </p>
+                <pre className="mt-2 overflow-auto rounded-md border border-zinc-800 bg-[#0a0a0a] p-4 font-mono text-xs leading-relaxed text-zinc-100">
+{`claude mcp add --transport http --scope user enwise \\
+  ${mcpUrl} \\
+  --header "Authorization: Bearer <YOUR_TOKEN>"`}
+                </pre>
 
                 <h3 className="mt-5 text-sm font-semibold text-zinc-200">
                   Claude.ai (web &amp; desktop with native MCP connectors)
@@ -202,10 +212,3 @@ function Step({ n, title, body }: { n: string; title: string; body: React.ReactN
   );
 }
 
-function CodeLine({ value }: { value: string }) {
-  return (
-    <code className="mt-3 block select-all break-all rounded-md border border-zinc-800 bg-[#0a0a0a] px-3 py-2 font-mono text-xs text-zinc-100">
-      {value}
-    </code>
-  );
-}

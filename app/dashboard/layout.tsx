@@ -24,7 +24,7 @@ export default async function DashboardLayout({
           </Link>
           <nav className="flex items-center gap-6 text-sm text-zinc-400">
             <Link href="/dashboard" className="hover:text-zinc-100">
-              Overview
+              Dashboard
             </Link>
             <Link href="/dashboard/connect" className="hover:text-zinc-100">
               Connect Claude

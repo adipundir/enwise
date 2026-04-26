@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import { RotatingWord } from "@/components/rotating-word";
 import { SiteHeader } from "@/components/site-header";
 
 export async function Landing() {
@@ -20,14 +21,18 @@ export async function Landing() {
             </span>
             <br />
             <span className="font-normal text-zinc-500">
-              Bill clients, send PDFs, and track payments by chatting with
-              Claude.
+              Bill clients, send PDFs, and track payments by chatting with{" "}
+              <RotatingWord
+                words={["Claude", "Cursor", "Codex", "Windsurf", "Antigravity"]}
+                className="text-zinc-200"
+              />
             </span>
           </h1>
           <p className="mt-8 max-w-xl text-sm leading-relaxed text-zinc-400">
-            enwise plugs into Claude over the Model Context Protocol. Tell it
-            who to bill and what for. It creates the invoice, attaches a PDF,
-            emails the client, and records the payment when it comes in.
+            enwise plugs into your AI over the Model Context Protocol. Tell it
+            who to bill and what for. It creates the invoice, renders the PDF,
+            emails the client a link, and records the payment when it comes
+            in.
           </p>
 
           <div className="mt-10 flex flex-wrap items-center gap-3">
@@ -61,17 +66,17 @@ export async function Landing() {
               <Step
                 n="01"
                 title="Sign in"
-                body="Sign in with GitHub or Google and create an API token."
+                body="Sign in with GitHub or Google. Your API key is minted and shown once."
               />
               <Step
                 n="02"
-                title="Connect Claude"
-                body="Paste the MCP server URL and your token into Claude Desktop or Claude.ai."
+                title="Connect your AI"
+                body="One-shot copy-paste for Claude Code. Or drop the URL + bearer into Cursor, Claude.ai, Windsurf, and other MCP clients."
               />
               <Step
                 n="03"
                 title="Just ask"
-                body="Type what you want to bill. Claude does the rest. PDF, email, share link, tracking."
+                body="Type what you want to bill. Your AI does the rest. PDF, email, share link, tracking."
               />
             </div>
           </div>
@@ -98,7 +103,7 @@ export async function Landing() {
               />
               <Stat
                 big="Email"
-                label="Sends the PDF to the client in one tool call."
+                label="Sends the client a link to the hosted invoice in one tool call."
               />
               <Stat
                 big="Recurring"

@@ -50,14 +50,37 @@ clients or invoices.
 2. If no match comes back and the user clearly intends a new client, call
    `create_client`.
 3. Call `create_invoice` with the `client_id`, an array of `line_items`
-   (each with `description`, `quantity`, `unit_price`, optional `tax_rate`),
-   and any `notes` / `terms` / `due_date` the user mentioned.
+   (each with `description`, `quantity`, `unit_price`, optional `tax_rate`,
+   optional per-item `note`, optional `attachments`), and any `notes` /
+   `terms` / `due_date` the user mentioned.
 4. If the user said "send it", follow with `send_invoice({invoice_id})`. This
-   emails the client with a PDF attachment and flips the status from draft to
-   sent. It's safe to omit `to` — the client's email is used automatically.
+   emails the client a link to the hosted invoice page (with a Download PDF
+   button) and flips the status from draft to sent. No attachment is sent —
+   modern email clients auto-preview PDFs and make the email feel cluttered.
+   It's safe to omit `to` — the client's email is used automatically.
+5. If the user wants to mark an invoice as sent WITHOUT emailing (e.g. they
+   delivered it out-of-band), call `finalize_invoice({invoice_id})`.
 
 Amounts are strings like `"5000"` or `"2499.99"`. The tool accepts numeric
 literals and strings with commas / currency symbols and normalizes them.
+
+## Writing style — each field has its own lane
+
+- `line_items[].description` → product or service name only (e.g. `"MacBook Pro 14" M5 Pro (24GB/1TB)"`, `"Claude Max subscription"`). No `"Reimbursement:"` prefix, no reference numbers, no dates, no conversion math.
+- `line_items[].note` → context for THIS item only — currency conversion math, source invoice number, purchase date, why this item is listed.
+- `notes` (invoice-level) → context for the WHOLE invoice — payment instructions, thank-yous, reimbursement framing when the entire invoice is one thing.
+- `line_items[].attachments` → the actual receipt/PDF/screenshot. Don't retype its contents into the description or note.
+
+Rule of thumb: context about ONE line item → `line_items[].note`. Context about the whole invoice → `notes`. When you convert currency, put the rate + source in the line's note (or the invoice note if the whole invoice uses one FX rate).
+
+## Attachments
+
+Each line item can carry supporting files. Pass as either:
+
+- `{ url: "https://…", label?: "Amazon receipt" }` — public URL passthrough.
+- `{ file_base64: "…", mime_type: "image/png" | "image/jpeg" | "image/webp" | "application/pdf", filename?: "receipt.pdf", label?: "Hotel receipt" }` — uploads to storage and attaches.
+
+8 MB per file. Attachments render on both the PDF and the public invoice page.
 
 ### The user asks about money owed or earned
 
