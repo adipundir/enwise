@@ -29,10 +29,13 @@ export type LineItemInput = {
   unitPrice: string;
   taxRate?: string;
   productId?: string | null;
+  /** Per-item context: conversion math, source reference numbers, dates, etc.
+   *  Whole-invoice context belongs on the invoice's `notes` field. */
+  note?: string | null;
   /**
    * Optional supporting docs. Each attachment is either a passthrough URL
-   * (`{url, label?}`) or a base64-encoded image to upload to our own Blob
-   * storage (`{image_base64, mime_type, filename?, label?}`). Resolved into
+   * (`{url, label?}`) or a base64-encoded file to upload to our own Blob
+   * storage (`{file_base64, mime_type, filename?, label?}`). Resolved into
    * `{label, url}` before insert.
    */
   attachments?: AttachmentInput[];
@@ -269,6 +272,7 @@ export async function createInvoice(
     lineSubtotal: string;
     lineTax: string;
     lineTotal: string;
+    note: string | null;
     attachments: LineItemAttachment[];
   }>;
   try {
@@ -286,6 +290,7 @@ export async function createInvoice(
         quantity: li.quantity,
         unitPrice: li.unitPrice,
         taxRate,
+        note: li.note?.trim() || null,
         attachments: resolvedPerLine[idx]!,
         ...math,
       };
@@ -340,6 +345,7 @@ export async function createInvoice(
       lineSubtotal: l.lineSubtotal,
       lineTax: l.lineTax,
       lineTotal: l.lineTotal,
+      note: l.note,
       attachments: l.attachments,
     })),
   );
@@ -578,6 +584,7 @@ export async function addLineItem(
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     taxRate: item.taxRate ?? "0",
+    note: item.note?.trim() || null,
     attachments: att.attachments,
     ...math,
   });
@@ -625,6 +632,8 @@ export async function updateLineItem(
     unitPrice: patch.unitPrice ?? existing.unitPrice,
     taxRate: patch.taxRate ?? existing.taxRate,
     productId: patch.productId !== undefined ? patch.productId ?? null : existing.productId,
+    note:
+      patch.note !== undefined ? (patch.note?.trim() || null) : existing.note,
     attachments: nextAttachments,
   };
   const math = computeLine(next);
@@ -870,6 +879,7 @@ export async function duplicateInvoice(
       unitPrice: l.unitPrice,
       taxRate: l.taxRate,
       productId: l.productId,
+      note: l.note,
       attachments: l.attachments as LineItemAttachment[],
     })),
     issueDate: opts.newIssueDate,
@@ -928,6 +938,7 @@ export function formatInvoiceForMcp(inv: InvoiceWithLineItems) {
       line_tax: l.lineTax,
       line_total: l.lineTotal,
       product_id: l.productId,
+      note: l.note,
       attachments: l.attachments,
     })),
   };

@@ -157,6 +157,11 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                     <tr key={li.id}>
                       <td className="px-4 py-3">
                         <div>{li.description}</div>
+                        {li.note ? (
+                          <div className="mt-1 text-xs leading-relaxed text-zinc-500 whitespace-pre-wrap">
+                            {li.note}
+                          </div>
+                        ) : null}
                         {atts.length > 0 ? (
                           <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
                             {atts.map((a, i) => (

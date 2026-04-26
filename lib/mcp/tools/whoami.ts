@@ -90,12 +90,13 @@ export function registerWhoami(server: McpServer) {
   );
 }
 
-const WRITING_STYLE = `Invoice writing style — keep each field crisp and in its own lane:
+const WRITING_STYLE = `Invoice writing style — each field has its own lane:
 - line item description = product or service name only (e.g. "MacBook Pro 14\\" M5 Pro (24GB/1TB)", "Claude Max subscription"). No "Reimbursement:" prefix, no reference numbers, no dates, no conversion math.
-- invoice notes = context for the whole invoice (reimbursement framing, FX notes, reference numbers). E.g. "Reimbursement for work laptop. Converted from INR 246,400 at 93.75 INR/USD. See attached Apple invoice."
-- attachments = the actual receipt/PDF. Don't retype its contents into the description.
+- line item note (per-item) = context for THIS item only — conversion math, source invoice number, purchase date, why this item is listed.
+- invoice notes (invoice-level) = context for the WHOLE invoice — payment instructions, thank-yous, reimbursement framing when the entire invoice is one thing.
+- attachments = the actual receipt/PDF. Don't retype its contents.
 
-When converting currency, include the source (mid-market rate, where you looked it up) in the notes so the client can verify.`;
+Rule of thumb: context about ONE line item → line_items[].note. Context about the whole invoice → notes. When you convert currency, put the rate + source in the line's note (or the invoice note if the whole invoice uses one FX rate).`;
 
 function buildHint(
   business: { name: string; addressLine1: string | null; country: string | null; taxId: string | null },

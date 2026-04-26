@@ -147,6 +147,12 @@ const styles = StyleSheet.create({
     fontSize: 9,
     textDecoration: "underline",
   },
+  lineNote: {
+    marginTop: 2,
+    color: c.muted,
+    fontSize: 9,
+    lineHeight: 1.4,
+  },
 });
 
 // Column widths (fractions of remaining space, tuned)
@@ -281,6 +287,9 @@ export function InvoiceDocument({ invoice, client, business }: InvoicePdfData) {
               >
                 <View style={{ ...styles.td, ...col.desc }}>
                   <Text>{li.description}</Text>
+                  {li.note ? (
+                    <Text style={styles.lineNote}>{li.note}</Text>
+                  ) : null}
                   {atts.length > 0 ? (
                     <View style={styles.attachmentList}>
                       {atts.map((a, i) => (

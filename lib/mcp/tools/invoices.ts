@@ -101,6 +101,7 @@ const lineItemSchema = z.object({
   unit_price: amount,
   tax_rate: taxRate.optional(),
   product_id: uuid.nullish(),
+  note: z.string().max(1000).nullish(),
   attachments,
 });
 
@@ -143,7 +144,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Create invoice",
       description:
-        "Create a draft invoice for a client with one or more line items. Every line item description, quantity, unit price, and tax rate MUST come from the user — NEVER invent them. If the user hasn't specified what they're billing for, ask before calling this tool.\n\nFIELD SEPARATION RULES (follow these):\n- `line_items[].description`: just the product or service name. Keep it short and specific (e.g., `MacBook Pro 14\" M5 Pro (24GB / 1TB)`, `Consulting — April 2026`, `Claude Max subscription`). Do NOT prefix with 'Reimbursement', do NOT include reference numbers, invoice IDs, dates, conversion math, or 'see attached' notes. Those belong in `notes`.\n- `notes` (invoice-level): context the client needs for this invoice as a whole — reimbursement framing, currency conversion notes, payment instructions, reference numbers to supporting invoices. E.g., `Reimbursement for work laptop. Original price INR 2,46,400 converted at 93.75 INR/USD. See attached Apple invoice MC65592205.`\n- `terms` (invoice-level): standing terms like 'Payment due within 30 days via bank transfer'.\n- `attachments` on a line item: supporting files (receipts, PDFs, photos). Don't repeat their contents in the description.\n\nATTACHMENTS: each attachment is either (a) passthrough URL `{url, label?}` or (b) inline upload `{file_base64, mime_type, filename?, label?}` where mime_type is `image/png`, `image/jpeg`, `image/webp`, or `application/pdf` (max 8 MB). If the user shares a file, upload via (b). Pass PDFs through as-is — do NOT rasterize them.\n\nInvoice number is allocated automatically (e.g. INV-0001). Dates default to today + net-30; currency defaults to the client's default then the business's. Returns the full invoice including line totals and a share URL. To send it to the client, call send_invoice next.",
+        "Create a draft invoice for a client with one or more line items. Every line item description, quantity, unit price, and tax rate MUST come from the user — NEVER invent them. If the user hasn't specified what they're billing for, ask before calling this tool.\n\nFIELD SEPARATION RULES (follow these):\n- `line_items[].description`: just the product or service name. Keep it short and specific (e.g., `MacBook Pro 14\" M5 Pro (24GB / 1TB)`, `Consulting — April 2026`, `Claude Max subscription`). No 'Reimbursement' prefix, no reference numbers, no conversion math, no 'see attached'.\n- `line_items[].note` (per-item): context for THIS item specifically — conversion math, source invoice number, purchase date, why this specific item is listed. E.g. `Converted from INR 2,46,400 at 93.75 INR/USD (mid-market rate on 2026-04-23). Source: Apple invoice MC65592205, purchased 2026-04-17.`\n- `notes` (invoice-level): context for the WHOLE invoice — payment instructions, thank-yous, reimbursement framing when the entire invoice is one thing, shared terms across items. E.g., `Reimbursement invoice. Please pay via Wise to: …`.\n- `terms` (invoice-level): standing terms like `Payment due within 30 days via bank transfer`.\n- `attachments` on a line item: supporting files (receipts, PDFs, photos). Don't repeat their contents in the description or note.\n\nRule of thumb: if the context is about ONE line item, put it on that line's `note`. If it applies to the whole invoice, put it on `notes`.\n\nATTACHMENTS: each attachment is either (a) passthrough URL `{url, label?}` or (b) inline upload `{file_base64, mime_type, filename?, label?}` where mime_type is `image/png`, `image/jpeg`, `image/webp`, or `application/pdf` (max 8 MB). If the user shares a file, upload via (b). Pass PDFs through as-is — do NOT rasterize them.\n\nInvoice number is allocated automatically (e.g. INV-0001). Dates default to today + net-30; currency defaults to the client's default then the business's. Returns the full invoice including line totals and a share URL. To send it to the client, call send_invoice next.",
       inputSchema: createSchema,
     },
     async (args, extra) => {
@@ -165,6 +166,7 @@ export function registerInvoiceTools(server: McpServer) {
           unitPrice: l.unit_price,
           taxRate: l.tax_rate,
           productId: l.product_id ?? null,
+          note: l.note ?? null,
           attachments: l.attachments,
         })),
       });
@@ -240,6 +242,7 @@ export function registerInvoiceTools(server: McpServer) {
         unit_price: amount,
         tax_rate: taxRate.optional(),
         product_id: uuid.nullish(),
+        note: z.string().max(1000).nullish(),
         attachments,
       },
     },
@@ -251,6 +254,7 @@ export function registerInvoiceTools(server: McpServer) {
         unit_price: amount,
         tax_rate: taxRate.optional(),
         product_id: uuid.nullish(),
+        note: z.string().max(1000).nullish(),
         attachments,
       });
       const parsed = schema.safeParse(args);
@@ -263,6 +267,7 @@ export function registerInvoiceTools(server: McpServer) {
         unitPrice: d.unit_price,
         taxRate: d.tax_rate,
         productId: d.product_id ?? null,
+        note: d.note ?? null,
         attachments: d.attachments,
       });
       if (!r.ok) return toolError(mapMutateError(r.code), r.message, { hint: r.hint });
@@ -284,6 +289,7 @@ export function registerInvoiceTools(server: McpServer) {
         unit_price: amount.optional(),
         tax_rate: taxRate.optional(),
         product_id: uuid.nullish(),
+        note: z.string().max(1000).nullish(),
         attachments,
       },
     },
@@ -296,6 +302,7 @@ export function registerInvoiceTools(server: McpServer) {
         unit_price: amount.optional(),
         tax_rate: taxRate.optional(),
         product_id: uuid.nullish(),
+        note: z.string().max(1000).nullish(),
         attachments,
       });
       const parsed = schema.safeParse(args);
@@ -308,6 +315,7 @@ export function registerInvoiceTools(server: McpServer) {
       if (d.unit_price !== undefined) patch.unitPrice = d.unit_price;
       if (d.tax_rate !== undefined) patch.taxRate = d.tax_rate;
       if (d.product_id !== undefined) patch.productId = d.product_id ?? null;
+      if (d.note !== undefined) patch.note = d.note ?? null;
       if (d.attachments !== undefined) patch.attachments = d.attachments;
       const r = await updateLineItem(ctx, d.invoice_id, d.line_item_id, patch);
       if (!r.ok) return toolError(mapMutateError(r.code), r.message, { hint: r.hint });

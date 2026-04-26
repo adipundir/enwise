@@ -371,6 +371,9 @@ export const invoiceLineItems = pgTable(
     taxRate: numeric("tax_rate", { precision: 6, scale: 4 })
       .notNull()
       .default("0"),
+    // Per-item context: conversion math, reference IDs, dates, source invoice
+    // numbers. Whole-invoice context lives on invoices.notes instead.
+    note: text("note"),
     lineSubtotal: numeric("line_subtotal", {
       precision: 14,
       scale: 2,
