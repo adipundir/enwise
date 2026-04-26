@@ -8,6 +8,7 @@ import {
   finalizeInvoice,
   getInvoice,
   invoiceShareUrl,
+  revertFinalizeInvoice,
   type InvoiceWithLineItems,
 } from "@/lib/invoices";
 import type { EnwiseCtx } from "@/lib/mcp/context";
@@ -78,6 +79,11 @@ export async function sendInvoiceByEmail(
     };
   }
   const toArray = input.to?.length ? input.to : [recipientEmail];
+  // Remember whether this call is the one that flipped draft→sent. If Resend
+  // later rejects the message, we revert the finalize so the invoice doesn't
+  // sit in a "sent but not actually sent" state.
+  const didFinalizeInThisCall =
+    invoice.status === "draft" && invoice.clientNameSnapshot === null;
 
   // 3. Finalize invoice (snapshot + status=sent).
   const finalized = await finalizeInvoice(ctx, invoice.id);
@@ -166,12 +172,15 @@ export async function sendInvoiceByEmail(
       },
     });
     if (result.error) {
+      if (didFinalizeInThisCall) {
+        await revertFinalizeInvoice(ctx, invoice.id);
+      }
       return {
         ok: false,
         code: "resend_failure",
-        message: `Resend rejected the message: ${result.error.message}`,
+        message: `Resend rejected the message: ${result.error.message}. Invoice kept as draft.`,
         hint:
-          "Check RESEND_API_KEY, verify the sending domain, and confirm the from-address is on a verified domain.",
+          "Check RESEND_API_KEY, verify the sending domain, and confirm the from-address is on a verified domain. Retry send_invoice once fixed.",
       };
     }
     return {
@@ -181,10 +190,15 @@ export async function sendInvoiceByEmail(
       resendId: result.data?.id ?? null,
     };
   } catch (err) {
+    if (didFinalizeInThisCall) {
+      await revertFinalizeInvoice(ctx, invoice.id);
+    }
     return {
       ok: false,
       code: "resend_failure",
-      message: `Resend request failed: ${(err as Error).message}`,
+      message: `Resend request failed: ${(err as Error).message}. Invoice kept as draft.`,
+      hint:
+        "Check RESEND_API_KEY and network connectivity to Resend. Retry send_invoice once fixed.",
     };
   }
 }

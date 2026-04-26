@@ -808,6 +808,34 @@ export async function markInvoicePaid(
   return { ok: true, value: (await getInvoice(ctx, inv.id))! };
 }
 
+/**
+ * Undo a first-time finalize. Used by sendInvoiceByEmail when Resend rejects
+ * the message so the invoice doesn't get stuck in a "sent but not actually
+ * sent" limbo. Only reverts rows that this process flipped within the
+ * current call — callers must know `wasDraft` beforehand.
+ */
+export async function revertFinalizeInvoice(
+  ctx: EnwiseCtx,
+  invoiceId: string,
+): Promise<void> {
+  await db
+    .update(invoices)
+    .set({
+      status: "draft",
+      sentAt: null,
+      clientNameSnapshot: null,
+      clientEmailSnapshot: null,
+      clientAddressSnapshot: null,
+      businessNameSnapshot: null,
+      businessAddressSnapshot: null,
+      businessLogoUrlSnapshot: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(eq(invoices.id, invoiceId), eq(invoices.businessId, ctx.businessId)),
+    );
+}
+
 export async function voidInvoice(
   ctx: EnwiseCtx,
   invoiceId: string,
