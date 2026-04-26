@@ -25,6 +25,15 @@ export interface InvoiceEmailProps {
   businessAddressLines: string[];
 }
 
+/**
+ * Invoice notification email. Designed to mirror the public /i/[slug]
+ * page's aesthetic: white card on a zinc-100 page, uppercase kicker
+ * labels, mono font for the invoice number, generous vertical rhythm.
+ *
+ * We intentionally opt out of email-client dark-mode inversion via the
+ * color-scheme meta + supported-color-schemes meta. Modern Apple Mail,
+ * Outlook, and iOS Mail honor this.
+ */
 export function InvoiceEmail({
   invoiceNumber,
   clientName,
@@ -42,63 +51,97 @@ export function InvoiceEmail({
 
   return (
     <Html>
-      <Head />
+      <Head>
+        <meta name="color-scheme" content="light only" />
+        <meta name="supported-color-schemes" content="light" />
+      </Head>
       <Preview>{previewText}</Preview>
       <Body style={styles.body}>
         <Container style={styles.container}>
-          <Section style={styles.header}>
+          {/* Letterhead: logo + business */}
+          <Section style={styles.letterhead}>
             {logoUrl ? (
               <Img
                 src={logoUrl}
                 alt={businessName}
-                width="64"
+                width="56"
                 style={styles.logo}
               />
             ) : null}
             <Text style={styles.brand}>{businessName}</Text>
           </Section>
 
-          <Text style={styles.greeting}>Hi {clientName},</Text>
+          <Hr style={styles.ruleTop} />
 
-          <Text style={styles.body1}>
-            {businessName} sent you invoice{" "}
-            <strong>{invoiceNumber}</strong> for{" "}
-            <strong>{formattedTotal}</strong>, due <strong>{dueDate}</strong>.
-          </Text>
+          {/* Invoice meta block — mirrors the right column of /i/[slug] */}
+          <Section style={styles.metaBlock}>
+            <table
+              cellPadding={0}
+              cellSpacing={0}
+              width="100%"
+              style={styles.metaTable}
+            >
+              <tbody>
+                <tr>
+                  <td style={styles.metaLabelCell}>Invoice</td>
+                  <td style={styles.metaValueCellStrong}>{invoiceNumber}</td>
+                </tr>
+                <tr>
+                  <td style={styles.metaLabelCell}>Total</td>
+                  <td style={styles.metaValueCell}>{formattedTotal}</td>
+                </tr>
+                <tr>
+                  <td style={styles.metaLabelCell}>Due date</td>
+                  <td style={styles.metaValueCell}>{dueDate}</td>
+                </tr>
+              </tbody>
+            </table>
+          </Section>
 
-          {customMessage ? (
-            <Section style={styles.note}>
-              <Text style={styles.noteText}>{customMessage}</Text>
-            </Section>
-          ) : null}
+          <Hr style={styles.rule} />
 
-          <Section style={{ textAlign: "center", margin: "32px 0" }}>
+          {/* Body copy */}
+          <Section>
+            <Text style={styles.greeting}>Hi {clientName},</Text>
+            <Text style={styles.body1}>
+              Please find the invoice above. Full details and the PDF are on
+              the hosted page linked below.
+            </Text>
+
+            {customMessage ? (
+              <Section style={styles.note}>
+                <Text style={styles.kicker}>Message</Text>
+                <Text style={styles.noteText}>{customMessage}</Text>
+              </Section>
+            ) : null}
+          </Section>
+
+          {/* CTA */}
+          <Section style={styles.ctaBlock}>
             <Button href={shareUrl} style={styles.button}>
               View invoice
             </Button>
           </Section>
 
           <Text style={styles.muted}>
-            Download the PDF from that page, or open it directly at{" "}
+            Or open it directly at{" "}
             <a href={shareUrl} style={styles.link}>
               {shareUrl}
             </a>
-            .
+            . Download the PDF from that page if you need a local copy.
           </Text>
 
-          <Hr style={styles.hr} />
+          <Hr style={styles.rule} />
 
+          {/* Footer letterhead echo */}
           <Section style={styles.footer}>
-            <Text style={styles.footerText}>
-              <strong>{businessName}</strong>
-              {businessAddressLines.length > 0 ? (
-                <>
-                  <br />
-                  {businessAddressLines.join(" · ")}
-                </>
-              ) : null}
-            </Text>
-            <Text style={styles.footerText}>Powered by enwise</Text>
+            <Text style={styles.footerBrand}>{businessName}</Text>
+            {businessAddressLines.length > 0 ? (
+              <Text style={styles.footerText}>
+                {businessAddressLines.join(" · ")}
+              </Text>
+            ) : null}
+            <Text style={styles.footerMuted}>Powered by enwise</Text>
           </Section>
         </Container>
       </Body>
@@ -106,58 +149,127 @@ export function InvoiceEmail({
   );
 }
 
+// Palette pinned to the same zinc scale the /i/[slug] page uses.
+const c = {
+  pageBg: "#f4f4f5", // zinc-100
+  cardBg: "#ffffff",
+  ink: "#18181b", // zinc-900
+  text: "#27272a", // zinc-800
+  muted: "#71717a", // zinc-500
+  soft: "#a1a1aa", // zinc-400
+  line: "#e4e4e7", // zinc-200
+  black: "#0a0a0a",
+};
+
+const systemSans =
+  "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const systemMono =
+  "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace";
+
 const styles = {
   body: {
-    backgroundColor: "#f4f4f5",
-    fontFamily:
-      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    color: "#18181b",
+    backgroundColor: c.pageBg,
+    fontFamily: systemSans,
+    color: c.text,
     margin: 0,
-    padding: "24px 0",
+    padding: "32px 16px",
+    colorScheme: "light only",
   },
   container: {
-    maxWidth: "560px",
+    maxWidth: "600px",
     margin: "0 auto",
-    backgroundColor: "#ffffff",
+    backgroundColor: c.cardBg,
     padding: "40px",
-    borderRadius: "12px",
+    borderRadius: "16px",
+    border: `1px solid ${c.line}`,
   },
-  header: {
-    marginBottom: "24px",
+  letterhead: {
+    marginBottom: "20px",
   },
   logo: {
-    marginBottom: "12px",
+    marginBottom: "10px",
     objectFit: "contain" as const,
   },
   brand: {
     fontSize: "18px",
     fontWeight: 600,
+    color: c.ink,
     margin: 0,
+    letterSpacing: "-0.01em",
+  },
+  ruleTop: {
+    borderColor: c.line,
+    margin: "4px 0 20px",
+  },
+  metaBlock: {
+    marginBottom: "8px",
+  },
+  metaTable: {
+    borderCollapse: "collapse" as const,
+  },
+  metaLabelCell: {
+    fontSize: "10px",
+    letterSpacing: "0.12em",
+    textTransform: "uppercase" as const,
+    color: c.muted,
+    padding: "4px 0",
+    width: "110px",
+  },
+  metaValueCell: {
+    fontSize: "14px",
+    color: c.ink,
+    padding: "4px 0",
+  },
+  metaValueCellStrong: {
+    fontSize: "14px",
+    color: c.ink,
+    padding: "4px 0",
+    fontFamily: systemMono,
+    fontWeight: 600,
+    letterSpacing: "-0.01em",
+  },
+  rule: {
+    borderColor: c.line,
+    margin: "20px 0",
   },
   greeting: {
-    fontSize: "16px",
-    marginBottom: "12px",
+    fontSize: "15px",
+    color: c.text,
+    margin: "0 0 8px",
   },
   body1: {
-    fontSize: "15px",
-    lineHeight: 1.5,
-    color: "#27272a",
+    fontSize: "14px",
+    lineHeight: 1.55,
+    color: c.text,
+    margin: "0 0 8px",
+  },
+  kicker: {
+    fontSize: "10px",
+    letterSpacing: "0.12em",
+    textTransform: "uppercase" as const,
+    color: c.muted,
+    margin: "0 0 6px",
   },
   note: {
-    borderLeft: "3px solid #e4e4e7",
-    padding: "4px 16px",
-    margin: "20px 0",
+    borderLeft: `3px solid ${c.line}`,
+    padding: "4px 14px",
+    margin: "16px 0",
   },
   noteText: {
     fontSize: "14px",
-    color: "#3f3f46",
+    color: c.text,
+    lineHeight: 1.55,
     margin: 0,
     whiteSpace: "pre-wrap" as const,
   },
+  ctaBlock: {
+    textAlign: "center" as const,
+    margin: "28px 0 16px",
+  },
   button: {
-    backgroundColor: "#0a0a0a",
+    backgroundColor: c.black,
     color: "#fafafa",
-    padding: "12px 24px",
+    padding: "12px 28px",
     borderRadius: "8px",
     fontSize: "14px",
     fontWeight: 500,
@@ -165,26 +277,34 @@ const styles = {
     display: "inline-block",
   },
   muted: {
-    fontSize: "13px",
-    color: "#71717a",
-    lineHeight: 1.5,
+    fontSize: "12px",
+    color: c.muted,
+    lineHeight: 1.55,
     wordBreak: "break-all" as const,
+    margin: 0,
   },
   link: {
-    color: "#3f3f46",
+    color: c.text,
     textDecoration: "underline",
   },
-  hr: {
-    borderColor: "#e4e4e7",
-    margin: "32px 0",
-  },
   footer: {
-    marginTop: "12px",
+    marginTop: "8px",
+  },
+  footerBrand: {
+    fontSize: "13px",
+    fontWeight: 600,
+    color: c.ink,
+    margin: "0 0 4px",
   },
   footerText: {
     fontSize: "12px",
-    color: "#71717a",
+    color: c.muted,
     lineHeight: 1.5,
-    margin: "6px 0",
+    margin: "0 0 12px",
+  },
+  footerMuted: {
+    fontSize: "11px",
+    color: c.soft,
+    margin: 0,
   },
 };
