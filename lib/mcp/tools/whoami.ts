@@ -90,6 +90,13 @@ export function registerWhoami(server: McpServer) {
   );
 }
 
+const WRITING_STYLE = `Invoice writing style — keep each field crisp and in its own lane:
+- line item description = product or service name only (e.g. "MacBook Pro 14\\" M5 Pro (24GB/1TB)", "Claude Max subscription"). No "Reimbursement:" prefix, no reference numbers, no dates, no conversion math.
+- invoice notes = context for the whole invoice (reimbursement framing, FX notes, reference numbers). E.g. "Reimbursement for work laptop. Converted from INR 246,400 at 93.75 INR/USD. See attached Apple invoice."
+- attachments = the actual receipt/PDF. Don't retype its contents into the description.
+
+When converting currency, include the source (mid-market rate, where you looked it up) in the notes so the client can verify.`;
+
 function buildHint(
   business: { name: string; addressLine1: string | null; country: string | null; taxId: string | null },
   clientCount: number,
@@ -114,10 +121,10 @@ Do NOT invent data at any step. Do NOT create a sample/demo invoice. If the user
   }
 
   if (clientCount === 0) {
-    return `Business "${business.name}" is configured but has no clients yet. Offer to add the user's first client — ask for name, email, and address, then use create_client. Do not invent a client. After the client is saved, ask what they'd like to bill for and call create_invoice.`;
+    return `Business "${business.name}" is configured but has no clients yet. Offer to add the user's first client — ask for name, email, and address, then use create_client. Do not invent a client. After the client is saved, ask what they'd like to bill for and call create_invoice.\n\n${WRITING_STYLE}`;
   }
 
-  return `Business "${business.name}" has ${clientCount} client${clientCount === 1 ? "" : "s"}. Ask the user what they'd like to do. Use find_client to resolve names they mention.`;
+  return `Business "${business.name}" has ${clientCount} client${clientCount === 1 ? "" : "s"}. Ask the user what they'd like to do. Use find_client to resolve names they mention.\n\n${WRITING_STYLE}`;
 }
 
 function toolError(message: string) {
