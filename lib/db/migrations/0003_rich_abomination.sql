@@ -1,0 +1,1 @@
+ALTER TABLE "invoice_line_items" ADD COLUMN "attachments" jsonb DEFAULT '[]'::jsonb NOT NULL;

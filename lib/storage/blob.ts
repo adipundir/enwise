@@ -4,7 +4,8 @@ import { put } from "@vercel/blob";
 import { fileTypeFromBuffer } from "file-type";
 import { nanoid } from "nanoid";
 
-const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_BYTES = 2 * 1024 * 1024; // 2 MB (logo)
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8 MB (photo/receipt)
 const ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MIME_EXT: Record<string, string> = {
   "image/png": "png",
@@ -249,6 +250,146 @@ function mimeError(): Extract<LogoResult, { ok: false }> {
     message: "Logo must be PNG, JPEG, or WebP.",
     hint: "SVG is not supported in v1. Convert your logo and try again.",
   };
+}
+
+// ---------- Line item attachments ----------
+
+export type AttachmentInput =
+  | { label?: string; url: string }
+  | {
+      label?: string;
+      image_base64: string;
+      mime_type: string;
+      filename?: string;
+    };
+
+export type AttachmentResolved = { label: string; url: string };
+
+export type AttachmentResult =
+  | { ok: true; attachment: AttachmentResolved }
+  | {
+      ok: false;
+      code:
+        | "attachment_too_large"
+        | "attachment_invalid_mime"
+        | "attachment_storage_unavailable"
+        | "attachment_invalid_url";
+      message: string;
+      hint?: string;
+    };
+
+export async function resolveAttachment(params: {
+  businessId: string;
+  input: AttachmentInput;
+}): Promise<AttachmentResult> {
+  const { businessId, input } = params;
+
+  if ("url" in input) {
+    let u: URL;
+    try {
+      u = new URL(input.url);
+    } catch {
+      return {
+        ok: false,
+        code: "attachment_invalid_url",
+        message: "Attachment URL isn't a valid URL.",
+      };
+    }
+    if (!/^https?:$/.test(u.protocol)) {
+      return {
+        ok: false,
+        code: "attachment_invalid_url",
+        message: "Attachment URL must be http:// or https://.",
+      };
+    }
+    return {
+      ok: true,
+      attachment: {
+        label: input.label?.trim() || u.hostname,
+        url: input.url.trim(),
+      },
+    };
+  }
+
+  if (!ALLOWED_MIME.has(input.mime_type)) {
+    return {
+      ok: false,
+      code: "attachment_invalid_mime",
+      message: "Attachment image must be PNG, JPEG, or WebP.",
+      hint: "PDFs and SVGs aren't supported yet. Host elsewhere and pass `url` instead.",
+    };
+  }
+
+  const hasBlob = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  if (!hasBlob) {
+    return {
+      ok: false,
+      code: "attachment_storage_unavailable",
+      message:
+        "Image uploads require Vercel Blob storage, which isn't configured on this server.",
+      hint: "Host the image elsewhere (Drive, Imgur, Dropbox) and pass `url` instead.",
+    };
+  }
+
+  const clean = input.image_base64.replace(/^data:[^;]+;base64,/, "");
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(clean, "base64");
+  } catch {
+    return {
+      ok: false,
+      code: "attachment_invalid_mime",
+      message: "image_base64 isn't valid base64.",
+    };
+  }
+  if (buffer.byteLength > MAX_ATTACHMENT_BYTES) {
+    return {
+      ok: false,
+      code: "attachment_too_large",
+      message: `Image is ${formatBytes(buffer.byteLength)}, max is ${formatBytes(MAX_ATTACHMENT_BYTES)}.`,
+    };
+  }
+
+  const mimeCheck = await validateMime(buffer);
+  if (!mimeCheck.ok) {
+    return {
+      ok: false,
+      code: "attachment_invalid_mime",
+      message: "File content doesn't look like a supported image.",
+    };
+  }
+  if (mimeCheck.mime !== input.mime_type) {
+    return {
+      ok: false,
+      code: "attachment_invalid_mime",
+      message: `mime_type ${input.mime_type} doesn't match actual file contents (${mimeCheck.mime}).`,
+    };
+  }
+
+  const ext = MIME_EXT[mimeCheck.mime] ?? "bin";
+  const pathname = `attachments/${businessId}/${nanoid(16)}.${ext}`;
+  try {
+    const result = await put(pathname, buffer, {
+      access: "public",
+      contentType: mimeCheck.mime,
+      addRandomSuffix: false,
+      allowOverwrite: false,
+    });
+    const filenameLabel = input.filename?.replace(/\.[^.]+$/, "").trim();
+    return {
+      ok: true,
+      attachment: {
+        label: input.label?.trim() || filenameLabel || "Attachment",
+        url: result.url,
+      },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      code: "attachment_storage_unavailable",
+      message: `Upload to blob storage failed: ${(err as Error).message}`,
+    };
+  }
 }
 
 function formatBytes(n: number): string {

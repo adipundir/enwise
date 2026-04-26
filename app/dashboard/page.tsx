@@ -8,6 +8,11 @@ import { formatMoney, addAmounts } from "@/lib/money";
 import { createToken, getActiveToken } from "@/lib/tokens";
 import { KeyAndConnectSection } from "./KeyAndConnectSection";
 
+// Stats depend on fresh DB state that changes via MCP tool calls outside
+// of this route's request context. Force dynamic so every page hit
+// re-queries rather than serving a cached render.
+export const dynamic = "force-dynamic";
+
 export default async function DashboardHome() {
   const session = await auth();
   const user = session?.user as

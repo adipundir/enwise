@@ -2,6 +2,7 @@
 import {
   Document,
   Image,
+  Link,
   Page,
   StyleSheet,
   Text,
@@ -140,6 +141,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   footerText: { color: c.muted, fontSize: 8 },
+  attachmentList: { marginTop: 4, flexDirection: "column", gap: 2 },
+  attachmentLink: {
+    color: "#3f3f46",
+    fontSize: 9,
+    textDecoration: "underline",
+  },
 });
 
 // Column widths (fractions of remaining space, tuned)
@@ -257,9 +264,31 @@ export function InvoiceDocument({ invoice, client, business }: InvoicePdfData) {
           </View>
           {invoice.lineItems.map((li, idx) => {
             const isLast = idx === invoice.lineItems.length - 1;
+            const atts = (li.attachments ?? []) as Array<{
+              label: string;
+              url: string;
+            }>;
+            // wrap={false} keeps rows atomic in the normal case; but with many
+            // attachment links a row can exceed page height, so allow wrap
+            // when attachments are present.
             return (
-              <View key={li.id} style={isLast ? styles.tableRowLast : styles.tableRow} wrap={false}>
-                <Text style={{ ...styles.td, ...col.desc }}>{li.description}</Text>
+              <View
+                key={li.id}
+                style={isLast ? styles.tableRowLast : styles.tableRow}
+                wrap={atts.length > 0}
+              >
+                <View style={{ ...styles.td, ...col.desc }}>
+                  <Text>{li.description}</Text>
+                  {atts.length > 0 ? (
+                    <View style={styles.attachmentList}>
+                      {atts.map((a, i) => (
+                        <Link key={i} src={a.url} style={styles.attachmentLink}>
+                          ↗ {a.label}
+                        </Link>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
                 <Text style={{ ...styles.tdRight, ...col.qty }}>
                   {stripTrailingZeros(li.quantity)}
                 </Text>

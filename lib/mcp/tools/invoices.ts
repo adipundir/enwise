@@ -76,12 +76,26 @@ const currency = z
   .regex(/^[A-Za-z]{3}$/, "3-letter ISO 4217 code like 'USD'")
   .transform((s) => s.toUpperCase());
 
+const urlAttachment = z.object({
+  label: z.string().min(1).max(120).optional(),
+  url: z.string().url().max(2000),
+});
+const uploadAttachment = z.object({
+  label: z.string().min(1).max(120).optional(),
+  image_base64: z.string().min(1),
+  mime_type: z.enum(["image/png", "image/jpeg", "image/webp"]),
+  filename: z.string().min(1).max(120).optional(),
+});
+const attachmentSchema = z.union([urlAttachment, uploadAttachment]);
+const attachments = z.array(attachmentSchema).max(10).optional();
+
 const lineItemSchema = z.object({
   description: z.string().min(1).max(500),
   quantity,
   unit_price: amount,
   tax_rate: taxRate.optional(),
   product_id: uuid.nullish(),
+  attachments,
 });
 
 const createSchema = {
@@ -106,6 +120,11 @@ function mapMutateError(code: string): ErrorCode {
     case "invalid_amount":
     case "no_line_items":
       return "invalid_input";
+    case "attachment_too_large":
+    case "attachment_invalid_mime":
+    case "attachment_storage_unavailable":
+    case "attachment_invalid_url":
+      return code;
     default:
       return "internal_error";
   }
@@ -117,7 +136,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Create invoice",
       description:
-        "Create a draft invoice for a client with one or more line items. Every line item description, quantity, unit price, and tax rate MUST come from the user — NEVER invent them. If the user hasn't specified what they're billing for, ask before calling this tool. Invoice number is allocated automatically (e.g. INV-0001). Dates default to today + net-30; currency defaults to the client's default, then the business's. Returns the full invoice including line totals and a share URL. To send it to the client, call send_invoice next.",
+        "Create a draft invoice for a client with one or more line items. Every line item description, quantity, unit price, and tax rate MUST come from the user — NEVER invent them. If the user hasn't specified what they're billing for, ask before calling this tool. Each line item can optionally include `attachments`: an array of supporting docs (receipts, photo proofs, spec pages). Each attachment is either (a) a passthrough URL `{url, label?}` or (b) an inline image to upload to enwise's own storage `{image_base64, mime_type, filename?, label?}` where mime_type is png/jpeg/webp (max 8 MB). If the user shares an image in the conversation (e.g. drag-and-dropped photo of a receipt), upload it via (b) rather than asking them to host it elsewhere. Attachments render as clickable links on the invoice and PDF. Invoice number is allocated automatically (e.g. INV-0001). Dates default to today + net-30; currency defaults to the client's default, then the business's. Returns the full invoice including line totals and a share URL. To send it to the client, call send_invoice next.",
       inputSchema: createSchema,
     },
     async (args, extra) => {
@@ -139,10 +158,13 @@ export function registerInvoiceTools(server: McpServer) {
           unitPrice: l.unit_price,
           taxRate: l.tax_rate,
           productId: l.product_id ?? null,
+          attachments: l.attachments,
         })),
       });
       if (!result.ok) {
-        return toolError(mapMutateError(result.code), result.message);
+        return toolError(mapMutateError(result.code), result.message, {
+          hint: result.hint,
+        });
       }
       return toolOk({
         ...formatInvoiceForMcp(result.invoice),
@@ -203,7 +225,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Add line item (draft only)",
       description:
-        "Append a line item to a draft invoice. Totals are recomputed automatically.",
+        "Append a line item to a draft invoice. Totals are recomputed automatically. Optional `attachments` accepts an array of supporting docs — each is either `{url, label?}` (passthrough link) or `{image_base64, mime_type, filename?, label?}` (inline PNG/JPEG/WebP, max 8 MB, uploaded to enwise's own storage). If the user shared an image, upload it via base64 rather than asking for a URL.",
       inputSchema: {
         invoice_id: uuid,
         description: z.string().min(1).max(500),
@@ -211,6 +233,7 @@ export function registerInvoiceTools(server: McpServer) {
         unit_price: amount,
         tax_rate: taxRate.optional(),
         product_id: uuid.nullish(),
+        attachments,
       },
     },
     async (args, extra) => {
@@ -221,6 +244,7 @@ export function registerInvoiceTools(server: McpServer) {
         unit_price: amount,
         tax_rate: taxRate.optional(),
         product_id: uuid.nullish(),
+        attachments,
       });
       const parsed = schema.safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
@@ -232,8 +256,9 @@ export function registerInvoiceTools(server: McpServer) {
         unitPrice: d.unit_price,
         taxRate: d.tax_rate,
         productId: d.product_id ?? null,
+        attachments: d.attachments,
       });
-      if (!r.ok) return toolError(mapMutateError(r.code), r.message);
+      if (!r.ok) return toolError(mapMutateError(r.code), r.message, { hint: r.hint });
       return toolOk(formatInvoiceForMcp(r.value));
     },
   );
@@ -242,6 +267,8 @@ export function registerInvoiceTools(server: McpServer) {
     "update_line_item",
     {
       title: "Update line item (draft only)",
+      description:
+        "Update fields on a draft invoice line item. Pass only the fields you want to change. Passing `attachments` REPLACES the whole list (send the full desired array, including any you want to keep — mix of existing `{url}` and new `{image_base64, mime_type}` entries). Pass `attachments: []` to clear.",
       inputSchema: {
         invoice_id: uuid,
         line_item_id: uuid,
@@ -250,6 +277,7 @@ export function registerInvoiceTools(server: McpServer) {
         unit_price: amount.optional(),
         tax_rate: taxRate.optional(),
         product_id: uuid.nullish(),
+        attachments,
       },
     },
     async (args, extra) => {
@@ -261,6 +289,7 @@ export function registerInvoiceTools(server: McpServer) {
         unit_price: amount.optional(),
         tax_rate: taxRate.optional(),
         product_id: uuid.nullish(),
+        attachments,
       });
       const parsed = schema.safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
@@ -272,8 +301,9 @@ export function registerInvoiceTools(server: McpServer) {
       if (d.unit_price !== undefined) patch.unitPrice = d.unit_price;
       if (d.tax_rate !== undefined) patch.taxRate = d.tax_rate;
       if (d.product_id !== undefined) patch.productId = d.product_id ?? null;
+      if (d.attachments !== undefined) patch.attachments = d.attachments;
       const r = await updateLineItem(ctx, d.invoice_id, d.line_item_id, patch);
-      if (!r.ok) return toolError(mapMutateError(r.code), r.message);
+      if (!r.ok) return toolError(mapMutateError(r.code), r.message, { hint: r.hint });
       return toolOk(formatInvoiceForMcp(r.value));
     },
   );

@@ -18,6 +18,10 @@ export type ErrorCode =
   | "logo_fetch_failed"
   | "logo_storage_unavailable"
   | "duplicate_invoice_number"
+  | "attachment_too_large"
+  | "attachment_invalid_mime"
+  | "attachment_storage_unavailable"
+  | "attachment_invalid_url"
   | "internal_error";
 
 export interface ToolErrorBody {

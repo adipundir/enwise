@@ -377,6 +377,12 @@ export const invoiceLineItems = pgTable(
     }).notNull(),
     lineTax: numeric("line_tax", { precision: 14, scale: 2 }).notNull(),
     lineTotal: numeric("line_total", { precision: 14, scale: 2 }).notNull(),
+    // Supporting docs: receipts, photo proofs, spec links etc. Rendered as
+    // clickable links on the public invoice page and in the PDF.
+    attachments: jsonb("attachments")
+      .$type<Array<{ label: string; url: string }>>()
+      .notNull()
+      .default([]),
   },
   (t) => [index("line_items_invoice_idx").on(t.invoiceId)],
 );

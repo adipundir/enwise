@@ -12,8 +12,15 @@ import {
 import type { EnwiseCtx } from "@/lib/mcp/context";
 import { addAmounts, computeLine, isValidCurrency } from "@/lib/money";
 import { allocateInvoiceNumber } from "@/lib/numbering";
+import {
+  resolveAttachment,
+  type AttachmentInput,
+  type AttachmentResolved,
+} from "@/lib/storage/blob";
 
 // ---------- Shared shapes ----------
+
+export type LineItemAttachment = AttachmentResolved;
 
 export type LineItemInput = {
   description: string;
@@ -21,6 +28,13 @@ export type LineItemInput = {
   unitPrice: string;
   taxRate?: string;
   productId?: string | null;
+  /**
+   * Optional supporting docs. Each attachment is either a passthrough URL
+   * (`{url, label?}`) or a base64-encoded image to upload to our own Blob
+   * storage (`{image_base64, mime_type, filename?, label?}`). Resolved into
+   * `{label, url}` before insert.
+   */
+  attachments?: AttachmentInput[];
 };
 
 export type CreateInvoiceInput = {
@@ -75,6 +89,41 @@ async function writeEvent(
   });
 }
 
+export type AttachmentResolveError = {
+  code:
+    | "attachment_too_large"
+    | "attachment_invalid_mime"
+    | "attachment_storage_unavailable"
+    | "attachment_invalid_url";
+  message: string;
+  hint?: string;
+};
+
+/**
+ * Walk a list of attachment inputs and resolve each to its final
+ * `{label, url}` form. Base64 images get uploaded to our Blob bucket;
+ * URLs pass through. Fails fast on the first error so callers can surface
+ * a clean message to Claude without a partial DB write.
+ */
+async function resolveAttachments(
+  businessId: string,
+  inputs: AttachmentInput[] | undefined,
+): Promise<
+  | { ok: true; attachments: LineItemAttachment[] }
+  | { ok: false; error: AttachmentResolveError }
+> {
+  if (!inputs || inputs.length === 0) return { ok: true, attachments: [] };
+  const resolved: LineItemAttachment[] = [];
+  for (const input of inputs) {
+    const r = await resolveAttachment({ businessId, input });
+    if (!r.ok) {
+      return { ok: false, error: { code: r.code, message: r.message, hint: r.hint } };
+    }
+    resolved.push(r.attachment);
+  }
+  return { ok: true, attachments: resolved };
+}
+
 async function getClientScoped(ctx: EnwiseCtx, clientId: string) {
   const [row] = await db
     .select()
@@ -87,7 +136,20 @@ async function getClientScoped(ctx: EnwiseCtx, clientId: string) {
 
 export type CreateInvoiceResult =
   | { ok: true; invoice: InvoiceWithLineItems }
-  | { ok: false; code: "client_not_found" | "invalid_currency" | "no_line_items" | "invalid_amount"; message: string };
+  | {
+      ok: false;
+      code:
+        | "client_not_found"
+        | "invalid_currency"
+        | "no_line_items"
+        | "invalid_amount"
+        | "attachment_too_large"
+        | "attachment_invalid_mime"
+        | "attachment_storage_unavailable"
+        | "attachment_invalid_url";
+      message: string;
+      hint?: string;
+    };
 
 export async function createInvoice(
   ctx: EnwiseCtx,
@@ -154,6 +216,22 @@ export async function createInvoice(
   const dueDate = input.dueDate ?? addDays(issueDate, 30);
   const shareSlug = nanoid(24);
 
+  // Resolve attachments up front so any upload failure aborts before we
+  // allocate an invoice number or write anything.
+  const resolvedPerLine: LineItemAttachment[][] = [];
+  for (const li of input.lineItems) {
+    const r = await resolveAttachments(ctx.businessId, li.attachments);
+    if (!r.ok) {
+      return {
+        ok: false,
+        code: r.error.code,
+        message: r.error.message,
+        hint: r.error.hint,
+      };
+    }
+    resolvedPerLine.push(r.attachments);
+  }
+
   // Compute line totals.
   let computedLines: Array<{
     position: number;
@@ -165,6 +243,7 @@ export async function createInvoice(
     lineSubtotal: string;
     lineTax: string;
     lineTotal: string;
+    attachments: LineItemAttachment[];
   }>;
   try {
     computedLines = input.lineItems.map((li, idx) => {
@@ -181,6 +260,7 @@ export async function createInvoice(
         quantity: li.quantity,
         unitPrice: li.unitPrice,
         taxRate,
+        attachments: resolvedPerLine[idx]!,
         ...math,
       };
     });
@@ -234,6 +314,7 @@ export async function createInvoice(
       lineSubtotal: l.lineSubtotal,
       lineTax: l.lineTax,
       lineTotal: l.lineTotal,
+      attachments: l.attachments,
     })),
   );
 
@@ -358,7 +439,31 @@ export type UpdateInvoiceInput = {
 
 export type MutateResult<T> =
   | { ok: true; value: T }
-  | { ok: false; code: "not_found" | "invoice_not_draft" | "client_not_found"; message: string };
+  | {
+      ok: false;
+      code: "not_found" | "invoice_not_draft" | "client_not_found";
+      message: string;
+    };
+
+/**
+ * Line-item mutations can additionally fail with attachment errors (when a
+ * user-supplied image can't be uploaded). Used by addLineItem / updateLineItem.
+ */
+export type LineItemMutateResult<T> =
+  | { ok: true; value: T }
+  | {
+      ok: false;
+      code:
+        | "not_found"
+        | "invoice_not_draft"
+        | "client_not_found"
+        | "attachment_too_large"
+        | "attachment_invalid_mime"
+        | "attachment_storage_unavailable"
+        | "attachment_invalid_url";
+      message: string;
+      hint?: string;
+    };
 
 export async function updateInvoice(
   ctx: EnwiseCtx,
@@ -414,7 +519,7 @@ export async function addLineItem(
   ctx: EnwiseCtx,
   invoiceId: string,
   item: LineItemInput,
-): Promise<MutateResult<InvoiceWithLineItems>> {
+): Promise<LineItemMutateResult<InvoiceWithLineItems>> {
   const inv = await getInvoice(ctx, invoiceId);
   if (!inv) return { ok: false, code: "not_found", message: `No invoice with id ${invoiceId}.` };
   if (!isEditable(inv)) {
@@ -422,6 +527,15 @@ export async function addLineItem(
       ok: false,
       code: "invoice_not_draft",
       message: `Invoice ${inv.invoiceNumber} is ${inv.status}; only drafts are editable.`,
+    };
+  }
+  const att = await resolveAttachments(ctx.businessId, item.attachments);
+  if (!att.ok) {
+    return {
+      ok: false,
+      code: att.error.code,
+      message: att.error.message,
+      hint: att.error.hint,
     };
   }
   const math = computeLine({
@@ -438,6 +552,7 @@ export async function addLineItem(
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     taxRate: item.taxRate ?? "0",
+    attachments: att.attachments,
     ...math,
   });
   await withRecomputedTotals(inv.id);
@@ -450,7 +565,7 @@ export async function updateLineItem(
   invoiceId: string,
   lineItemId: string,
   patch: Partial<LineItemInput>,
-): Promise<MutateResult<InvoiceWithLineItems>> {
+): Promise<LineItemMutateResult<InvoiceWithLineItems>> {
   const inv = await getInvoice(ctx, invoiceId);
   if (!inv) return { ok: false, code: "not_found", message: `No invoice with id ${invoiceId}.` };
   if (!isEditable(inv)) {
@@ -463,12 +578,28 @@ export async function updateLineItem(
   const existing = inv.lineItems.find((l) => l.id === lineItemId);
   if (!existing) return { ok: false, code: "not_found", message: `No line item with id ${lineItemId} on invoice ${inv.invoiceNumber}.` };
 
+  let nextAttachments: LineItemAttachment[];
+  if (patch.attachments !== undefined) {
+    const att = await resolveAttachments(ctx.businessId, patch.attachments);
+    if (!att.ok) {
+      return {
+        ok: false,
+        code: att.error.code,
+        message: att.error.message,
+        hint: att.error.hint,
+      };
+    }
+    nextAttachments = att.attachments;
+  } else {
+    nextAttachments = existing.attachments as LineItemAttachment[];
+  }
   const next = {
     description: patch.description ?? existing.description,
     quantity: patch.quantity ?? existing.quantity,
     unitPrice: patch.unitPrice ?? existing.unitPrice,
     taxRate: patch.taxRate ?? existing.taxRate,
     productId: patch.productId !== undefined ? patch.productId ?? null : existing.productId,
+    attachments: nextAttachments,
   };
   const math = computeLine(next);
   await db
@@ -713,6 +844,7 @@ export async function duplicateInvoice(
       unitPrice: l.unitPrice,
       taxRate: l.taxRate,
       productId: l.productId,
+      attachments: l.attachments as LineItemAttachment[],
     })),
     issueDate: opts.newIssueDate,
     currency: source.currency,
@@ -770,6 +902,7 @@ export function formatInvoiceForMcp(inv: InvoiceWithLineItems) {
       line_tax: l.lineTax,
       line_total: l.lineTotal,
       product_id: l.productId,
+      attachments: l.attachments,
     })),
   };
 }

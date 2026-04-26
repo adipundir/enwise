@@ -65,6 +65,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
           <div className="flex items-center gap-2">
             <a
               href={`/i/${slug}/pdf`}
+              download={`${invoice.invoiceNumber}.pdf`}
               className="rounded-md bg-zinc-900 text-zinc-50 px-3.5 py-1.5 hover:bg-zinc-800"
             >
               Download PDF
@@ -145,17 +146,42 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200">
-                {invoice.lineItems.map((li) => (
-                  <tr key={li.id}>
-                    <td className="px-4 py-3">{li.description}</td>
-                    <td className="px-4 py-3 text-right">
-                      {stripTrailingZeros(li.quantity)}
-                    </td>
-                    <td className="px-4 py-3 text-right">{fmt(li.unitPrice)}</td>
-                    <td className="px-4 py-3 text-right">{percent(li.taxRate)}</td>
-                    <td className="px-4 py-3 text-right">{fmt(li.lineTotal)}</td>
-                  </tr>
-                ))}
+                {invoice.lineItems.map((li) => {
+                  const atts = (li.attachments ?? []) as Array<{
+                    label: string;
+                    url: string;
+                  }>;
+                  return (
+                    <tr key={li.id}>
+                      <td className="px-4 py-3">
+                        <div>{li.description}</div>
+                        {atts.length > 0 ? (
+                          <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                            {atts.map((a, i) => (
+                              <li key={i}>
+                                <a
+                                  href={a.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-zinc-600 underline underline-offset-2 hover:text-zinc-900"
+                                >
+                                  <AttachmentIcon />
+                                  {a.label}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-right align-top">
+                        {stripTrailingZeros(li.quantity)}
+                      </td>
+                      <td className="px-4 py-3 text-right align-top">{fmt(li.unitPrice)}</td>
+                      <td className="px-4 py-3 text-right align-top">{percent(li.taxRate)}</td>
+                      <td className="px-4 py-3 text-right align-top">{fmt(li.lineTotal)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </section>
@@ -293,4 +319,23 @@ function percent(rate: string): string {
   const n = Number(rate);
   if (!Number.isFinite(n) || n === 0) return "—";
   return `${(n * 100).toFixed(2).replace(/\.00$/, "")}%`;
+}
+
+function AttachmentIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="size-3.5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    >
+      <path
+        d="M10.5 3.5 5.75 8.25a2.5 2.5 0 1 0 3.536 3.536l4.243-4.243a4 4 0 1 0-5.657-5.657L3.629 6.128"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }

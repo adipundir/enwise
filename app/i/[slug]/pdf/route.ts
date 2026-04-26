@@ -24,7 +24,7 @@ export async function GET(
     status: 200,
     headers: {
       "content-type": "application/pdf",
-      "content-disposition": `inline; filename="${invoice.invoiceNumber}.pdf"`,
+      "content-disposition": `attachment; filename="${invoice.invoiceNumber}.pdf"`,
       "cache-control": "private, max-age=0, must-revalidate",
       "x-robots-tag": "noindex, nofollow",
     },
