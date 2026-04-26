@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 
 function buildPrompt(rawToken: string, mcpUrl: string): string {
-  return `Add the enwise invoicing MCP server to Claude Code so it's available across all my projects. Run this:
+  return `Register the enwise invoicing MCP server for me. Run:
 
 claude mcp add --transport http --scope user enwise ${mcpUrl} --header "Authorization: Bearer ${rawToken}"
 
-Then run \`claude mcp list\` to confirm it shows as Connected. To actually use the new tools, this Claude Code session needs to reload them. The reliable way is to exit (\`/exit\`) and restart Claude Code. After restart, call the \`whoami\` tool to verify everything works.`;
+Then \`claude mcp list\` should show enwise as Connected. Claude Code loads MCP tools at session start, so the tools aren't usable in this session. Tell me to \`/exit\` and relaunch Claude Code — in the next session, call the \`whoami\` tool and it'll walk us through setting up my business profile and first client.`;
 }
 
 /**
