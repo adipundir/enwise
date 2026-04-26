@@ -49,7 +49,7 @@ export async function createToken(params: {
 
 /**
  * Fetch the active (non-revoked) token for a user. Tokens are now user-scoped
- * — one token grants access to every business the user owns. Returns only
+ *. one token grants access to every business the user owns. Returns only
  * identifying fields; the raw secret is never persisted.
  */
 export async function getActiveToken(userId: string): Promise<{

@@ -107,9 +107,9 @@ export const verificationTokens = pgTable(
   (t) => [primaryKey({ columns: [t.identifier, t.token] })],
 );
 
-// Businesses. the tenant unit. A user can own many — they bill clients
+// Businesses. the tenant unit. A user can own many. they bill clients
 // from each one independently. Plan is account-level (on users), not
-// per-business — Pro unlocks Pro features across every business the
+// per-business. Pro unlocks Pro features across every business the
 // user owns.
 
 export const businesses = pgTable(

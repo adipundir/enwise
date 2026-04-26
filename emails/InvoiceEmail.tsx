@@ -73,7 +73,7 @@ export function InvoiceEmail({
 
           <Hr style={styles.ruleTop} />
 
-          {/* Invoice meta block — mirrors the right column of /i/[slug] */}
+          {/* Invoice meta block. mirrors the right column of /i/[slug] */}
           <Section style={styles.metaBlock}>
             <table
               cellPadding={0}

@@ -393,7 +393,7 @@ function stripTrailingZeros(s: string): string {
 
 function percent(rate: string): string {
   const n = Number(rate);
-  if (!Number.isFinite(n) || n === 0) return "—";
+  if (!Number.isFinite(n) || n === 0) return "(none)";
   return `${(n * 100).toFixed(2).replace(/\.00$/, "")}%`;
 }
 

@@ -36,7 +36,7 @@ export type LineItemInput = {
    * Optional supporting docs. External callers (the MCP layer) pass base64
    * files to upload to our Blob. Internal callers (duplicate_invoice) can
    * pass already-resolved `{label, url}` entries for attachments that
-   * already live on our Blob — we re-use them instead of re-uploading.
+   * already live on our Blob. we re-use them instead of re-uploading.
    */
   attachments?: (AttachmentInput | LineItemAttachment)[];
 };
@@ -104,7 +104,7 @@ export type AttachmentResolveError = {
 
 /**
  * Walk a list of attachment inputs and resolve each to its final
- * `{label, url}` form. Every input is a base64 upload — URL passthrough
+ * `{label, url}` form. Every input is a base64 upload. URL passthrough
  * was removed. Fails fast on the first error so callers can surface
  * a clean message to Claude without a partial DB write.
  */
@@ -120,7 +120,7 @@ async function resolveAttachments(
   for (const input of inputs) {
     // Already-resolved entry (duplicate_invoice hands these through). We
     // trust them because the url was minted by us during the original
-    // upload — no re-upload needed.
+    // upload. no re-upload needed.
     if (!("file_base64" in input)) {
       resolved.push({ label: input.label, url: input.url });
       continue;
@@ -192,7 +192,7 @@ export async function createInvoice(
     return {
       ok: false,
       code: "onboarding_required",
-      message: `Business profile for "${biz?.name ?? "this account"}" is empty — no address, no tax ID. An invoice created right now would have placeholders on it.`,
+      message: `Business profile for "${biz?.name ?? "this account"}" is empty. no address, no tax ID. An invoice created right now would have placeholders on it.`,
       hint: "Before creating any invoice, call update_business_profile with the user's real details: (a) business name, (b) address + country, (c) default currency, (d) tax ID if they have one. Ask the user for values you don't know. Do NOT invent them.",
     };
   }
@@ -816,7 +816,7 @@ export async function markInvoicePaid(
  * Undo a first-time finalize. Used by sendInvoiceByEmail when Resend rejects
  * the message so the invoice doesn't get stuck in a "sent but not actually
  * sent" limbo. Only reverts rows that this process flipped within the
- * current call — callers must know `wasDraft` beforehand.
+ * current call. callers must know `wasDraft` beforehand.
  */
 export async function revertFinalizeInvoice(
   ctx: ScopedCtx,
@@ -953,7 +953,7 @@ export function formatInvoiceForMcp(inv: InvoiceWithLineItems) {
     outstanding: addAmounts(inv.total, `-${inv.amountPaid}`),
     notes: inv.notes,
     terms: inv.terms,
-    // Full URL — never expose the bare slug. Models will guess the
+    // Full URL. never expose the bare slug. Models will guess the
     // domain ("envoice.app" vs "enwise.app") if they see only a slug
     // without a domain in context.
     share_url: invoiceShareUrl(inv.shareSlug),
@@ -991,7 +991,7 @@ export function formatInvoiceSummaryForMcp(inv: Invoice) {
     total: inv.total,
     amount_paid: inv.amountPaid,
     outstanding: addAmounts(inv.total, `-${inv.amountPaid}`),
-    // Full URL — never expose the bare slug. Models will guess the
+    // Full URL. never expose the bare slug. Models will guess the
     // domain if they see only a slug without a domain in context.
     share_url: invoiceShareUrl(inv.shareSlug),
     share_enabled: inv.shareEnabled,

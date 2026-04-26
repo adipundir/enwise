@@ -33,9 +33,12 @@ export default async function SignInPage({
         <Landing />
       </div>
       <SignInModalShell>
-        <div className="pr-6">
-          <h1 className="display text-3xl leading-[1.05] text-zinc-100">
-            Sign in.
+        <div className="space-y-3 pr-8">
+          <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">
+            Sign in
+          </div>
+          <h1 className="display text-3xl leading-[1.05] text-zinc-100 sm:text-4xl">
+            Welcome to enwise
           </h1>
         </div>
 
@@ -43,7 +46,7 @@ export default async function SignInPage({
           <form action={signInWithGitHub}>
             <button
               type="submit"
-              className="group flex w-full items-center gap-3 rounded-md border border-zinc-800 bg-[#0a0a0a] px-4 py-3 text-sm text-zinc-100 hover:border-zinc-700 hover:bg-zinc-900"
+              className="group flex w-full items-center gap-3 rounded-md border border-zinc-800 bg-[#0a0a0a] px-4 py-3 text-sm text-zinc-100 transition-colors hover:border-zinc-700 hover:bg-zinc-900 focus:outline-none focus-visible:border-zinc-600 focus-visible:bg-zinc-900"
             >
               <GitHubIcon />
               <span className="flex-1 text-left">Continue with GitHub</span>
@@ -53,7 +56,7 @@ export default async function SignInPage({
           <form action={signInWithGoogle}>
             <button
               type="submit"
-              className="group flex w-full items-center gap-3 rounded-md border border-zinc-800 bg-[#0a0a0a] px-4 py-3 text-sm text-zinc-100 hover:border-zinc-700 hover:bg-zinc-900"
+              className="group flex w-full items-center gap-3 rounded-md border border-zinc-800 bg-[#0a0a0a] px-4 py-3 text-sm text-zinc-100 transition-colors hover:border-zinc-700 hover:bg-zinc-900 focus:outline-none focus-visible:border-zinc-600 focus-visible:bg-zinc-900"
             >
               <GoogleIcon />
               <span className="flex-1 text-left">Continue with Google</span>
@@ -62,9 +65,6 @@ export default async function SignInPage({
           </form>
         </div>
 
-        <p className="mt-6 text-xs leading-relaxed text-zinc-600">
-          OAuth only. One account, one key, rotate anytime.
-        </p>
       </SignInModalShell>
     </>
   );

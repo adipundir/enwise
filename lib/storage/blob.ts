@@ -226,7 +226,7 @@ async function validateMime(buffer: Uint8Array): Promise<
   return { ok: true, mime: sniffed.mime };
 }
 
-/** Looser mime sniff for attachments — allows PDF in addition to images. */
+/** Looser mime sniff for attachments. allows PDF in addition to images. */
 async function sniffAttachmentMime(
   buffer: Uint8Array,
 ): Promise<{ ok: true; mime: string } | { ok: false }> {
@@ -295,7 +295,7 @@ export type AttachmentResult =
 
 // Base64 uploads only. URL passthrough was intentionally dropped so every
 // attachment is stored on our own Blob and stays immutable for the life of
-// the invoice — matches Stripe / QuickBooks / Xero behaviour, removes the
+// the invoice. matches Stripe / QuickBooks / Xero behaviour, removes the
 // phishing + link-rot surface, and collapses the schema to one code path.
 export async function resolveAttachment(params: {
   businessId: string;
@@ -308,7 +308,7 @@ export async function resolveAttachment(params: {
       ok: false,
       code: "attachment_invalid_mime",
       message: "Attachment must be PNG, JPEG, WebP, or PDF.",
-      hint: "Other formats (SVG, DOCX, etc.) aren't supported — convert first.",
+      hint: "Other formats (SVG, DOCX, etc.) aren't supported. convert first.",
     };
   }
 

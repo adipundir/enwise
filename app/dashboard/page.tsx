@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { invoiceShareUrl } from "@/lib/invoices";
 import { formatMoney, addAmounts } from "@/lib/money";
 import { createToken, getActiveToken } from "@/lib/tokens";
-import { KeyAndConnectSection } from "./KeyAndConnectSection";
+import { SetupSection } from "./SetupSection";
 
 // Stats depend on fresh DB state that changes via MCP tool calls outside
 // of this route's request context. Force dynamic so every page hit
@@ -105,7 +105,7 @@ export default async function DashboardHome() {
           label="Outstanding"
           value={
             outstandingByCurrency.length === 0
-              ? "—"
+              ? "(none)"
               : outstandingByCurrency
                   .map((b) => formatMoney(b.outstanding, b.currency))
                   .join(" · ")
@@ -118,7 +118,7 @@ export default async function DashboardHome() {
         />
       </section>
 
-      <KeyAndConnectSection
+      <SetupSection
         initialRawToken={bootstrapRawToken}
         currentPrefix={currentPrefix}
         mcpUrl={mcpUrl}

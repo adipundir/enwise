@@ -99,7 +99,7 @@ export type CreateBusinessResult =
 /**
  * Create a new business under `userId`. A user can own many businesses;
  * the plan (Free / Pro) is account-level, not per-business. Free is
- * capped at one business — every additional business requires Pro.
+ * capped at one business. every additional business requires Pro.
  *
  * The very first business at signup is created via this function before
  * the user has any plan friction, but the auth.ts createUser hook calls
@@ -112,7 +112,7 @@ export async function createBusiness(params: {
   defaultCurrency?: string;
   setAsDefault?: boolean;
 }): Promise<CreateBusinessResult> {
-  // Plan + count gate — Free users can have one business max.
+  // Plan + count gate. Free users can have one business max.
   const [user] = await db
     .select({ plan: users.plan })
     .from(users)

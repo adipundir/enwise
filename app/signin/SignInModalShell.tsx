@@ -23,19 +23,19 @@ export function SignInModalShell({ children }: { children: React.ReactNode }) {
     <div
       aria-modal="true"
       role="dialog"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md px-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) close();
       }}
     >
       <div
         ref={panelRef}
-        className="relative w-full max-w-md rounded-2xl border border-zinc-800 bg-[#0c0c0c] p-8 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)]"
+        className="relative w-full max-w-md rounded-2xl border border-zinc-800 bg-[#0a0a0a] p-8 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9)]"
       >
         <button
           type="button"
           onClick={close}
-          className="absolute right-4 top-4 rounded-md p-1 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
+          className="absolute right-4 top-4 rounded-md p-1 text-zinc-600 transition-colors hover:bg-zinc-900 hover:text-zinc-200 focus:outline-none focus-visible:text-zinc-200"
           aria-label="Close"
         >
           <svg

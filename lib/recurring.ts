@@ -243,7 +243,7 @@ export async function runTemplate(
   template: RecurringInvoiceTemplate,
 ): Promise<RunResult> {
   // Cron runs outside a user session. Look up the business owner so the
-  // synthesized ScopedCtx has a real userId — tools downstream that assume
+  // synthesized ScopedCtx has a real userId. tools downstream that assume
   // an authenticated user (e.g. any future per-user rate limiting) keep
   // working against cron-generated invoices.
   const [owner] = await db

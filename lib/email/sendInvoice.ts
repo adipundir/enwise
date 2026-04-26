@@ -91,7 +91,7 @@ export async function sendInvoiceByEmail(
   const sent = finalized.value;
 
   // 4. Build PDF-render data (used by the email template for business/client
-  //    info) but don't render the PDF into the email itself — we no longer
+  //    info) but don't render the PDF into the email itself. we no longer
   //    attach it. Email clients auto-preview PDF attachments inline, which
   //    makes the email feel like a dumped invoice rather than a clean
   //    transactional notice. Instead we link to /i/[slug] which has a
@@ -146,7 +146,7 @@ export async function sendInvoiceByEmail(
   // Prod sets RESEND_FROM_ADDRESS=invoices@enwise.app.
   const fromAddress =
     process.env.RESEND_FROM_ADDRESS || "onboarding@resend.dev";
-  // Display name is just the business name — the @enwise.app in the address
+  // Display name is just the business name. the @enwise.app in the address
   // already tells the recipient which platform sent it, so we don't need
   // "via enwise" duplicating that signal in the display name.
   const fromDisplay = `${sanitizeHeaderValue(pdfData.business.name)} <${fromAddress}>`;

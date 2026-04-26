@@ -108,7 +108,7 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Create client",
       description:
-        "Add a new client using details the user has explicitly given you. NEVER invent a client name, email, address, or tax ID — if the user hasn't told you these, ASK before calling this tool. Name is required; everything else is optional. Pass `business_id` when the user owns multiple businesses. Returns the created client including its id. Remember the id for follow-up tool calls in this session.",
+        "Add a new client using details the user has explicitly given you. NEVER invent a client name, email, address, or tax ID. if the user hasn't told you these, ASK before calling this tool. Name is required; everything else is optional. Pass `business_id` when the user owns multiple businesses. Returns the created client including its id. Remember the id for follow-up tool calls in this session.",
       inputSchema: createSchema,
     },
     async (args, extra) => {
@@ -251,7 +251,7 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Archive client",
       description:
-        "Archive a client. They stop showing in list_clients and find_client (unless include_archived is set). Existing invoices are untouched. Soft action — restore by calling update_client. Pass `business_id` when the user owns multiple businesses.",
+        "Archive a client. They stop showing in list_clients and find_client (unless include_archived is set). Existing invoices are untouched. Soft action. restore by calling update_client. Pass `business_id` when the user owns multiple businesses.",
       inputSchema: { business_id: uuid.optional(), client_id: clientIdSchema },
     },
     async (args, extra) => {

@@ -26,9 +26,6 @@ export default async function DashboardLayout({
             <Link href="/dashboard" className="hover:text-zinc-100">
               Dashboard
             </Link>
-            <Link href="/dashboard/connect" className="hover:text-zinc-100">
-              Connect Claude
-            </Link>
             <form
               action={async () => {
                 "use server";

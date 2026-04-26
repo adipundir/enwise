@@ -66,7 +66,7 @@ export default async function SetupDocsPage() {
               <>
                 <p>
                   Pick whichever client you use. Claude Code is the primary
-                  flow — the dashboard gives you a one-shot copy-paste prompt
+                  flow. the dashboard gives you a one-shot copy-paste prompt
                   that registers the server for you.
                 </p>
 
@@ -75,7 +75,7 @@ export default async function SetupDocsPage() {
                 </h3>
                 <p className="mt-1 text-sm text-zinc-400">
                   From the dashboard, click <strong>Copy Claude Code prompt</strong>.
-                  Paste it into Claude Code — Claude registers the server at
+                  Paste it into Claude Code. Claude registers the server at
                   user scope and you restart once to pick up the new tools. Or
                   run it manually:
                 </p>

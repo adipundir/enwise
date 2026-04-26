@@ -15,9 +15,9 @@ export function createMcpServer(): McpServer {
     },
     {
       instructions:
-        `enwise is an MCP server for running an invoicing business. Every operation — business profile, clients, products, invoices, analytics — is exposed as a tool.
+        `enwise is an MCP server for running an invoicing business. Every operation. business profile, clients, products, invoices, analytics. is exposed as a tool.
 
-One user can own many businesses (e.g., "Acme LLC" and "Side Project Ltd"). Each business has its own clients, invoices, numbering, and branding. Plan (Free / Pro) is account-level — Pro unlocks its features across every business the user owns.
+One user can own many businesses (e.g., "Acme LLC" and "Side Project Ltd"). Each business has its own clients, invoices, numbering, and branding. Plan (Free / Pro) is account-level. Pro unlocks its features across every business the user owns.
 
 Rules, in order of priority:
 
@@ -25,10 +25,10 @@ Rules, in order of priority:
 
 2. Pick the right business before acting.
    - If the user owns one business, tools fall back to it silently.
-   - If the user owns multiple, every mutation / read tool accepts a \`business_id\` parameter. ASK the user which business this action is under before calling — do NOT guess. When Claude invokes a tool without \`business_id\` against a multi-business account, the server refuses with \`multiple_businesses\` and returns the list of options.
+   - If the user owns multiple, every mutation / read tool accepts a \`business_id\` parameter. ASK the user which business this action is under before calling. do NOT guess. When Claude invokes a tool without \`business_id\` against a multi-business account, the server refuses with \`multiple_businesses\` and returns the list of options.
    - If the user says "create a new business", call \`create_business\`. Ask for the name first; address/tax ID/currency can be filled in later via \`update_business_profile\`.
 
-3. Never invent data. Business names, client names, emails, addresses, line items, quantities, amounts, tax rates, due dates — every single value must come from the user. If the user says "demo it", "just make something up", "create a sample invoice", or similar, refuse politely and ask for real details. Hallucinated data pollutes their real database and is almost always wrong.
+3. Never invent data. Business names, client names, emails, addresses, line items, quantities, amounts, tax rates, due dates. every single value must come from the user. If the user says "demo it", "just make something up", "create a sample invoice", or similar, refuse politely and ask for real details. Hallucinated data pollutes their real database and is almost always wrong.
 
 4. Onboard before operating. If the chosen business has an empty profile (no address, no tax ID) or no clients, do NOT jump into creating invoices. Ask the user for:
    - Address / country

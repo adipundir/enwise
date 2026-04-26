@@ -15,10 +15,10 @@ data.
 At the start of every new conversation that touches enwise, call `whoami`
 before anything else. Its response includes:
 
-- `user` — the authenticated user (name, email)
-- `businesses` — every business this user owns, with plan + counts + profile-complete flag
-- `default_business_id` — the user's chosen default (may be null)
-- `hint` — a **directive** describing what to do next. Follow it.
+- `user`. the authenticated user (name, email)
+- `businesses`. every business this user owns, with plan + counts + profile-complete flag
+- `default_business_id`. the user's chosen default (may be null)
+- `hint`. a **directive** describing what to do next. Follow it.
 
 ## Multi-business
 
@@ -31,7 +31,7 @@ A user can own many businesses (e.g., "Acme LLC" and "Side Project Ltd"). Every 
 ## Never invent data
 
 Business name, client names, emails, addresses, line items, quantities, amounts,
-tax rates, due dates — every value must come from the user. If the user says
+tax rates, due dates. every value must come from the user. If the user says
 "demo it", "just make something up", or "create a sample invoice", refuse
 politely and ask for real details. Hallucinated data pollutes a real database
 and is almost always wrong.
@@ -64,21 +64,21 @@ clients or invoices.
    `terms` / `due_date` the user mentioned.
 4. If the user said "send it", follow with `send_invoice({invoice_id})`. This
    emails the client a link to the hosted invoice page (with a Download PDF
-   button) and flips the status from draft to sent. No attachment is sent —
+   button) and flips the status from draft to sent. No attachment is sent ,
    modern email clients auto-preview PDFs and make the email feel cluttered.
-   It's safe to omit `to` — the client's email is used automatically.
+   It's safe to omit `to`. the client's email is used automatically.
 5. If the user wants to mark an invoice as sent WITHOUT emailing (e.g. they
    delivered it out-of-band), call `finalize_invoice({invoice_id})`.
 
 Amounts are strings like `"5000"` or `"2499.99"`. The tool accepts numeric
 literals and strings with commas / currency symbols and normalizes them.
 
-## Writing style — each field has its own lane
+## Writing style. each field has its own lane
 
 - `line_items[].description` → product or service name only (e.g. `"MacBook Pro 14" M5 Pro (24GB/1TB)"`, `"Claude Max subscription"`). No `"Reimbursement:"` prefix, no reference numbers, no dates, no conversion math.
-- `line_items[].note` → context the recipient can't see from the attachment. Billing periods, FX rates, conversion math. **Do NOT include `"Source: Invoice X"` or filenames in the note when you've attached the source PDF — the attachment label is the citation. Repeating it is noise.** Keep notes terse, single-line when possible.
-- `notes` (invoice-level) → context for the WHOLE invoice — payment instructions, thank-yous, reimbursement framing when the entire invoice is one thing.
-- `line_items[].attachments` → the actual receipt/PDF/screenshot. The label is the source citation — name them naturally (`Apple receipt`, `Hotel folio`). Don't retype their contents into the description or note.
+- `line_items[].note` → context the recipient can't see from the attachment. Billing periods, FX rates, conversion math. **Do NOT include `"Source: Invoice X"` or filenames in the note when you've attached the source PDF. the attachment label is the citation. Repeating it is noise.** Keep notes terse, single-line when possible.
+- `notes` (invoice-level) → context for the WHOLE invoice. payment instructions, thank-yous, reimbursement framing when the entire invoice is one thing.
+- `line_items[].attachments` → the actual receipt/PDF/screenshot. The label is the source citation. name them naturally (`Apple receipt`, `Hotel folio`). Don't retype their contents into the description or note.
 
 Rule of thumb: context about ONE line item that isn't visible from the attachment → `line_items[].note`. Context about the whole invoice → `notes`. Currency conversions → put the rate + amount in the note (or in the invoice-level note if the whole invoice uses one FX rate).
 
@@ -88,7 +88,7 @@ Each line item can carry supporting files. Pass as base64 only:
 
 - `{ file_base64: "…", mime_type: "image/png" | "image/jpeg" | "image/webp" | "application/pdf", filename?: "receipt.pdf", label?: "Hotel receipt" }`
 
-8 MB per file, 10 files per line item. They're uploaded to our own storage so the invoice stays self-contained — no URL passthrough (matches how Stripe, QuickBooks, and Xero handle invoice evidence). Attachments render on both the PDF and the public invoice page.
+8 MB per file, 10 files per line item. They're uploaded to our own storage so the invoice stays self-contained. no URL passthrough (matches how Stripe, QuickBooks, and Xero handle invoice evidence). Attachments render on both the PDF and the public invoice page.
 
 ### The user asks about money owed or earned
 
@@ -127,13 +127,13 @@ connected. Offer to help fill in the business profile:
 
 enwise tools return structured errors in `structuredContent.error`:
 
-- `ambiguous_client` / `ambiguous_product` — multiple matches; relay the
+- `ambiguous_client` / `ambiguous_product`. multiple matches; relay the
   `suggestions` list and ask the user to pick.
-- `invoice_not_draft` — can't edit a sent/paid invoice. Suggest the
+- `invoice_not_draft`. can't edit a sent/paid invoice. Suggest the
   void + duplicate flow.
-- `logo_too_large` / `logo_invalid_mime` / `logo_fetch_failed` — show the
+- `logo_too_large` / `logo_invalid_mime` / `logo_fetch_failed`. show the
   `hint` field verbatim; it tells the user how to fix it.
-- `not_found` — check the id you passed. Use `find_*` to resolve names first.
+- `not_found`. check the id you passed. Use `find_*` to resolve names first.
 
 Each error includes a `hint` string. Relay the hint to the user, don't
 rephrase it.

@@ -29,7 +29,7 @@ export async function GET(): Promise<Response> {
       timestamp: new Date().toISOString(),
       // Non-secret config echo: confirms which base URLs this lambda is
       // reading. If share links look wrong, hit /api/health on prod and
-      // check these values — Vercel env var changes don't apply to
+      // check these values. Vercel env var changes don't apply to
       // existing deployments until the next build.
       public_base_url: process.env.PUBLIC_BASE_URL ?? null,
       auth_url: process.env.AUTH_URL ?? null,

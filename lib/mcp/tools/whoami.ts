@@ -41,7 +41,7 @@ export function registerWhoami(server: McpServer) {
     {
       title: "Who am I?",
       description:
-        "Return the authenticated user, every business this token can act on, and a directive hint. Call this at the start of a session — and again after `create_business` — so you know which businesses exist and which to act on before mutating anything.",
+        "Return the authenticated user, every business this token can act on, and a directive hint. Call this at the start of a session. and again after `create_business`. so you know which businesses exist and which to act on before mutating anything.",
       outputSchema,
     },
     async (extra) => {
@@ -121,15 +121,15 @@ export function registerWhoami(server: McpServer) {
   );
 }
 
-const WRITING_STYLE = `Invoice writing style — each field has its own lane:
+const WRITING_STYLE = `Invoice writing style. each field has its own lane:
 - line item description = product or service name only (e.g. "MacBook Pro 14\\" M5 Pro (24GB/1TB)", "Claude Max subscription"). No "Reimbursement:" prefix, no reference numbers, no dates, no conversion math.
-- line item note (per-item) = context that ISN'T already visible elsewhere on the invoice. Things like billing periods, conversion math, FX rates, why this item is listed. DO NOT include the source invoice number, source filename, or "Source: …" text if you've also uploaded the source as an attachment — the attachment label already shows that. Repeating the same info as text + paperclip is visual noise.
-- invoice notes (invoice-level) = context for the WHOLE invoice — payment instructions, thank-yous, reimbursement framing when the entire invoice is one thing.
-- attachments = the actual receipt/PDF/screenshot. Label them naturally (e.g. "Apple receipt", "Hotel folio") — that label IS the source citation. Don't retype the attachment's contents into the note.
+- line item note (per-item) = context that ISN'T already visible elsewhere on the invoice. Things like billing periods, conversion math, FX rates, why this item is listed. DO NOT include the source invoice number, source filename, or "Source: …" text if you've also uploaded the source as an attachment. the attachment label already shows that. Repeating the same info as text + paperclip is visual noise.
+- invoice notes (invoice-level) = context for the WHOLE invoice. payment instructions, thank-yous, reimbursement framing when the entire invoice is one thing.
+- attachments = the actual receipt/PDF/screenshot. Label them naturally (e.g. "Apple receipt", "Hotel folio"). that label IS the source citation. Don't retype the attachment's contents into the note.
 
-Rule of thumb: context about ONE line item that the recipient can't see from the attachment → line_items[].note. Context about the whole invoice → notes. When you convert currency, put the rate + source in the line's note (or the invoice note if the whole invoice uses one FX rate). Keep notes terse — a single short line is usually enough.`;
+Rule of thumb: context about ONE line item that the recipient can't see from the attachment → line_items[].note. Context about the whole invoice → notes. When you convert currency, put the rate + source in the line's note (or the invoice note if the whole invoice uses one FX rate). Keep notes terse. a single short line is usually enough.`;
 
-const MULTI_BUSINESS_NOTE = `MULTI-BUSINESS: this user owns more than one business. Every tool that creates or modifies data takes an optional \`business_id\`. Before calling those tools, ask the user which business to act under — do not guess. If they say "the one for Acme" or similar, pick the matching business by name. Pass the chosen id as \`business_id\`.`;
+const MULTI_BUSINESS_NOTE = `MULTI-BUSINESS: this user owns more than one business. Every tool that creates or modifies data takes an optional \`business_id\`. Before calling those tools, ask the user which business to act under. do not guess. If they say "the one for Acme" or similar, pick the matching business by name. Pass the chosen id as \`business_id\`.`;
 
 type BusinessOut = {
   id: string;
@@ -144,7 +144,7 @@ function buildHint(
   _defaultBusinessId: string | null,
 ): string {
   if (bs.length === 0) {
-    return `NO BUSINESSES. Call \`create_business\` first — ask the user for (a) business name, (b) default currency (USD if unspecified). Then walk the user through filling in the profile: address + country, tax ID. Only after that, ask about clients and invoices. Do NOT invent data.`;
+    return `NO BUSINESSES. Call \`create_business\` first. ask the user for (a) business name, (b) default currency (USD if unspecified). Then walk the user through filling in the profile: address + country, tax ID. Only after that, ask about clients and invoices. Do NOT invent data.`;
   }
 
   if (bs.length === 1) {
@@ -152,11 +152,11 @@ function buildHint(
     if (!b.profile_complete && b.invoice_count === 0 && b.client_count === 0) {
       return `FRESH ACCOUNT with one business "${b.name}". Walk the user through setup, step by step:
 
-STEP 1 — Business profile. Ask for: (a) business name (current: "${b.name}" — confirm or change), (b) address + country, (c) default currency (USD if unspecified), (d) tax ID if applicable. Save with update_business_profile.
+STEP 1. Business profile. Ask for: (a) business name (current: "${b.name}". confirm or change), (b) address + country, (c) default currency (USD if unspecified), (d) tax ID if applicable. Save with update_business_profile.
 
-STEP 2 — First client. After profile saved, offer to add their first client. Ask for name, email, address. Save with create_client. Do NOT add a client before the profile is saved.
+STEP 2. First client. After profile saved, offer to add their first client. Ask for name, email, address. Save with create_client. Do NOT add a client before the profile is saved.
 
-STEP 3 — Invoice. After both are done, ask what they'd like to bill the client for. Only then call create_invoice.
+STEP 3. Invoice. After both are done, ask what they'd like to bill the client for. Only then call create_invoice.
 
 Do NOT invent data at any step. Do NOT create a sample/demo invoice. If the user says "just demo it" or "make something up", refuse and ask for real details.`;
     }
@@ -173,7 +173,7 @@ Do NOT invent data at any step. Do NOT create a sample/demo invoice. If the user
   const list = bs
     .map(
       (b) =>
-        `- ${b.name} (${b.id}) — ${b.client_count} client${b.client_count === 1 ? "" : "s"}, ${b.invoice_count} invoice${b.invoice_count === 1 ? "" : "s"}${b.profile_complete ? "" : ", PROFILE INCOMPLETE"}`,
+        `- ${b.name} (${b.id}). ${b.client_count} client${b.client_count === 1 ? "" : "s"}, ${b.invoice_count} invoice${b.invoice_count === 1 ? "" : "s"}${b.profile_complete ? "" : ", PROFILE INCOMPLETE"}`,
     )
     .join("\n");
   return `${MULTI_BUSINESS_NOTE}
