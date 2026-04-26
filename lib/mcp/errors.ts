@@ -22,13 +22,9 @@ export type ErrorCode =
   | "attachment_too_large"
   | "attachment_invalid_mime"
   | "attachment_storage_unavailable"
-  | "attachment_count_exceeded"
   | "multiple_businesses"
   | "no_businesses"
   | "business_not_found"
-  | "business_limit_reached"
-  | "monthly_limit_reached"
-  | "pro_required"
   | "internal_error";
 
 export interface ToolErrorBody {

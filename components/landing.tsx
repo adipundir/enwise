@@ -131,70 +131,41 @@ export async function Landing() {
 
         {/* Pricing */}
         <section id="pricing" className="border-t border-zinc-900 bg-[#070707]">
-          <div className="mx-auto w-full max-w-5xl px-6 py-20 sm:py-24">
+          <div className="mx-auto w-full max-w-3xl px-6 py-20 sm:py-24">
             <div className="text-[11px] uppercase tracking-widest text-zinc-500">
               Pricing
             </div>
             <h2 className="mt-3 display text-2xl leading-tight sm:text-3xl text-zinc-100">
-              One flat tier. Plus a free plan for kicking the tires.
+              Free. Every feature. No tiers, no caps.
             </h2>
 
-            <div className="mt-10 grid gap-6 sm:grid-cols-2">
-              {/* Free */}
-              <div className="flex flex-col rounded-2xl border border-zinc-800 bg-[#0c0c0c] p-8">
-                <div className="text-[11px] uppercase tracking-widest text-zinc-500">
-                  Free
-                </div>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className="display text-4xl text-zinc-100">$0</span>
-                  <span className="text-sm text-zinc-500">/ year</span>
-                </div>
-                <p className="mt-3 text-sm text-zinc-500">
-                  Enough to invoice a couple of clients and prove the workflow.
-                </p>
-                <ul className="mt-6 flex-1 space-y-2.5 text-sm text-zinc-300">
-                  <Li>Up to 10 sent invoices / month</Li>
-                  <Li>All MCP tools, all features</Li>
-                  <Li>PDF + share link per invoice</Li>
-                  <Li>&ldquo;Powered by enwise&rdquo; on PDFs</Li>
-                </ul>
-                <Link
-                  href={primaryHref}
-                  className="mt-8 inline-flex items-center justify-center gap-2 rounded-md border border-zinc-800 px-5 py-2.5 text-sm text-zinc-100 hover:border-zinc-700 hover:bg-zinc-900"
-                >
-                  Start free
-                </Link>
-              </div>
-
-              {/* Pro */}
+            <div className="mt-10">
               <div className="flex flex-col rounded-2xl border border-zinc-200 bg-zinc-50 p-8 text-zinc-900">
                 <div className="text-[11px] uppercase tracking-widest text-zinc-500">
-                  Pro
+                  All accounts
                 </div>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="display text-4xl text-zinc-900">$9</span>
-                  <span className="text-sm text-zinc-500">/ year</span>
+                  <span className="display text-4xl text-zinc-900">$0</span>
                 </div>
                 <p className="mt-3 text-sm text-zinc-600">
-                  Everything unlocked. One flat price, no usage ladder.
+                  Everything unlocked from day one. No upsell, no metering.
                 </p>
-                <ul className="mt-6 flex-1 space-y-2.5 text-sm text-zinc-700">
-                  <LiDark>Unlimited sent invoices</LiDark>
-                  <LiDark>No enwise branding on PDFs</LiDark>
+                <ul className="mt-6 space-y-2.5 text-sm text-zinc-700">
+                  <LiDark>Unlimited businesses, clients, invoices</LiDark>
+                  <LiDark>Email delivery, share links, hosted PDFs</LiDark>
                   <LiDark>Recurring invoices + auto-send</LiDark>
                   <LiDark>Custom brand color + logo on PDFs</LiDark>
-                  <LiDark>Priority support</LiDark>
+                  <LiDark>Up to 10 attachments per line item, 8 MB each</LiDark>
                 </ul>
                 <Link
                   href={primaryHref}
-                  className="mt-8 inline-flex items-center justify-center gap-2 rounded-md bg-zinc-900 px-5 py-2.5 text-sm font-medium text-zinc-50 hover:bg-black"
+                  className="mt-8 inline-flex items-center justify-center gap-2 self-start rounded-md bg-zinc-900 px-5 py-2.5 text-sm font-medium text-zinc-50 hover:bg-black"
                 >
-                  Get Pro
+                  Get started
                   <ArrowRight />
                 </Link>
               </div>
             </div>
-
           </div>
         </section>
       </main>
@@ -233,23 +204,6 @@ function Stat({ big, label }: { big: string; label: string }) {
       </div>
       <div className="mt-2 text-sm leading-relaxed text-zinc-500">{label}</div>
     </div>
-  );
-}
-
-function Li({ children }: { children: React.ReactNode }) {
-  return (
-    <li className="flex gap-3">
-      <svg
-        viewBox="0 0 16 16"
-        className="mt-1 size-3.5 shrink-0 text-emerald-400"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-      >
-        <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <span>{children}</span>
-    </li>
   );
 }
 

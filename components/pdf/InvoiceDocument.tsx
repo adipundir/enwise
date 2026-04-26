@@ -210,9 +210,7 @@ export function InvoiceDocument({
   invoice,
   client,
   business,
-  showWatermark = true,
-  showLogo = false,
-}: InvoicePdfData & { showWatermark?: boolean; showLogo?: boolean }) {
+}: InvoicePdfData) {
   const fmt = (amount: string) => formatMoney(amount, invoice.currency);
   return (
     <Document
@@ -223,7 +221,7 @@ export function InvoiceDocument({
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <View style={styles.brandBlock}>
-            {showLogo && business.logoUrl ? (
+            {business.logoUrl ? (
               <Image src={business.logoUrl} style={styles.logo} />
             ) : null}
             <Text style={styles.brandName}>{business.name}</Text>
@@ -353,9 +351,6 @@ export function InvoiceDocument({
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>{invoice.invoiceNumber}</Text>
-          {showWatermark ? (
-            <Text style={styles.footerText}>Powered by enwise</Text>
-          ) : null}
         </View>
       </Page>
     </Document>

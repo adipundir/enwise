@@ -5,7 +5,6 @@ import { db } from "@/lib/db";
 import { businesses, clients, type Business, type Client } from "@/lib/db/schema";
 import type { InvoiceWithLineItems } from "@/lib/invoices";
 import { InvoiceDocument, type InvoicePdfData } from "@/components/pdf/InvoiceDocument";
-import { getUserPlan } from "@/lib/plan";
 
 /**
  * Render an invoice to a PDF Node stream.
@@ -18,13 +17,10 @@ export async function renderInvoicePdf(
   invoice: InvoiceWithLineItems,
 ): Promise<NodeJS.ReadableStream> {
   const data = await buildInvoicePdfData(invoice);
-  const plan = await getUserPlan(invoice.ownerUserId);
-  const isPro = plan === "pro";
-  const element = createElement(InvoiceDocument, {
-    ...data,
-    showWatermark: !isPro,
-    showLogo: isPro,
-  }) as unknown as ReactElement<DocumentProps>;
+  const element = createElement(
+    InvoiceDocument,
+    data,
+  ) as unknown as ReactElement<DocumentProps>;
   return renderToStream(element);
 }
 

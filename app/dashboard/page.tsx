@@ -6,7 +6,6 @@ import { auth } from "@/auth";
 import { invoiceShareUrl } from "@/lib/invoices";
 import { formatMoney, addAmounts } from "@/lib/money";
 import { createToken, getActiveToken } from "@/lib/tokens";
-import { getUserPlan } from "@/lib/plan";
 import { SetupSection } from "./SetupSection";
 import { OutstandingStat } from "./OutstandingStat";
 
@@ -73,7 +72,6 @@ export default async function DashboardHome() {
     : [[], [], []];
 
   const outstandingByCurrency = aggregateOutstanding(allInvoices);
-  const plan = userId ? await getUserPlan(userId) : "free";
   const baseUrl =
     process.env.PUBLIC_BASE_URL ||
     process.env.AUTH_URL ||
@@ -83,15 +81,8 @@ export default async function DashboardHome() {
   return (
     <div className="space-y-12">
       <section className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="text-xs uppercase tracking-widest text-zinc-500">
-            Overview
-          </div>
-          {plan === "pro" ? (
-            <span className="inline-flex items-center rounded-full border border-zinc-700 bg-zinc-950 px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest text-zinc-300">
-              Pro
-            </span>
-          ) : null}
+        <div className="text-xs uppercase tracking-widest text-zinc-500">
+          Overview
         </div>
         <h1 className="display text-3xl leading-tight sm:text-4xl text-zinc-100">
           Welcome

@@ -29,19 +29,18 @@ and relaunch Claude Code for the new skill to load.
 At the start of every new conversation that touches enwise, call `whoami`
 before anything else. Its response includes:
 
-- `user` — the authenticated user (name, email, **current plan**, total client count)
+- `user` — the authenticated user (name, email, total client count)
 - `businesses` — every business this user owns, with invoice count + profile-complete flag
 - `default_business_id` — the user's chosen default (may be null)
 - `hint` — a **directive** describing what to do next. Follow it.
 
 ## Always re-fetch state-dependent answers
 
-Account state changes between turns. The user might upgrade to Pro,
-add a business, generate an invoice from a different client, or
-archive someone. **NEVER answer state questions from earlier-turn
-cached output.** When the user asks:
+Account state changes between turns. The user might add a business,
+generate an invoice from a different client, or archive someone.
+**NEVER answer state questions from earlier-turn cached output.** When
+the user asks:
 
-- "What plan am I on?" → call `whoami`
 - "How many invoices do I have?" / "What's outstanding?" → call `list_invoices` or `get_outstanding_invoices`
 - "Which businesses do I own?" / "What's my default?" → call `whoami`
 - "Is this client in my list?" → call `find_client`

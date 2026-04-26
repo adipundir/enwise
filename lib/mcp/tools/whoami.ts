@@ -28,7 +28,6 @@ const outputSchema = {
     id: z.string(),
     name: z.string().nullable(),
     email: z.string(),
-    plan: z.enum(["free", "pro"]),
     client_count: z.number(),
   }),
   businesses: z.array(businessSchema),
@@ -49,7 +48,7 @@ export function registerWhoami(server: McpServer) {
     {
       title: "Who am I?",
       description:
-        "Return the authenticated user (with current plan), every business this token can act on, and a directive hint. Call at the start of every session, after `create_business`, AND every time the user asks anything about their account state — current plan, business list, default business, client count. NEVER answer those questions from cached output of an earlier turn; the user can upgrade their plan or add a business between turns and stale answers are worse than a fresh tool call.",
+        "Return the authenticated user, every business this token can act on, and a directive hint. Call at the start of every session, after `create_business`, AND every time the user asks anything about their account state — business list, default business, client count. NEVER answer those questions from cached output of an earlier turn; the user can add a business between turns and stale answers are worse than a fresh tool call.",
       outputSchema,
     },
     async (extra) => {
@@ -59,7 +58,6 @@ export function registerWhoami(server: McpServer) {
           id: users.id,
           name: users.name,
           email: users.email,
-          plan: users.plan,
           defaultBusinessId: users.defaultBusinessId,
         })
         .from(users)
@@ -117,7 +115,6 @@ export function registerWhoami(server: McpServer) {
           id: user.id,
           name: user.name,
           email: user.email,
-          plan: user.plan,
           client_count: totalClientCount,
         },
         businesses: businessesOut,

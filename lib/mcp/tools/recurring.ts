@@ -115,11 +115,7 @@ export function registerRecurringTools(server: McpServer) {
       });
       if (!result.ok) {
         const code =
-          result.code === "client_not_found"
-            ? "not_found"
-            : result.code === "pro_required"
-              ? "pro_required"
-              : "invalid_input";
+          result.code === "client_not_found" ? "not_found" : "invalid_input";
         return toolError(code, result.message, { hint: result.hint });
       }
       return toolOk(formatRecurringForMcp(result.value));

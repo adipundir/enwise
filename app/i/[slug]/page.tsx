@@ -6,7 +6,6 @@ import { db } from "@/lib/db";
 import { businesses, clients } from "@/lib/db/schema";
 import { getInvoiceBySlug, markInvoiceViewed } from "@/lib/invoices";
 import { formatMoney } from "@/lib/money";
-import { getUserPlan } from "@/lib/plan";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,9 +49,6 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
     }
   });
 
-  const ownerPlan = await getUserPlan(invoice.ownerUserId);
-  const isPro = ownerPlan === "pro";
-
   const fmt = (amount: string) => formatMoney(amount, invoice.currency);
 
   const clientAddr = buildAddressLines(client as AddressSource | undefined);
@@ -89,7 +85,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
           <StatusBadge status={invoice.status} />
           <section className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              {isPro && business?.logoUrl ? (
+              {business?.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={business.logoUrl}
@@ -279,9 +275,8 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
             </section>
           )}
 
-          <footer className="mt-10 flex items-center justify-between border-t border-zinc-200 pt-4 text-xs text-zinc-500">
-            <span>{invoice.invoiceNumber}</span>
-            {!isPro ? <span>Powered by enwise</span> : null}
+          <footer className="mt-10 border-t border-zinc-200 pt-4 text-xs text-zinc-500">
+            {invoice.invoiceNumber}
           </footer>
         </article>
       </div>

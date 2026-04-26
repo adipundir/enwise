@@ -2,7 +2,6 @@ import { render } from "@react-email/components";
 import { createElement } from "react";
 import { Resend } from "resend";
 import { InvoiceEmail } from "@/emails/InvoiceEmail";
-import { getUserPlan } from "@/lib/plan";
 import {
   finalizeInvoice,
   getInvoice,
@@ -114,11 +113,6 @@ export async function sendInvoiceByEmail(
     country: pdfData.business.country,
   });
 
-  // Plan-gated rendering: Pro hides watermark + shows logo; Free shows
-  // watermark + falls back to default header.
-  const plan = await getUserPlan(ctx.userId);
-  const isPro = plan === "pro";
-
   const emailProps = {
     invoiceNumber: sent.invoiceNumber,
     clientName: pdfData.client.name,
@@ -130,8 +124,6 @@ export async function sendInvoiceByEmail(
     shareUrl,
     customMessage: input.message ?? null,
     businessAddressLines: addressLines,
-    showWatermark: !isPro,
-    showLogo: isPro,
   };
 
   const html = await render(createElement(InvoiceEmail, emailProps));
