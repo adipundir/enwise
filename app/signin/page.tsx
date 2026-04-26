@@ -33,13 +33,10 @@ export default async function SignInPage({
         <Landing />
       </div>
       <SignInModalShell>
-        <div className="space-y-3 pr-6">
+        <div className="pr-6">
           <h1 className="display text-3xl leading-[1.05] text-zinc-100">
             Sign in.
           </h1>
-          <p className="text-sm leading-relaxed text-zinc-400">
-            Mint a key. Paste it into Claude. Start invoicing.
-          </p>
         </div>
 
         <div className="mt-8 space-y-2.5">
