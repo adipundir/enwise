@@ -182,11 +182,15 @@ export function registerRecurringTools(server: McpServer) {
     },
     async (args, extra) => {
       const parsed = z
-        .object({ client_id: uuid.optional(), active_only: z.boolean().optional() })
+        .object({
+          business_id: uuid.optional(),
+          client_id: uuid.optional(),
+          active_only: z.boolean().optional(),
+        })
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const __u = ctxFromAuthInfo(extra.authInfo);
-      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      const __s = await scopeFromCtx(__u, parsed.data.business_id);
       if (!__s.ok) return __s.error;
       const ctx = __s.scoped;
       const rows = await listRecurring(ctx, {

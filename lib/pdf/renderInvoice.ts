@@ -56,6 +56,7 @@ export async function buildInvoicePdfData(
     },
     business: {
       name: invoice.businessNameSnapshot ?? business?.name ?? "(unknown business)",
+      legalName: invoice.businessLegalNameSnapshot ?? business?.legalName ?? null,
       logoUrl: invoice.businessLogoUrlSnapshot ?? business?.logoUrl ?? null,
       addressLine1: businessSnapshot?.line1 ?? business?.addressLine1 ?? null,
       addressLine2: businessSnapshot?.line2 ?? business?.addressLine2 ?? null,

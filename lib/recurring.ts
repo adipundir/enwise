@@ -241,7 +241,7 @@ export interface RunResult {
   template_id: string;
   invoice_id: string | null;
   invoice_number: string | null;
-  status: "generated" | "auto_sent" | "skipped" | "error";
+  status: "generated" | "auto_sent" | "send_failed" | "skipped" | "error";
   error?: string;
 }
 
@@ -297,9 +297,11 @@ export async function runTemplate(
   }
 
   let sentOk = false;
+  let sendError: string | null = null;
   if (template.autoSend) {
     const sendResult = await sendInvoiceByEmail(ctx, { invoiceId: created.invoice.id });
     sentOk = sendResult.ok;
+    if (!sendResult.ok) sendError = `${sendResult.code}: ${sendResult.message}`;
   }
 
   const nextRunAt = computeNext(template.interval, template.anchorDay, issueDate);
@@ -311,6 +313,21 @@ export async function runTemplate(
       updatedAt: new Date(),
     })
     .where(eq(recurringInvoiceTemplates.id, template.id));
+
+  // Surface auto-send failures so cron summaries / manual `run_now` callers
+  // can see that the invoice was created but not delivered. The invoice
+  // itself stays in "draft" state (sendInvoiceByEmail reverts on failure)
+  // so the user can retry via send_invoice once the underlying issue
+  // (Resend API key, unverified domain, etc.) is fixed.
+  if (template.autoSend && !sentOk) {
+    return {
+      template_id: template.id,
+      invoice_id: created.invoice.id,
+      invoice_number: created.invoice.invoiceNumber,
+      status: "send_failed",
+      error: sendError ?? "Auto-send failed for unknown reason.",
+    };
+  }
 
   return {
     template_id: template.id,

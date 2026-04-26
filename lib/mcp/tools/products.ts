@@ -197,6 +197,7 @@ export function registerProductTools(server: McpServer) {
     async (args, extra) => {
       const parsed = z
         .object({
+          business_id: uuid.optional(),
           query: z.string().min(1).max(200),
           limit: z.number().int().min(1).max(25).optional(),
           include_archived: z.boolean().optional(),
@@ -204,7 +205,7 @@ export function registerProductTools(server: McpServer) {
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const __u = ctxFromAuthInfo(extra.authInfo);
-      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      const __s = await scopeFromCtx(__u, parsed.data.business_id);
       if (!__s.ok) return __s.error;
       const ctx = __s.scoped;
       const matches = await findProducts(ctx, {
@@ -241,13 +242,14 @@ export function registerProductTools(server: McpServer) {
     async (args, extra) => {
       const parsed = z
         .object({
+          business_id: uuid.optional(),
           limit: z.number().int().min(1).max(200).optional(),
           include_archived: z.boolean().optional(),
         })
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const __u = ctxFromAuthInfo(extra.authInfo);
-      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      const __s = await scopeFromCtx(__u, parsed.data.business_id);
       if (!__s.ok) return __s.error;
       const ctx = __s.scoped;
       const rows = await listProducts(ctx, {

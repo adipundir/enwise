@@ -195,6 +195,7 @@ export interface InvoicePdfData {
   };
   business: {
     name: string;
+    legalName: string | null;
     logoUrl: string | null;
     addressLine1: string | null;
     addressLine2: string | null;
@@ -225,6 +226,9 @@ export function InvoiceDocument({
               <Image src={business.logoUrl} style={styles.logo} />
             ) : null}
             <Text style={styles.brandName}>{business.name}</Text>
+            {business.legalName && business.legalName !== business.name ? (
+              <Text style={styles.brandMeta}>{business.legalName}</Text>
+            ) : null}
             {addressLines(business).map((l, i) => (
               <Text key={i} style={styles.brandMeta}>
                 {l}

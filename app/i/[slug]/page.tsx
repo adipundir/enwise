@@ -34,6 +34,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
     ? [
         {
           name: invoice.businessNameSnapshot,
+          legalName: invoice.businessLegalNameSnapshot,
           logoUrl: invoice.businessLogoUrlSnapshot,
           taxId: invoice.businessTaxIdSnapshot,
           snapshot: invoice.businessAddressSnapshot,
@@ -94,6 +95,12 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                 />
               ) : null}
               <div className="text-lg font-semibold">{business?.name}</div>
+              {business &&
+              "legalName" in business &&
+              business.legalName &&
+              business.legalName !== business.name ? (
+                <div className="text-sm text-zinc-600">{business.legalName}</div>
+              ) : null}
               <AddressLines lines={businessAddr} />
               {business && "taxId" in business && business.taxId ? (
                 <div className="mt-1 text-xs text-zinc-500">Tax ID: {business.taxId}</div>

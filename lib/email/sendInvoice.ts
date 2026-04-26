@@ -76,7 +76,15 @@ export async function sendInvoiceByEmail(
       hint: "Pass `to` explicitly, or add an email to the client first via update_client.",
     };
   }
-  const toArray = input.to?.length ? input.to : [recipientEmail];
+  const toArray = dedupEmails(input.to?.length ? input.to : [recipientEmail]);
+  // Dedup cc/bcc against to so a caller passing the same address into
+  // multiple buckets doesn't double-deliver. Case-insensitive.
+  const toSet = new Set(toArray.map((a) => a.toLowerCase()));
+  const ccArray = input.cc ? dedupEmails(input.cc).filter((a) => !toSet.has(a.toLowerCase())) : undefined;
+  const ccSet = new Set([...toSet, ...(ccArray ?? []).map((a) => a.toLowerCase())]);
+  const bccArray = input.bcc
+    ? dedupEmails(input.bcc).filter((a) => !ccSet.has(a.toLowerCase()))
+    : undefined;
   // Remember whether this call is the one that flipped draft→sent. If Resend
   // later rejects the message, we revert the finalize so the invoice doesn't
   // sit in a "sent but not actually sent" state.
@@ -153,8 +161,8 @@ export async function sendInvoiceByEmail(
     const result = await resend.emails.send({
       from: fromDisplay,
       to: toArray,
-      cc: input.cc,
-      bcc: input.bcc,
+      cc: ccArray && ccArray.length > 0 ? ccArray : undefined,
+      bcc: bccArray && bccArray.length > 0 ? bccArray : undefined,
       replyTo: replyToAddress ?? undefined,
       subject: `${sanitizeHeaderValue(pdfData.business.name)}. Invoice ${sent.invoiceNumber}`,
       html,
@@ -224,6 +232,18 @@ async function getBusinessReplyTo(businessId: string): Promise<string | null> {
     .from(businesses)
     .where(eq(businesses.id, businessId));
   return row?.emailReplyTo ?? null;
+}
+
+function dedupEmails(arr: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const a of arr) {
+    const k = a.trim().toLowerCase();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(a.trim());
+  }
+  return out;
 }
 
 function buildAddressLines(a: {

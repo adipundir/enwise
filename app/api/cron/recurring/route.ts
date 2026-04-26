@@ -39,6 +39,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     processed: results.length,
     generated: results.filter((r) => r.status === "generated").length,
     auto_sent: results.filter((r) => r.status === "auto_sent").length,
+    send_failed: results.filter((r) => r.status === "send_failed").length,
     errors: results.filter((r) => r.status === "error").length,
     results,
   };

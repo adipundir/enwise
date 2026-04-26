@@ -472,12 +472,17 @@ export async function findInvoiceByNumber(
   ctx: ScopedCtx,
   invoiceNumber: string,
 ): Promise<Invoice | null> {
+  // The unique index is (business_id, invoice_number), so the same
+  // invoice_number can legitimately exist in two businesses owned by
+  // the same user. Scope by businessId so the caller's business_id arg
+  // is honored deterministically.
   const [row] = await db
     .select()
     .from(invoices)
     .where(
       and(
         eq(invoices.ownerUserId, ctx.userId),
+        eq(invoices.businessId, ctx.businessId),
         eq(invoices.invoiceNumber, invoiceNumber),
         isNull(invoices.deletedAt),
       ),
@@ -870,7 +875,7 @@ export async function markInvoicePaid(
   invoiceId: string,
   opts: { amount?: string; paidAt?: string } = {},
 ): Promise<MutateResult<InvoiceWithLineItems>> {
-  const inv = await getInvoice(ctx, invoiceId);
+  let inv = await getInvoice(ctx, invoiceId);
   if (!inv) return { ok: false, code: "not_found", message: `No invoice with id ${invoiceId}.` };
   if (inv.status === "void") {
     return {
@@ -878,6 +883,15 @@ export async function markInvoicePaid(
       code: "invoice_not_draft",
       message: `Invoice ${inv.invoiceNumber} is void and cannot be marked paid.`,
     };
+  }
+  // Drafts must be snapshotted before they can be marked paid, otherwise
+  // future renders read live (mutable) business/client rows and the audit
+  // trail is broken. Auto-finalize so the caller doesn't need a two-step
+  // dance for "I delivered + got paid out-of-band".
+  if (inv.status === "draft") {
+    const finalized = await finalizeInvoice(ctx, invoiceId);
+    if (!finalized.ok) return finalized;
+    inv = finalized.value;
   }
 
   // ACCUMULATE: each call adds to amountPaid (matches the tool description's
@@ -926,6 +940,8 @@ export async function revertFinalizeInvoice(
       clientEmailSnapshot: null,
       clientAddressSnapshot: null,
       businessNameSnapshot: null,
+      businessLegalNameSnapshot: null,
+      businessTaxIdSnapshot: null,
       businessAddressSnapshot: null,
       businessLogoUrlSnapshot: null,
       updatedAt: new Date(),

@@ -49,11 +49,14 @@ export function registerAnalyticsTools(server: McpServer) {
     },
     async (args, extra) => {
       const parsed = z
-        .object({ period: z.enum(["month", "quarter", "year"]).optional() })
+        .object({
+          business_id: uuid.optional(),
+          period: z.enum(["month", "quarter", "year"]).optional(),
+        })
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const __u = ctxFromAuthInfo(extra.authInfo);
-      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      const __s = await scopeFromCtx(__u, parsed.data.business_id);
       if (!__s.ok) return __s.error;
       const ctx = __s.scoped;
       const summary = await getRevenueSummary(ctx, {
@@ -79,6 +82,7 @@ export function registerAnalyticsTools(server: McpServer) {
     async (args, extra) => {
       const parsed = z
         .object({
+          business_id: uuid.optional(),
           client_id: uuid.optional(),
           overdue_only: z.boolean().optional(),
           limit: z.number().int().min(1).max(200).optional(),
@@ -86,7 +90,7 @@ export function registerAnalyticsTools(server: McpServer) {
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const __u = ctxFromAuthInfo(extra.authInfo);
-      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      const __s = await scopeFromCtx(__u, parsed.data.business_id);
       if (!__s.ok) return __s.error;
       const ctx = __s.scoped;
       const rows = await getOutstandingInvoices(ctx, {
