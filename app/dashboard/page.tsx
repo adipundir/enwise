@@ -47,14 +47,12 @@ export default async function DashboardHome() {
         .where(eq(businesses.ownerUserId, userId))
         .orderBy(asc(businesses.createdAt))
     : [];
-  const businessIds = allBusinesses.map((b) => b.id);
-
-  const [clientCount, allInvoices, recentInvoices] = businessIds.length > 0
+  const [clientCount, allInvoices, recentInvoices] = userId
     ? await Promise.all([
         db
           .select({ id: clients.id })
           .from(clients)
-          .where(and(inArray(clients.businessId, businessIds), isNull(clients.archivedAt))),
+          .where(and(eq(clients.ownerUserId, userId), isNull(clients.archivedAt))),
         db
           .select({
             status: invoices.status,
@@ -63,11 +61,11 @@ export default async function DashboardHome() {
             currency: invoices.currency,
           })
           .from(invoices)
-          .where(and(inArray(invoices.businessId, businessIds), isNull(invoices.deletedAt))),
+          .where(and(eq(invoices.ownerUserId, userId), isNull(invoices.deletedAt))),
         db
           .select()
           .from(invoices)
-          .where(and(inArray(invoices.businessId, businessIds), isNull(invoices.deletedAt)))
+          .where(and(eq(invoices.ownerUserId, userId), isNull(invoices.deletedAt)))
           .orderBy(desc(invoices.createdAt))
           .limit(5),
       ])

@@ -1,6 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { businesses } from "@/lib/db/schema";
+import { businesses, users } from "@/lib/db/schema";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { toolError } from "@/lib/mcp/errors";
@@ -95,30 +95,37 @@ export async function resolveBusinessId(
     return { ok: true, businessId: row.id };
   }
 
-  const owned = await db
-    .select({ id: businesses.id, name: businesses.name })
+  // Multi-business: fall back to the user's defaultBusinessId silently.
+  // Clients / invoices / products are now account-level so it's the
+  // *write* tools (create_invoice, create_recurring) where the choice of
+  // business actually matters for branding + numbering. Those tools'
+  // descriptions tell Claude to ask the user. Server-side, we no longer
+  // hard-fail on multi-business — picks the default, lets the user move
+  // the invoice later via `update_invoice({business_id})` if needed.
+  const [user] = await db
+    .select({ defaultBusinessId: users.defaultBusinessId })
+    .from(users)
+    .where(eq(users.id, ctx.userId));
+
+  if (user?.defaultBusinessId) {
+    return { ok: true, businessId: user.defaultBusinessId };
+  }
+
+  const [first] = await db
+    .select({ id: businesses.id })
     .from(businesses)
     .where(eq(businesses.ownerUserId, ctx.userId))
     .orderBy(asc(businesses.createdAt));
 
-  if (owned.length === 0) {
-    return {
-      ok: false,
-      code: "no_businesses",
-      message: "This user has no businesses.",
-      hint: "Call `create_business` to set one up before creating invoices.",
-    };
+  if (first) {
+    return { ok: true, businessId: first.id };
   }
-  if (owned.length === 1) {
-    return { ok: true, businessId: owned[0]!.id };
-  }
+
   return {
     ok: false,
-    code: "multiple_businesses",
-    message:
-      "This user owns multiple businesses. Ask the user which one to use and pass `business_id` on the next call.",
-    hint: "Show the user the list in `suggestions` and ask which business this action should happen under. Don't guess.",
-    suggestions: owned.map((b) => ({ business_id: b.id, name: b.name })),
+    code: "no_businesses",
+    message: "This user has no businesses.",
+    hint: "Call `create_business` to set one up before creating invoices.",
   };
 }
 

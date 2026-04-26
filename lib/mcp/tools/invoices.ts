@@ -119,6 +119,8 @@ function mapMutateError(code: string): ErrorCode {
     case "not_found":
     case "client_not_found":
       return "not_found";
+    case "business_not_found":
+      return "business_not_found";
     case "invoice_not_draft":
       return "invoice_not_draft";
     case "invalid_currency":
@@ -187,10 +189,10 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Update invoice (draft only)",
       description:
-        "Update draft invoice headers (client, dates, notes, terms). Only drafts are editable. To change line items use add_line_item / update_line_item / remove_line_item. For finalized invoices use void_invoice + duplicate_invoice.",
+        "Update draft invoice headers. Only drafts are editable. Pass `business_id` to MOVE the invoice to render under a different business — a new invoice number is allocated under that business automatically. To change line items use add_line_item / update_line_item / remove_line_item. For finalized invoices use void_invoice + duplicate_invoice.",
       inputSchema: {
-        business_id: uuid.optional(),
         invoice_id: uuid,
+        business_id: uuid.optional(),
         client_id: uuid.optional(),
         issue_date: isoDate.optional(),
         due_date: isoDate.optional(),
@@ -202,6 +204,7 @@ export function registerInvoiceTools(server: McpServer) {
       const parsed = z
         .object({
           invoice_id: uuid,
+          business_id: uuid.optional(),
           client_id: uuid.optional(),
           issue_date: isoDate.optional(),
           due_date: isoDate.optional(),
@@ -211,12 +214,13 @@ export function registerInvoiceTools(server: McpServer) {
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
       const __u = ctxFromAuthInfo(extra.authInfo);
-      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      const __s = await scopeFromCtx(__u, undefined);
       if (!__s.ok) return __s.error;
       const ctx = __s.scoped;
       const d = parsed.data;
       const r = await updateInvoice(ctx, d.invoice_id, {
         clientId: d.client_id,
+        businessId: d.business_id,
         issueDate: d.issue_date,
         dueDate: d.due_date,
         notes: d.notes ?? undefined,
@@ -227,7 +231,9 @@ export function registerInvoiceTools(server: McpServer) {
           hint:
             r.code === "invoice_not_draft"
               ? "Void the invoice and call duplicate_invoice to create a new draft."
-              : undefined,
+              : r.code === "business_not_found"
+                ? "Call whoami to see businesses on this account, then pass a valid id."
+                : undefined,
         });
       return toolOk({ ...formatInvoiceForMcp(r.value), share_url: invoiceShareUrl(r.value.shareSlug) });
     },

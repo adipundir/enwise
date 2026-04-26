@@ -18,7 +18,6 @@ const businessSchema = z.object({
   address_line1: z.string().nullable(),
   city: z.string().nullable(),
   country: z.string().nullable(),
-  client_count: z.number(),
   invoice_count: z.number(),
   profile_complete: z.boolean(),
 });
@@ -29,6 +28,7 @@ const outputSchema = {
     name: z.string().nullable(),
     email: z.string(),
     plan: z.enum(["free", "pro"]),
+    client_count: z.number(),
   }),
   businesses: z.array(businessSchema),
   default_business_id: z.string().nullable(),
@@ -66,12 +66,16 @@ export function registerWhoami(server: McpServer) {
         .where(eq(businesses.ownerUserId, ctx.userId))
         .orderBy(asc(businesses.createdAt));
 
+      // Counts are now USER-level (clients + invoices are account-scoped).
+      // Per-business invoice count is still meaningful — it tells you how
+      // many invoices have been rendered under each business — so keep that.
+      const [{ value: userClientCount }] = await db
+        .select({ value: count() })
+        .from(clients)
+        .where(eq(clients.ownerUserId, ctx.userId));
+
       const businessesOut = await Promise.all(
         owned.map(async (b) => {
-          const [{ value: clientCount }] = await db
-            .select({ value: count() })
-            .from(clients)
-            .where(eq(clients.businessId, b.id));
           const [{ value: invoiceCount }] = await db
             .select({ value: count() })
             .from(invoices)
@@ -92,12 +96,13 @@ export function registerWhoami(server: McpServer) {
             address_line1: b.addressLine1,
             city: b.city,
             country: b.country,
-            client_count: Number(clientCount ?? 0),
             invoice_count: Number(invoiceCount ?? 0),
             profile_complete: profileComplete,
           };
         }),
       );
+
+      const totalClientCount = Number(userClientCount ?? 0);
 
       const structured = {
         user: {
@@ -105,10 +110,11 @@ export function registerWhoami(server: McpServer) {
           name: user.name,
           email: user.email,
           plan: user.plan,
+          client_count: totalClientCount,
         },
         businesses: businessesOut,
         default_business_id: user.defaultBusinessId,
-        hint: buildHint(businessesOut, user.defaultBusinessId),
+        hint: buildHint(businessesOut, totalClientCount, user.defaultBusinessId),
       };
 
       return {
@@ -129,18 +135,20 @@ const WRITING_STYLE = `Invoice writing style. each field has its own lane:
 
 Rule of thumb: context about ONE line item that the recipient can't see from the attachment → line_items[].note. Context about the whole invoice → notes. When you convert currency, put the rate + source in the line's note (or the invoice note if the whole invoice uses one FX rate). Keep notes terse. a single short line is usually enough.`;
 
-const MULTI_BUSINESS_NOTE = `MULTI-BUSINESS: this user owns more than one business. Every tool that creates or modifies data takes an optional \`business_id\`. Before calling those tools, ask the user which business to act under. do not guess. If they say "the one for Acme" or similar, pick the matching business by name. Pass the chosen id as \`business_id\`.`;
+const MULTI_BUSINESS_NOTE = `MULTI-BUSINESS: this user owns more than one business. Clients, products, and invoices are SHARED across all businesses on this account — find_client / list_invoices / etc. return data from across the account regardless of business.
+
+What is per-business: the rendering profile (letterhead, address, logo, invoice numbering scheme). This matters for **create_invoice** and **create_recurring_invoice** — ASK the user which business to render the invoice under before calling. If you don't pass \`business_id\`, the user's default business is used. To MOVE a draft invoice to a different business after the fact, call \`update_invoice({invoice_id, business_id: <new>})\` — a fresh invoice number is allocated under the destination automatically.`;
 
 type BusinessOut = {
   id: string;
   name: string;
-  client_count: number;
   invoice_count: number;
   profile_complete: boolean;
 };
 
 function buildHint(
   bs: BusinessOut[],
+  totalClients: number,
   _defaultBusinessId: string | null,
 ): string {
   if (bs.length === 0) {
@@ -149,7 +157,7 @@ function buildHint(
 
   if (bs.length === 1) {
     const b = bs[0]!;
-    if (!b.profile_complete && b.invoice_count === 0 && b.client_count === 0) {
+    if (!b.profile_complete && b.invoice_count === 0 && totalClients === 0) {
       return `FRESH ACCOUNT with one business "${b.name}". Walk the user through setup, step by step:
 
 STEP 1. Business profile. Ask for: (a) business name (current: "${b.name}". confirm or change), (b) address + country, (c) default currency (USD if unspecified), (d) tax ID if applicable. Save with update_business_profile.
@@ -163,17 +171,18 @@ Do NOT invent data at any step. Do NOT create a sample/demo invoice. If the user
     if (!b.profile_complete) {
       return `Business "${b.name}" has no address / tax ID yet. Before sending invoices, ask the user to fill that in via update_business_profile.`;
     }
-    if (b.client_count === 0) {
+    if (totalClients === 0) {
       return `Business "${b.name}" is configured but has no clients. Offer to add the first client (name, email, address) via create_client. Don't invent one.\n\n${WRITING_STYLE}`;
     }
-    return `Business "${b.name}" has ${b.client_count} client${b.client_count === 1 ? "" : "s"}. Use find_client to resolve names the user mentions.\n\n${WRITING_STYLE}`;
+    return `Business "${b.name}" has ${totalClients} client${totalClients === 1 ? "" : "s"}. Use find_client to resolve names the user mentions.\n\n${WRITING_STYLE}`;
   }
 
-  // Multiple businesses.
+  // Multiple businesses. Clients are SHARED across all of them (account-
+  // level), so we report total client count once at the user level.
   const list = bs
     .map(
       (b) =>
-        `- ${b.name} (${b.id}). ${b.client_count} client${b.client_count === 1 ? "" : "s"}, ${b.invoice_count} invoice${b.invoice_count === 1 ? "" : "s"}${b.profile_complete ? "" : ", PROFILE INCOMPLETE"}`,
+        `- ${b.name} (${b.id}). ${b.invoice_count} invoice${b.invoice_count === 1 ? "" : "s"}${b.profile_complete ? "" : ", PROFILE INCOMPLETE"}`,
     )
     .join("\n");
   return `${MULTI_BUSINESS_NOTE}

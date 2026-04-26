@@ -85,7 +85,7 @@ export async function createRecurring(
   const [client] = await db
     .select()
     .from(clients)
-    .where(and(eq(clients.id, input.clientId), eq(clients.businessId, ctx.businessId)));
+    .where(and(eq(clients.id, input.clientId), eq(clients.ownerUserId, ctx.userId)));
   if (!client) return { ok: false, code: "client_not_found", message: `No client with id ${input.clientId}.` };
 
   const currency = (input.currency ?? client.defaultCurrency ?? "USD").toUpperCase();
@@ -94,6 +94,7 @@ export async function createRecurring(
   const [row] = await db
     .insert(recurringInvoiceTemplates)
     .values({
+      ownerUserId: ctx.userId,
       businessId: ctx.businessId,
       clientId: input.clientId,
       name: input.name ?? null,
@@ -155,7 +156,7 @@ export async function updateRecurring(
     .where(
       and(
         eq(recurringInvoiceTemplates.id, id),
-        eq(recurringInvoiceTemplates.businessId, ctx.businessId),
+        eq(recurringInvoiceTemplates.ownerUserId, ctx.userId),
       ),
     )
     .returning();
@@ -167,7 +168,7 @@ export async function listRecurring(
   ctx: ScopedCtx,
   opts: { clientId?: string; activeOnly?: boolean } = {},
 ): Promise<RecurringInvoiceTemplate[]> {
-  const conditions = [eq(recurringInvoiceTemplates.businessId, ctx.businessId)];
+  const conditions = [eq(recurringInvoiceTemplates.ownerUserId, ctx.userId)];
   if (opts.clientId) conditions.push(eq(recurringInvoiceTemplates.clientId, opts.clientId));
   if (opts.activeOnly) conditions.push(eq(recurringInvoiceTemplates.active, true));
   return db
@@ -187,7 +188,7 @@ export async function getRecurring(
     .where(
       and(
         eq(recurringInvoiceTemplates.id, id),
-        eq(recurringInvoiceTemplates.businessId, ctx.businessId),
+        eq(recurringInvoiceTemplates.ownerUserId, ctx.userId),
       ),
     );
   return row ?? null;
@@ -204,7 +205,7 @@ export async function setActive(
     .where(
       and(
         eq(recurringInvoiceTemplates.id, id),
-        eq(recurringInvoiceTemplates.businessId, ctx.businessId),
+        eq(recurringInvoiceTemplates.ownerUserId, ctx.userId),
       ),
     )
     .returning();
@@ -221,7 +222,7 @@ export async function cancelRecurring(
     .where(
       and(
         eq(recurringInvoiceTemplates.id, id),
-        eq(recurringInvoiceTemplates.businessId, ctx.businessId),
+        eq(recurringInvoiceTemplates.ownerUserId, ctx.userId),
       ),
     )
     .returning({ id: recurringInvoiceTemplates.id });

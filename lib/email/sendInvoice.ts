@@ -86,7 +86,11 @@ export async function sendInvoiceByEmail(
   // 3. Finalize invoice (snapshot + status=sent).
   const finalized = await finalizeInvoice(ctx, invoice.id);
   if (!finalized.ok) {
-    return { ok: false, code: finalized.code, message: finalized.message };
+    // Finalize never moves businesses, so business_not_found is unreachable
+    // here; fold into not_found for the SendInvoiceOutcome shape.
+    const code =
+      finalized.code === "business_not_found" ? "not_found" : finalized.code;
+    return { ok: false, code, message: finalized.message };
   }
   const sent = finalized.value;
 
@@ -208,7 +212,7 @@ async function getClientEmail(ctx: ScopedCtx, clientId: string): Promise<string 
   const [row] = await db
     .select({ email: clients.email })
     .from(clients)
-    .where(and(eq(clients.id, clientId), eq(clients.businessId, ctx.businessId)));
+    .where(and(eq(clients.id, clientId), eq(clients.ownerUserId, ctx.userId)));
   return row?.email ?? null;
 }
 

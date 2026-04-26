@@ -30,7 +30,7 @@ export async function createClient(
 ): Promise<Client> {
   const [row] = await db
     .insert(clients)
-    .values({ businessId: ctx.businessId, ...input })
+    .values({ ownerUserId: ctx.userId, businessId: ctx.businessId, ...input })
     .returning();
   return row!;
 }
@@ -47,7 +47,7 @@ export async function updateClient(
     .update(clients)
     .set({ ...patch, updatedAt: new Date() })
     .where(
-      and(eq(clients.id, clientId), eq(clients.businessId, ctx.businessId)),
+      and(eq(clients.id, clientId), eq(clients.ownerUserId, ctx.userId)),
     )
     .returning();
   return row ?? null;
@@ -61,7 +61,7 @@ export async function getClient(
     .select()
     .from(clients)
     .where(
-      and(eq(clients.id, clientId), eq(clients.businessId, ctx.businessId)),
+      and(eq(clients.id, clientId), eq(clients.ownerUserId, ctx.userId)),
     );
   return row ?? null;
 }
@@ -71,7 +71,7 @@ export async function listClients(
   opts: { limit?: number; includeArchived?: boolean } = {},
 ): Promise<Client[]> {
   const limit = clamp(opts.limit ?? DEFAULT_LIST_LIMIT, 1, MAX_LIST_LIMIT);
-  const conditions = [eq(clients.businessId, ctx.businessId)];
+  const conditions = [eq(clients.ownerUserId, ctx.userId)];
   if (!opts.includeArchived) conditions.push(isNull(clients.archivedAt));
   return db
     .select()
@@ -89,7 +89,7 @@ export async function archiveClient(
     .update(clients)
     .set({ archivedAt: new Date() })
     .where(
-      and(eq(clients.id, clientId), eq(clients.businessId, ctx.businessId)),
+      and(eq(clients.id, clientId), eq(clients.ownerUserId, ctx.userId)),
     )
     .returning();
   return row ?? null;
@@ -136,7 +136,7 @@ export async function findClients(
         end
       )::float as score
     from ${clients}
-    where ${clients.businessId} = ${ctx.businessId}
+    where ${clients.ownerUserId} = ${ctx.userId}
       and ${archivedClause}
       and (
         ${clients.nameNormalized} % ${normQuery}

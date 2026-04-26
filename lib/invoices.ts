@@ -138,7 +138,7 @@ async function getClientScoped(ctx: ScopedCtx, clientId: string) {
   const [row] = await db
     .select()
     .from(clients)
-    .where(and(eq(clients.id, clientId), eq(clients.businessId, ctx.businessId)));
+    .where(and(eq(clients.id, clientId), eq(clients.ownerUserId, ctx.userId)));
   return row ?? null;
 }
 
@@ -213,7 +213,7 @@ export async function createInvoice(
       .from(invoices)
       .where(
         and(
-          eq(invoices.businessId, ctx.businessId),
+          eq(invoices.ownerUserId, ctx.userId),
           eq(invoices.clientRequestId, input.clientRequestId),
         ),
       )
@@ -313,6 +313,7 @@ export async function createInvoice(
   const [invoice] = await db
     .insert(invoices)
     .values({
+      ownerUserId: ctx.userId,
       businessId: ctx.businessId,
       clientId: client.id,
       invoiceNumber: allocation.invoiceNumber,
@@ -377,7 +378,7 @@ export async function getInvoice(
     .where(
       and(
         eq(invoices.id, invoiceId),
-        eq(invoices.businessId, ctx.businessId),
+        eq(invoices.ownerUserId, ctx.userId),
         isNull(invoices.deletedAt),
       ),
     );
@@ -426,7 +427,7 @@ export async function listInvoices(
 ): Promise<Invoice[]> {
   const limit = Math.max(1, Math.min(200, opts.limit ?? 25));
   const conditions = [
-    eq(invoices.businessId, ctx.businessId),
+    eq(invoices.ownerUserId, ctx.userId),
     isNull(invoices.deletedAt),
   ];
   if (opts.clientId) conditions.push(eq(invoices.clientId, opts.clientId));
@@ -456,7 +457,7 @@ export async function findInvoiceByNumber(
     .from(invoices)
     .where(
       and(
-        eq(invoices.businessId, ctx.businessId),
+        eq(invoices.ownerUserId, ctx.userId),
         eq(invoices.invoiceNumber, invoiceNumber),
         isNull(invoices.deletedAt),
       ),
@@ -468,6 +469,8 @@ export async function findInvoiceByNumber(
 
 export type UpdateInvoiceInput = {
   clientId?: string;
+  /** Move the invoice to render under a different business. Drafts only. */
+  businessId?: string;
   issueDate?: string;
   dueDate?: string;
   notes?: string | null;
@@ -478,7 +481,11 @@ export type MutateResult<T> =
   | { ok: true; value: T }
   | {
       ok: false;
-      code: "not_found" | "invoice_not_draft" | "client_not_found";
+      code:
+        | "not_found"
+        | "invoice_not_draft"
+        | "client_not_found"
+        | "business_not_found";
       message: string;
     };
 
@@ -519,15 +526,55 @@ export async function updateInvoice(
     const c = await getClientScoped(ctx, patch.clientId);
     if (!c) return { ok: false, code: "client_not_found", message: `No client with id ${patch.clientId}.` };
   }
+  // Moving to a different business: validate ownership, then re-allocate
+  // the invoice number under the destination (numbering is per-business).
+  let newInvoiceNumber: string | null = null;
+  if (patch.businessId && patch.businessId !== inv.businessId) {
+    const [target] = await db
+      .select({ id: businesses.id })
+      .from(businesses)
+      .where(
+        and(
+          eq(businesses.id, patch.businessId),
+          eq(businesses.ownerUserId, ctx.userId),
+        ),
+      );
+    if (!target) {
+      return {
+        ok: false,
+        code: "business_not_found",
+        message: `No business with id ${patch.businessId} on this account.`,
+      };
+    }
+    const allocation = await allocateInvoiceNumber({
+      ...ctx,
+      businessId: patch.businessId,
+    });
+    if (!allocation) {
+      return {
+        ok: false,
+        code: "business_not_found",
+        message: "Couldn't allocate an invoice number under the target business.",
+      };
+    }
+    newInvoiceNumber = allocation.invoiceNumber;
+  }
+
   const values: Partial<Invoice> = { updatedAt: new Date() };
   if (patch.clientId !== undefined) values.clientId = patch.clientId;
+  if (patch.businessId !== undefined && patch.businessId !== inv.businessId) {
+    values.businessId = patch.businessId;
+    if (newInvoiceNumber) values.invoiceNumber = newInvoiceNumber;
+  }
   if (patch.issueDate !== undefined) values.issueDate = patch.issueDate;
   if (patch.dueDate !== undefined) values.dueDate = patch.dueDate;
   if (patch.notes !== undefined) values.notes = patch.notes;
   if (patch.terms !== undefined) values.terms = patch.terms;
 
   await db.update(invoices).set(values).where(eq(invoices.id, inv.id));
-  await writeEvent(inv.id, "updated", ctx.tokenId);
+  await writeEvent(inv.id, "updated", ctx.tokenId, {
+    business_changed: patch.businessId !== undefined && patch.businessId !== inv.businessId,
+  });
   const after = await getInvoice(ctx, inv.id);
   return { ok: true, value: after! };
 }
@@ -724,9 +771,13 @@ export async function finalizeInvoice(
       message: `No client with id ${inv.clientId}.`,
     };
   }
+  // Snapshot from the invoice's own businessId, not the caller's ctx —
+  // an invoice can be moved between businesses while still in draft, and
+  // finalize must capture the business it's actually rendered under at
+  // send time.
   const bizRows = await db.execute(sql`
     select name, logo_url, address_line1, address_line2, city, region, postal_code, country
-    from businesses where id = ${ctx.businessId}
+    from businesses where id = ${inv.businessId}
   `);
   const biz = bizRows.rows[0] as
     | {
@@ -836,7 +887,7 @@ export async function revertFinalizeInvoice(
       updatedAt: new Date(),
     })
     .where(
-      and(eq(invoices.id, invoiceId), eq(invoices.businessId, ctx.businessId)),
+      and(eq(invoices.id, invoiceId), eq(invoices.ownerUserId, ctx.userId)),
     );
 }
 

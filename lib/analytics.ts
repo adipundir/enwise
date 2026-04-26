@@ -27,8 +27,8 @@ export async function getClientSummary(
            count(i.id) filter (where i.deleted_at is null) as invoice_count,
            max(i.issue_date) filter (where i.deleted_at is null) as last_date
     from clients c
-    left join invoices i on i.client_id = c.id and i.business_id = ${ctx.businessId}
-    where c.business_id = ${ctx.businessId}
+    left join invoices i on i.client_id = c.id and i.owner_user_id = ${ctx.userId}
+    where c.owner_user_id = ${ctx.userId}
       and c.id = ${clientId}
     group by c.id, c.name
   `);
@@ -45,7 +45,7 @@ export async function getClientSummary(
       coalesce(sum(total - amount_paid) filter (where status = 'sent'), 0)::numeric(14,2)::text                  as outstanding,
       count(*) filter (where status <> 'void')::int                                                              as invoice_count
     from invoices
-    where business_id = ${ctx.businessId}
+    where owner_user_id = ${ctx.userId}
       and client_id = ${clientId}
       and deleted_at is null
     group by currency
@@ -119,7 +119,7 @@ export async function getRevenueSummary(
       coalesce(sum(amount_paid) filter (where status <> 'void'), 0)::numeric(14,2)::text as total_paid,
       count(*) filter (where status <> 'void')::int                                    as invoice_count
     from invoices
-    where business_id = ${ctx.businessId}
+    where owner_user_id = ${ctx.userId}
       and deleted_at is null
       and issue_date >= date_trunc(${truncUnit}, (current_date - interval ${historyInterval}))
     group by 1, currency
@@ -135,7 +135,7 @@ export async function getRevenueSummary(
       count(*) filter (where i.status <> 'void')::int                                  as invoice_count
     from invoices i
     left join clients c on c.id = i.client_id
-    where i.business_id = ${ctx.businessId}
+    where i.owner_user_id = ${ctx.userId}
       and i.deleted_at is null
       and i.issue_date >= date_trunc(${truncUnit}, (current_date - interval ${historyInterval}))
     group by i.client_id, client_name, i.currency
@@ -216,7 +216,7 @@ export async function getOutstandingInvoices(
       greatest(0, (current_date - i.due_date))::int      as days_overdue
     from invoices i
     left join clients c on c.id = i.client_id
-    where i.business_id = ${ctx.businessId}
+    where i.owner_user_id = ${ctx.userId}
       and i.deleted_at is null
       and i.status = 'sent'
       ${clientClause}

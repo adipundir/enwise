@@ -24,7 +24,7 @@ export async function createProduct(
 ): Promise<Product> {
   const [row] = await db
     .insert(products)
-    .values({ businessId: ctx.businessId, ...input })
+    .values({ ownerUserId: ctx.userId, businessId: ctx.businessId, ...input })
     .returning();
   return row!;
 }
@@ -41,7 +41,7 @@ export async function updateProduct(
     .update(products)
     .set({ ...patch, updatedAt: new Date() })
     .where(
-      and(eq(products.id, productId), eq(products.businessId, ctx.businessId)),
+      and(eq(products.id, productId), eq(products.ownerUserId, ctx.userId)),
     )
     .returning();
   return row ?? null;
@@ -55,7 +55,7 @@ export async function getProduct(
     .select()
     .from(products)
     .where(
-      and(eq(products.id, productId), eq(products.businessId, ctx.businessId)),
+      and(eq(products.id, productId), eq(products.ownerUserId, ctx.userId)),
     );
   return row ?? null;
 }
@@ -65,7 +65,7 @@ export async function listProducts(
   opts: { limit?: number; includeArchived?: boolean } = {},
 ): Promise<Product[]> {
   const limit = clamp(opts.limit ?? DEFAULT_LIST_LIMIT, 1, MAX_LIST_LIMIT);
-  const conditions = [eq(products.businessId, ctx.businessId)];
+  const conditions = [eq(products.ownerUserId, ctx.userId)];
   if (!opts.includeArchived) conditions.push(isNull(products.archivedAt));
   return db
     .select()
@@ -83,7 +83,7 @@ export async function archiveProduct(
     .update(products)
     .set({ archivedAt: new Date() })
     .where(
-      and(eq(products.id, productId), eq(products.businessId, ctx.businessId)),
+      and(eq(products.id, productId), eq(products.ownerUserId, ctx.userId)),
     )
     .returning();
   return row ?? null;
@@ -128,7 +128,7 @@ export async function findProducts(
         end
       )::float as score
     from ${products}
-    where ${products.businessId} = ${ctx.businessId}
+    where ${products.ownerUserId} = ${ctx.userId}
       and ${archivedClause}
       and (
         ${products.nameNormalized} % ${normQuery}

@@ -178,15 +178,20 @@ export const apiTokens = pgTable(
   ],
 );
 
-// Clients
+// Clients. Owned by the user (account-level, shared across all the user's
+// businesses). The legacy businessId column stays populated for back-compat
+// but reads scope by ownerUserId now.
 
 export const clients = pgTable(
   "clients",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    businessId: uuid("business_id")
+    ownerUserId: uuid("owner_user_id")
       .notNull()
-      .references(() => businesses.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "cascade" }),
+    businessId: uuid("business_id").references(() => businesses.id, {
+      onDelete: "set null",
+    }),
     name: text("name").notNull(),
     // Normalized for fuzzy search. immutable_unaccent is defined by lib/db/migrate.ts
     // because the stock unaccent() is STABLE and can't be used in a generated column.
@@ -213,22 +218,26 @@ export const clients = pgTable(
       .defaultNow(),
   },
   (t) => [
-    index("clients_business_idx").on(t.businessId),
-    uniqueIndex("clients_business_email_idx")
-      .on(t.businessId, sql`lower(${t.email})`)
+    index("clients_owner_idx").on(t.ownerUserId),
+    uniqueIndex("clients_owner_email_idx")
+      .on(t.ownerUserId, sql`lower(${t.email})`)
       .where(sql`${t.email} is not null`),
   ],
 );
 
-// Products / services catalog
+// Products / services catalog. Owned by the user (account-level), reusable
+// across every business they own.
 
 export const products = pgTable(
   "products",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    businessId: uuid("business_id")
+    ownerUserId: uuid("owner_user_id")
       .notNull()
-      .references(() => businesses.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "cascade" }),
+    businessId: uuid("business_id").references(() => businesses.id, {
+      onDelete: "set null",
+    }),
     name: text("name").notNull(),
     nameNormalized: text("name_normalized").generatedAlwaysAs(
       sql`lower(immutable_unaccent(name))`,
@@ -247,19 +256,23 @@ export const products = pgTable(
       .defaultNow(),
   },
   (t) => [
-    index("products_business_idx").on(t.businessId),
-    uniqueIndex("products_business_sku_idx")
-      .on(t.businessId, t.sku)
+    index("products_owner_idx").on(t.ownerUserId),
+    uniqueIndex("products_owner_sku_idx")
+      .on(t.ownerUserId, t.sku)
       .where(sql`${t.sku} is not null`),
   ],
 );
 
-// Recurring invoice templates. must be declared before invoices, which FK-references it
+// Recurring invoice templates. Owned by the user; businessId is the
+// "render under this business" pointer for generated invoices, mutable.
 
 export const recurringInvoiceTemplates = pgTable(
   "recurring_invoice_templates",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     businessId: uuid("business_id")
       .notNull()
       .references(() => businesses.id, { onDelete: "cascade" }),
@@ -286,17 +299,23 @@ export const recurringInvoiceTemplates = pgTable(
       .defaultNow(),
   },
   (t) => [
+    index("recurring_owner_idx").on(t.ownerUserId),
     index("recurring_business_idx").on(t.businessId),
     index("recurring_due_idx").on(t.nextRunAt, t.active),
   ],
 );
 
-// Invoices
+// Invoices. Owned by the user; businessId is the "render under this
+// business" pointer (which letterhead, address, logo, numbering scheme).
+// Mutable on drafts, frozen on sent/paid via snapshots below.
 
 export const invoices = pgTable(
   "invoices",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     businessId: uuid("business_id")
       .notNull()
       .references(() => businesses.id, { onDelete: "cascade" }),
@@ -349,17 +368,18 @@ export const invoices = pgTable(
       .defaultNow(),
   },
   (t) => [
+    index("invoices_owner_idx").on(t.ownerUserId),
     uniqueIndex("invoices_business_number_idx").on(t.businessId, t.invoiceNumber),
     uniqueIndex("invoices_idempotency_idx")
-      .on(t.businessId, t.clientRequestId)
+      .on(t.ownerUserId, t.clientRequestId)
       .where(sql`${t.clientRequestId} is not null`),
-    index("invoices_business_status_date_idx").on(
-      t.businessId,
+    index("invoices_owner_status_date_idx").on(
+      t.ownerUserId,
       t.status,
       t.issueDate,
     ),
-    index("invoices_business_client_date_idx").on(
-      t.businessId,
+    index("invoices_owner_client_date_idx").on(
+      t.ownerUserId,
       t.clientId,
       t.issueDate,
     ),
