@@ -235,7 +235,9 @@ export function InvoiceDocument({ invoice, client, business }: InvoicePdfData) {
               <Text style={styles.metaRowLabel}>Due date</Text>
               <Text>{invoice.dueDate}</Text>
             </View>
-            <Text style={styles.statusBadge}>{invoice.status}</Text>
+            {invoice.status !== "draft" ? (
+              <Text style={styles.statusBadge}>{invoice.status}</Text>
+            ) : null}
           </View>
         </View>
 

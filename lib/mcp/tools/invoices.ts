@@ -4,6 +4,7 @@ import {
   createInvoice,
   deleteInvoice,
   duplicateInvoice,
+  finalizeInvoice,
   findInvoiceByNumber,
   formatInvoiceForMcp,
   formatInvoiceSummaryForMcp,
@@ -515,6 +516,24 @@ export function registerInvoiceTools(server: McpServer) {
         slug: inv.shareSlug,
         enabled: inv.shareEnabled,
       });
+    },
+  );
+
+  server.registerTool(
+    "finalize_invoice",
+    {
+      title: "Mark invoice as sent (no email)",
+      description:
+        "Flip a draft invoice to 'sent' status WITHOUT emailing anyone. Use this when the user delivered the invoice some other way (handed it over in person, WhatsApp, Slack, printed and mailed, etc.) or just wants to lock it in for their own records. Takes the client + business snapshot onto the row. For email delivery, use send_invoice instead. Returns the updated invoice. Already-sent / paid / void invoices are left untouched.",
+      inputSchema: { invoice_id: uuid },
+    },
+    async (args, extra) => {
+      const parsed = z.object({ invoice_id: uuid }).safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const r = await finalizeInvoice(ctx, parsed.data.invoice_id);
+      if (!r.ok) return toolError(mapMutateError(r.code), r.message);
+      return toolOk(formatInvoiceForMcp(r.value));
     },
   );
 

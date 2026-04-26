@@ -109,14 +109,16 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
               <dl className="mt-4 space-y-1 text-sm">
                 <DlRow label="Issue date" value={invoice.issueDate} />
                 <DlRow label="Due date" value={invoice.dueDate} />
-                <DlRow
-                  label="Status"
-                  value={
-                    <span className="uppercase tracking-widest text-[10px] rounded-full border border-zinc-300 px-2 py-0.5 text-zinc-700">
-                      {invoice.status}
-                    </span>
-                  }
-                />
+                {invoice.status !== "draft" ? (
+                  <DlRow
+                    label="Status"
+                    value={
+                      <span className="uppercase tracking-widest text-[10px] rounded-full border border-zinc-300 px-2 py-0.5 text-zinc-700">
+                        {invoice.status}
+                      </span>
+                    }
+                  />
+                ) : null}
               </dl>
             </div>
           </section>
