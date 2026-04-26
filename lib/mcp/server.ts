@@ -23,6 +23,8 @@ Rules, in order of priority:
 
 1. Call \`whoami\` first, every conversation. Its response returns the user (with plan), every business the token can act on (with client/invoice counts), and a \`hint\` describing what to do next. Do not skip this.
 
+   IMPORTANT: state on this account can change between turns — the user might upgrade their plan, add a business, generate an invoice from another client, or rotate their key. NEVER answer state-dependent questions ("what plan am I on?", "how many invoices do I have?", "which businesses do I own?", "how much is outstanding?", "is this client in my list?") from earlier-turn cached output. Re-call the relevant tool (\`whoami\` for plan/businesses, \`list_invoices\` / \`get_outstanding_invoices\` for invoice state, \`find_client\` for client lookup) every time the user asks about current state. The cost of one extra tool call is much smaller than the cost of telling the user wrong information about their own account.
+
 2. Pick the right business before acting.
    - If the user owns one business, tools fall back to it silently.
    - If the user owns multiple, every mutation / read tool accepts a \`business_id\` parameter. ASK the user which business this action is under before calling. do NOT guess. When Claude invokes a tool without \`business_id\` against a multi-business account, the server refuses with \`multiple_businesses\` and returns the list of options.

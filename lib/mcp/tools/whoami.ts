@@ -41,7 +41,7 @@ export function registerWhoami(server: McpServer) {
     {
       title: "Who am I?",
       description:
-        "Return the authenticated user, every business this token can act on, and a directive hint. Call this at the start of a session. and again after `create_business`. so you know which businesses exist and which to act on before mutating anything.",
+        "Return the authenticated user (with current plan), every business this token can act on, and a directive hint. Call at the start of every session, after `create_business`, AND every time the user asks anything about their account state — current plan, business list, default business, client count. NEVER answer those questions from cached output of an earlier turn; the user can upgrade their plan or add a business between turns and stale answers are worse than a fresh tool call.",
       outputSchema,
     },
     async (extra) => {
