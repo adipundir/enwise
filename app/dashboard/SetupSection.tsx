@@ -30,10 +30,10 @@ function buildClaudeCodeCommands(
   };
 }
 
-/** Concatenated form, used by the "copy everything" fallback button. */
-function buildClaudeCodeBundle(rawToken: string, mcpUrl: string): string {
-  const c = buildClaudeCodeCommands(rawToken, mcpUrl);
-  return [c.remove, c.add, c.restart, "", c.firstPrompt].join("\n");
+/** What the "Generate key" button copies to the clipboard for claude-code:
+ *  the install command with the freshly-minted token already embedded. */
+function buildClaudeCodeInstall(rawToken: string, mcpUrl: string): string {
+  return buildClaudeCodeCommands(rawToken, mcpUrl).add;
 }
 
 function buildJsonConfig(rawToken: string, mcpUrl: string): string {
@@ -104,7 +104,7 @@ export function SetupSection({
   function payloadFor(token: string): string {
     switch (agent) {
       case "claude-code":
-        return buildClaudeCodeBundle(token, mcpUrl);
+        return buildClaudeCodeInstall(token, mcpUrl);
       case "claude-ai":
         return `Authorization: Bearer ${token}`;
       case "windsurf":
@@ -208,10 +208,7 @@ export function SetupSection({
       {!expanded ? null : agent === "claude-code" ? (
         <ClaudeCodeSteps
           rawToken={rawToken}
-          currentPrefix={currentPrefix}
           mcpUrl={mcpUrl}
-          confirmOpen={confirmOpen}
-          setConfirmOpen={setConfirmOpen}
           pending={pending}
           onGenerateKey={makeNewKeyAndCopy}
         />
@@ -316,18 +313,12 @@ export function SetupSection({
 
 function ClaudeCodeSteps({
   rawToken,
-  currentPrefix,
   mcpUrl,
-  confirmOpen,
-  setConfirmOpen,
   pending,
   onGenerateKey,
 }: {
   rawToken: string | null;
-  currentPrefix: string | null;
   mcpUrl: string;
-  confirmOpen: boolean;
-  setConfirmOpen: (v: boolean) => void;
   pending: boolean;
   onGenerateKey: () => void;
 }) {
@@ -342,93 +333,91 @@ function ClaudeCodeSteps({
 
   return (
     <div className="grid gap-px overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900 md:grid-cols-3">
-      {/* STEP 1 — three terminal commands */}
+      {/* STEP 1 — install (register the MCP server) */}
       <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
-        <StepKicker n="01" title="Run these three commands" />
+        <StepKicker n="01" title="Install enwise MCP" />
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-          Run each in your terminal, in order. The first cleans up any prior
-          registration; the third restarts Claude Code so it picks up the new
-          MCP server.
-        </p>
-        <div className="mt-6 space-y-3">
-          <CommandBlock label="1" command={c.remove} hint='First-run output is "No user-scoped MCP server found" — that&rsquo;s fine.' />
-          <CommandBlock
-            label="2"
-            command={c.add}
-            hint={
-              tokenIsPlaceholder
-                ? `Replace <YOUR_KEY> with your token${currentPrefix ? ` (starts with ${currentPrefix}…)` : ""}.`
-                : "Registers enwise. Token is embedded."
-            }
-          />
-          <CommandBlock label="3" command={c.restart} multiline hint="Type /exit inside Claude Code, then run claude in your terminal." />
-        </div>
-        {tokenIsPlaceholder ? (
-          <div className="mt-auto pt-6 text-xs leading-relaxed text-zinc-500">
-            {confirmOpen ? (
-              <div className="space-y-2 rounded-md border border-zinc-800 bg-[#070707] p-3">
-                <p className="text-zinc-300">Generate a new key? Your current key{currentPrefix ? ` (${currentPrefix}…)` : ""} stops working immediately.</p>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={onGenerateKey}
-                    disabled={pending}
-                    className="rounded-md bg-red-900/80 px-3 py-1.5 text-xs font-medium text-red-50 hover:bg-red-900 disabled:opacity-60"
-                  >
-                    {pending ? "Generating…" : "Yes, rotate"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmOpen(false)}
-                    className="text-zinc-500 hover:text-zinc-200"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p>
-                Lost your key?{" "}
-                <button
-                  type="button"
-                  onClick={() => setConfirmOpen(true)}
-                  className="text-zinc-300 underline underline-offset-2 hover:text-white"
-                >
-                  Rotate to a new one
-                </button>{" "}
-                and the commands above will fill in automatically.
-              </p>
-            )}
-          </div>
-        ) : null}
-      </div>
-
-      {/* STEP 2 — paste in Claude Code */}
-      <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
-        <StepKicker n="02" title="Paste this in your new Claude Code session" />
-        <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-          One prompt that calls <code className="rounded bg-zinc-900 px-1 text-zinc-200">whoami</code> and walks
-          you through your business profile and first client.
+          {tokenIsPlaceholder
+            ? "One click: generates an API key and copies the install command to your clipboard. Paste it in your terminal."
+            : "Run this in your terminal."}
         </p>
         <div className="mt-6">
-          <CommandBlock command={c.firstPrompt} multiline />
+          {tokenIsPlaceholder ? (
+            <button
+              type="button"
+              onClick={onGenerateKey}
+              disabled={pending}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 hover:bg-white disabled:opacity-60"
+            >
+              {pending ? "Generating…" : "Generate key & copy install command"}
+            </button>
+          ) : (
+            <CommandBlock command={c.add} />
+          )}
         </div>
       </div>
 
-      {/* STEP 3 — examples */}
+      {/* STEP 2 — restart Claude Code */}
       <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
-        <StepKicker n="03" title="Then just ask" />
+        <StepKicker n="02" title="Restart Claude Code" />
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-          Once your business and first client are set up, you can drive enwise
-          in plain English. Try:
+          MCP tools only load at session start.
         </p>
-        <ul className="mt-4 space-y-2 text-sm text-zinc-300">
-          <li>→ &ldquo;Invoice Globex $5,000 for Q2 brand refresh, 8% tax, net 30, and email it.&rdquo;</li>
-          <li>→ &ldquo;How much has Globex paid me this year?&rdquo;</li>
-          <li>→ &ldquo;What&apos;s outstanding right now?&rdquo;</li>
-        </ul>
+        <ol className="mt-6 space-y-3 text-sm text-zinc-300">
+          <li className="flex items-start gap-3">
+            <span className="select-none pt-0.5 font-mono text-xs text-zinc-600">1</span>
+            <span>
+              Inside Claude Code, type{" "}
+              <code className="rounded bg-[#070707] px-1.5 py-0.5 font-mono text-xs text-zinc-100">/exit</code>
+              .
+            </span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="select-none pt-0.5 font-mono text-xs text-zinc-600">2</span>
+            <span>
+              In your terminal, run{" "}
+              <code className="rounded bg-[#070707] px-1.5 py-0.5 font-mono text-xs text-zinc-100">claude</code>
+              .
+            </span>
+          </li>
+        </ol>
+      </div>
+
+      {/* STEP 3 — paste setup prompt in the fresh session */}
+      <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
+        <StepKicker n="03" title="Paste this in your new session" />
+        <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+          One prompt that calls{" "}
+          <code className="rounded bg-zinc-900 px-1 text-zinc-200">whoami</code>{" "}
+          and walks you through your business profile and first client.
+        </p>
+        <div className="mt-auto pt-6">
+          <CopyButton command={c.firstPrompt} label="Copy setup prompt" />
+        </div>
       </div>
     </div>
+  );
+}
+
+function CopyButton({ command, label }: { command: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      // clipboard rejected
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 hover:bg-white"
+    >
+      {copied ? "Copied" : label}
+    </button>
   );
 }
 
@@ -436,12 +425,10 @@ function CommandBlock({
   command,
   label,
   hint,
-  multiline,
 }: {
   command: string;
   label?: string;
   hint?: string;
-  multiline?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
@@ -460,7 +447,13 @@ function CommandBlock({
           {label ? (
             <span className="select-none pt-0.5 text-zinc-600">{label}</span>
           ) : null}
-          <pre className={`flex-1 ${multiline ? "whitespace-pre" : "truncate"} text-zinc-200`}>{command}</pre>
+          {/* whitespace-pre-wrap preserves explicit \n in multi-line commands
+              while still wrapping long lines inside the box; break-all so a
+              long token without spaces (e.g., env_live_…) wraps too instead
+              of overflowing the column. */}
+          <pre className="flex-1 whitespace-pre-wrap break-all text-zinc-200">
+            {command}
+          </pre>
           <button
             type="button"
             onClick={copy}
