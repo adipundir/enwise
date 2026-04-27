@@ -161,9 +161,6 @@ export const apiTokens = pgTable(
   "api_tokens",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    businessId: uuid("business_id").references(() => businesses.id, {
-      onDelete: "set null",
-    }),
     createdByUserId: uuid("created_by_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -176,10 +173,7 @@ export const apiTokens = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [
-    uniqueIndex("api_tokens_hash_idx").on(t.tokenHash),
-    index("api_tokens_business_idx").on(t.businessId),
-  ],
+  (t) => [uniqueIndex("api_tokens_hash_idx").on(t.tokenHash)],
 );
 
 // Clients. Owned by the user (account-level, shared across all the user's

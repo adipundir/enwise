@@ -42,11 +42,7 @@ export async function rotateKeyAction(): Promise<RotateResult> {
       ),
     );
 
-  // Use the user's default business if they have one. the legacy
-  // api_tokens.businessId column stays populated for back-compat but has
-  // no semantic weight anymore.
   const { raw } = await createToken({
-    businessId: user.defaultBusinessId ?? null,
     createdByUserId: user.id,
     name: "Default",
   });

@@ -28,7 +28,6 @@ export default async function DashboardHome() {
     const active = await getActiveToken(userId);
     if (!active) {
       const created = await createToken({
-        businessId: user?.defaultBusinessId ?? null,
         createdByUserId: userId,
         name: "Default",
       });

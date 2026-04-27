@@ -46,7 +46,6 @@ async function main() {
   // 2. Create a token
   const raw = generateRawToken();
   await db.insert(apiTokens).values({
-    businessId: business.id,
     createdByUserId: user.id,
     name: "smoke",
     tokenHash: hashToken(raw),
