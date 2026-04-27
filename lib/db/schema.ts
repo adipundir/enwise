@@ -34,8 +34,6 @@ export const recurringInterval = pgEnum("recurring_interval", [
   "yearly",
 ]);
 
-export const businessPlan = pgEnum("business_plan", ["free", "pro"]);
-
 // Auth.js tables. shape dictated by @auth/drizzle-adapter
 
 export const users = pgTable("users", {
@@ -51,13 +49,6 @@ export const users = pgTable("users", {
     (): AnyPgColumn => businesses.id,
     { onDelete: "set null" },
   ),
-  // Plan is account-level: one Pro subscription covers every business the
-  // user owns. Makes pricing honest (a solo freelancer with Acme + a side
-  // project shouldn't pay twice) and matches the one-token-one-account
-  // auth model.
-  plan: businessPlan("plan").notNull().default("free"),
-  stripeCustomerId: text("stripe_customer_id"),
-  stripeSubscriptionId: text("stripe_subscription_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -108,9 +99,7 @@ export const verificationTokens = pgTable(
 );
 
 // Businesses. the tenant unit. A user can own many. they bill clients
-// from each one independently. Plan is account-level (on users), not
-// per-business. Pro unlocks Pro features across every business the
-// user owns.
+// from each one independently.
 
 export const businesses = pgTable(
   "businesses",
