@@ -20,7 +20,6 @@ import {
 } from "@/lib/storage/blob";
 
 const ATTACHMENTS_PER_LINE_ITEM = 10;
-const ATTACHMENT_BYTE_CAP = 8 * 1024 * 1024;
 
 // ---------- Shared shapes ----------
 
@@ -36,10 +35,10 @@ export type LineItemInput = {
    *  Whole-invoice context belongs on the invoice's `notes` field. */
   note?: string | null;
   /**
-   * Optional supporting docs. External callers (the MCP layer) pass base64
-   * files to upload to our Blob. Internal callers (duplicate_invoice) can
-   * pass already-resolved `{label, url}` entries for attachments that
-   * already live on our Blob. we re-use them instead of re-uploading.
+   * Optional supporting docs. External callers (the MCP layer) pass
+   * `{attachment_url}` entries pointing at files already uploaded to our
+   * Blob via POST /api/upload. Internal callers (duplicate_invoice) can
+   * pass already-resolved `{label, url}` entries — we re-use them as-is.
    */
   attachments?: (AttachmentInput | LineItemAttachment)[];
 };
@@ -144,7 +143,6 @@ async function resolveAttachments(
     const r = await resolveAttachment({
       businessId: ctx.businessId,
       input,
-      maxBytes: ATTACHMENT_BYTE_CAP,
     });
     if (!r.ok) {
       return { ok: false, error: { code: r.code, message: r.message, hint: r.hint } };

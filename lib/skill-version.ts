@@ -7,4 +7,4 @@
  *
  * Convention: YYYY.MM.DD of the publish date.
  */
-export const CURRENT_SKILL_VERSION = "2026.04.27.3";
+export const CURRENT_SKILL_VERSION = "2026.04.27.4";

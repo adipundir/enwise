@@ -1,6 +1,6 @@
 ---
 name: enwise
-version: 2026.04.27.3
+version: 2026.04.27.4
 description: Create, send, and track invoices for the user's business using the enwise MCP server.
 ---
 
@@ -113,11 +113,11 @@ Rule of thumb: context about ONE line item that isn't visible from the attachmen
 
 ## Attachments
 
-**Supported types**: PNG, JPEG, WebP, PDF only. 4 MB per file, 10 files per line item. They're uploaded to our own storage so the invoice stays self-contained (matches how Stripe, QuickBooks, and Xero handle invoice evidence). Attachments render on both the PDF and the public invoice page.
+**Supported types**: PNG, JPEG, WebP, PDF only. **Up to 10 MB per file**, 10 files per line item. Files are uploaded to our own storage so the invoice stays self-contained (matches how Stripe, QuickBooks, Xero handle invoice evidence). Attachments render on both the PDF and the public invoice page.
 
-**Two ways to attach** — pick based on where the bytes live:
+**Always upload via curl, never inline file bytes, never split or chunk a file.** If a file is on disk, the upload endpoint can take it. If something fails, ask — don't try to base64-encode + chunk into the tool call. That path no longer exists.
 
-### (a) Pre-uploaded URL — preferred for any file the user has on disk
+### Files ≤ 4 MB — one curl
 
 ```bash
 curl -X POST https://enwise.app/api/upload \
@@ -125,23 +125,44 @@ curl -X POST https://enwise.app/api/upload \
   -F "file=@/path/to/receipt.pdf"
 ```
 
-Returns `{url, mime_type, size_bytes, filename}`. Pass the `url` to the MCP tool as:
+Returns `{ok: true, url, mime_type, size_bytes, filename}`. Pass `url` to the MCP tool as:
 
 ```json
 { "attachment_url": "https://...blob.vercel-storage.com/...", "label": "Hotel receipt" }
 ```
 
-The bytes never enter your context — works for any file size up to 4 MB without bumping into the Read tool's token limit.
+### Files 4–10 MB — two curls (bypasses Vercel's 4.5 MB function body limit)
 
-### (b) Inline base64 — only for tiny screenshots / clipboard images you generated
+The multipart endpoint above is capped at 4 MB by Vercel's platform. For larger files, ask the endpoint for a presigned PUT URL first, then upload the bytes directly to Vercel Blob storage:
 
-```json
-{ "file_base64": "…", "mime_type": "image/png", "filename": "screenshot.png", "label": "Screenshot" }
+```bash
+# Step 1: ask for an upload URL (small JSON body, no size issue)
+RESP=$(curl -sS -X POST https://enwise.app/api/upload \
+  -H "Authorization: Bearer <THE_USER_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"filename":"receipt.pdf","mime_type":"application/pdf"}')
+
+# Step 2: PUT the bytes directly to Vercel Blob using the returned next_step
+PUT_URL=$(echo "$RESP" | jq -r .next_step.url)
+TOKEN=$(echo "$RESP"  | jq -r .next_step.headers.authorization)
+PUT_RESP=$(curl -sS -X PUT "$PUT_URL" \
+  -H "$TOKEN" \
+  -H "x-api-version: 12" \
+  -H "x-content-type: application/pdf" \
+  -H "x-vercel-blob-access: public" \
+  --data-binary @/path/to/receipt.pdf)
+
+# Step 3: take `url` from the PUT response and use it as attachment_url
+PUBLIC_URL=$(echo "$PUT_RESP" | jq -r .url)
 ```
 
-Practical limit ~20 KB because the base64 lives in your context window.
+Then pass `PUBLIC_URL` to the MCP tool as `attachment_url`. The PUT response always includes a `url` field — that's the citable link.
 
-**Default to (a)** whenever the user has a file on disk. (b) is only for the rare case where you have raw bytes already in memory.
+### What NOT to do
+
+- **Do not** base64-encode a file and inline it in the tool call. The schema doesn't accept that anymore.
+- **Do not** split a file into chunks. The endpoint handles 10 MB in one shot.
+- **Do not** ask the user for a public URL of their file. Take it from disk and upload it yourself.
 
 ### The user asks about money owed or earned
 

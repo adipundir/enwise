@@ -5,14 +5,7 @@ import { fileTypeFromBuffer } from "file-type";
 import { nanoid } from "nanoid";
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB (logo)
-const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8 MB (photo / receipt / PDF)
 const ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
-const ALLOWED_ATTACHMENT_MIME = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "application/pdf",
-]);
 const MIME_EXT: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -226,17 +219,6 @@ async function validateMime(buffer: Uint8Array): Promise<
   return { ok: true, mime: sniffed.mime };
 }
 
-/** Looser mime sniff for attachments. allows PDF in addition to images. */
-async function sniffAttachmentMime(
-  buffer: Uint8Array,
-): Promise<{ ok: true; mime: string } | { ok: false }> {
-  const sniffed = await fileTypeFromBuffer(buffer);
-  if (!sniffed || !ALLOWED_ATTACHMENT_MIME.has(sniffed.mime)) {
-    return { ok: false };
-  }
-  return { ok: true, mime: sniffed.mime };
-}
-
 async function uploadToBlob(
   businessId: string,
   buffer: Buffer,
@@ -272,18 +254,11 @@ function mimeError(): Extract<LogoResult, { ok: false }> {
 
 // ---------- Line item attachments ----------
 
-export type AttachmentInput =
-  | {
-      label?: string;
-      file_base64: string;
-      mime_type: string;
-      filename?: string;
-    }
-  | {
-      label?: string;
-      /** URL returned by POST /api/upload. Must be on our own Blob host. */
-      attachment_url: string;
-    };
+export type AttachmentInput = {
+  label?: string;
+  /** URL returned by POST /api/upload. Must be on our own Blob host. */
+  attachment_url: string;
+};
 
 export type AttachmentResolved = { label: string; url: string };
 
@@ -315,121 +290,34 @@ function isTrustedBlobUrl(url: string): boolean {
   }
 }
 
-// Two input variants:
-// - file_base64: small files inlined in the tool call (≤25 KB practical
-//   limit because the base64 lives in the model's context window).
-// - attachment_url: pre-uploaded via POST /api/upload, only enwise's own
-//   Blob host accepted (host check defends against the old URL passthrough
-//   surface where attackers could inject arbitrary phishing links).
+/**
+ * Validates a pre-uploaded blob URL and packages it as a `LineItemAttachment`.
+ * Bytes never enter the model's context — Claude (or any MCP client) curls
+ * the file to POST /api/upload, gets back a URL, then passes that URL here.
+ * Only enwise's own Vercel Blob hosts are accepted (defends against the
+ * old URL-passthrough surface where attackers could inject phishing links).
+ */
 export async function resolveAttachment(params: {
   businessId: string;
   input: AttachmentInput;
-  /** Per-file size cap in bytes (only enforced for the base64 path). */
-  maxBytes?: number;
 }): Promise<AttachmentResult> {
-  const { businessId, input } = params;
-  const sizeCap = params.maxBytes ?? MAX_ATTACHMENT_BYTES;
-
-  // attachment_url path (pre-uploaded via /api/upload)
-  if ("attachment_url" in input) {
-    if (!isTrustedBlobUrl(input.attachment_url)) {
-      return {
-        ok: false,
-        code: "attachment_invalid_mime",
-        message:
-          "attachment_url must be a URL returned by POST /api/upload (only enwise blob hosts accepted).",
-        hint: "Upload the file first: curl -X POST -H \"Authorization: Bearer …\" -F \"file=@/path/to/file.pdf\" https://enwise.app/api/upload — then pass the returned `url` as `attachment_url`.",
-      };
-    }
-    return {
-      ok: true,
-      attachment: {
-        label: input.label?.trim() || "Attachment",
-        url: input.attachment_url,
-      },
-    };
-  }
-
-  if (!ALLOWED_ATTACHMENT_MIME.has(input.mime_type)) {
-    return {
-      ok: false,
-      code: "attachment_invalid_mime",
-      message: "Attachment must be PNG, JPEG, WebP, or PDF.",
-      hint: "Other formats (SVG, DOCX, etc.) aren't supported. convert first.",
-    };
-  }
-
-  const hasBlob = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
-  if (!hasBlob) {
-    return {
-      ok: false,
-      code: "attachment_storage_unavailable",
-      message:
-        "File uploads require Vercel Blob storage, which isn't configured on this server.",
-      hint: "Configure BLOB_READ_WRITE_TOKEN on the server.",
-    };
-  }
-
-  const clean = input.file_base64.replace(/^data:[^;]+;base64,/, "");
-  let buffer: Buffer;
-  try {
-    buffer = Buffer.from(clean, "base64");
-  } catch {
-    return {
-      ok: false,
-      code: "attachment_invalid_mime",
-      message: "file_base64 isn't valid base64.",
-    };
-  }
-  if (buffer.byteLength > sizeCap) {
-    return {
-      ok: false,
-      code: "attachment_too_large",
-      message: `File is ${formatBytes(buffer.byteLength)}, max is ${formatBytes(sizeCap)}.`,
-    };
-  }
-
-  const mimeCheck = await sniffAttachmentMime(buffer);
-  if (!mimeCheck.ok) {
+  const { input } = params;
+  if (!isTrustedBlobUrl(input.attachment_url)) {
     return {
       ok: false,
       code: "attachment_invalid_mime",
       message:
-        "File contents don't match a supported format (PNG/JPEG/WebP/PDF).",
+        "attachment_url must be a URL returned by POST /api/upload (only enwise blob hosts accepted).",
+      hint: 'Upload the file first: curl -X POST -H "Authorization: Bearer <TOKEN>" -F "file=@/path/to/file.pdf" https://enwise.app/api/upload — then pass the returned `url` as `attachment_url`.',
     };
   }
-  if (mimeCheck.mime !== input.mime_type) {
-    return {
-      ok: false,
-      code: "attachment_invalid_mime",
-      message: `mime_type ${input.mime_type} doesn't match actual file contents (${mimeCheck.mime}).`,
-    };
-  }
-
-  const ext = MIME_EXT[mimeCheck.mime] ?? "bin";
-  const pathname = `attachments/${businessId}/${nanoid(16)}.${ext}`;
-  try {
-    const result = await put(pathname, buffer, {
-      access: "public",
-      contentType: mimeCheck.mime,
-      addRandomSuffix: false,
-      allowOverwrite: false,
-    });
-    const filenameLabel = input.filename?.replace(/\.[^.]+$/, "").trim();
-    return {
-      ok: true,
-      attachment: {
-        label: input.label?.trim() || filenameLabel || "Attachment",
-        url: result.url,
-      },
-    };
-  } catch (err) {
-    return {
-      ok: false,
-      code: "attachment_storage_unavailable",
-      message: `Upload to blob storage failed: ${(err as Error).message}`,
-    };
-  }
+  return {
+    ok: true,
+    attachment: {
+      label: input.label?.trim() || "Attachment",
+      url: input.attachment_url,
+    },
+  };
 }
 
 function formatBytes(n: number): string {
