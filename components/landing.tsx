@@ -62,7 +62,7 @@ export async function Landing() {
               Three steps. You&apos;re done in under two minutes.
             </h2>
 
-            <div className="mt-10 grid gap-px bg-zinc-900 sm:grid-cols-3">
+            <div className="mt-10 grid gap-x-8 gap-y-10 sm:grid-cols-3">
               <Step
                 n="01"
                 title="Sign in"
@@ -177,7 +177,7 @@ export async function Landing() {
 
 function Step({ n, title, body }: { n: string; title: string; body: string }) {
   return (
-    <div className="bg-[#0a0a0a] px-6 py-8">
+    <div>
       <div className="font-mono text-xs uppercase tracking-widest text-zinc-600">
         {n}
       </div>
