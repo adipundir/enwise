@@ -331,9 +331,14 @@ function ClaudeCodeSteps({
   pending: boolean;
   onGenerateKey: () => void;
 }) {
+  // We hash the token at rest, so on dashboard revisits we only know the
+  // prefix. Show <YOUR_KEY> as a placeholder in the add command and let the
+  // user paste their actual key from wherever they stored it. The "rotate"
+  // affordance below the commands handles the case where they've truly lost
+  // it.
   const tokenForCopy = rawToken ?? "<YOUR_KEY>";
   const c = buildClaudeCodeCommands(tokenForCopy, mcpUrl);
-  const ready = Boolean(rawToken);
+  const tokenIsPlaceholder = !rawToken;
 
   return (
     <div className="grid gap-px overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900 md:grid-cols-3">
@@ -345,58 +350,57 @@ function ClaudeCodeSteps({
           registration; the third restarts Claude Code so it picks up the new
           MCP server.
         </p>
-        {!ready ? (
-          <>
-            <p className="mt-4 text-xs leading-relaxed text-zinc-500">
-              Current key:{" "}
-              <code className="font-mono text-zinc-400">
-                {currentPrefix ? `${currentPrefix}…` : "(none)"}
-              </code>
-            </p>
-            <div className="mt-auto pt-8">
-              {confirmOpen ? (
-                <div className="space-y-2">
+        <div className="mt-6 space-y-3">
+          <CommandBlock label="1" command={c.remove} hint='First-run output is "No user-scoped MCP server found" — that&rsquo;s fine.' />
+          <CommandBlock
+            label="2"
+            command={c.add}
+            hint={
+              tokenIsPlaceholder
+                ? `Replace <YOUR_KEY> with your token${currentPrefix ? ` (starts with ${currentPrefix}…)` : ""}.`
+                : "Registers enwise. Token is embedded."
+            }
+          />
+          <CommandBlock label="3" command={c.restart} multiline hint="Type /exit inside Claude Code, then run claude in your terminal." />
+        </div>
+        {tokenIsPlaceholder ? (
+          <div className="mt-auto pt-6 text-xs leading-relaxed text-zinc-500">
+            {confirmOpen ? (
+              <div className="space-y-2 rounded-md border border-zinc-800 bg-[#070707] p-3">
+                <p className="text-zinc-300">Generate a new key? Your current key{currentPrefix ? ` (${currentPrefix}…)` : ""} stops working immediately.</p>
+                <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={onGenerateKey}
                     disabled={pending}
-                    className="w-full rounded-md bg-red-900/80 px-3.5 py-2 text-xs font-medium text-red-50 hover:bg-red-900 disabled:opacity-60"
+                    className="rounded-md bg-red-900/80 px-3 py-1.5 text-xs font-medium text-red-50 hover:bg-red-900 disabled:opacity-60"
                   >
-                    {pending
-                      ? "Generating key..."
-                      : "Yes, generate new key and reveal commands"}
+                    {pending ? "Generating…" : "Yes, rotate"}
                   </button>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-zinc-500">
-                      Your old key will stop working.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmOpen(false)}
-                      className="text-xs text-zinc-500 hover:text-zinc-200"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmOpen(false)}
+                    className="text-zinc-500 hover:text-zinc-200"
+                  >
+                    Cancel
+                  </button>
                 </div>
-              ) : (
+              </div>
+            ) : (
+              <p>
+                Lost your key?{" "}
                 <button
                   type="button"
                   onClick={() => setConfirmOpen(true)}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 hover:bg-white"
+                  className="text-zinc-300 underline underline-offset-2 hover:text-white"
                 >
-                  Reveal setup commands
-                </button>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="mt-6 space-y-3">
-            <CommandBlock label="1" command={c.remove} hint='First-run output is "No user-scoped MCP server found" — that&rsquo;s fine.' />
-            <CommandBlock label="2" command={c.add} hint="Registers enwise. Token is embedded." />
-            <CommandBlock label="3" command={c.restart} multiline hint="Type /exit inside Claude Code, then run claude in your terminal." />
+                  Rotate to a new one
+                </button>{" "}
+                and the commands above will fill in automatically.
+              </p>
+            )}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* STEP 2 — paste in Claude Code */}
@@ -406,15 +410,9 @@ function ClaudeCodeSteps({
           One prompt that calls <code className="rounded bg-zinc-900 px-1 text-zinc-200">whoami</code> and walks
           you through your business profile and first client.
         </p>
-        {ready ? (
-          <div className="mt-6">
-            <CommandBlock command={c.firstPrompt} multiline />
-          </div>
-        ) : (
-          <p className="mt-auto pt-8 text-xs text-zinc-500">
-            Reveal commands in step 01 first.
-          </p>
-        )}
+        <div className="mt-6">
+          <CommandBlock command={c.firstPrompt} multiline />
+        </div>
       </div>
 
       {/* STEP 3 — examples */}
