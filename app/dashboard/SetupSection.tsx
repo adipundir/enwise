@@ -21,13 +21,16 @@ const AGENTS: AgentMeta[] = [
 function buildClaudeCodePrompt(rawToken: string, mcpUrl: string): string {
   // The skill file lives next to the MCP endpoint on the same host.
   const skillUrl = mcpUrl.replace(/\/api\/mcp$/, "/enwise.skill.md");
-  return `Register the enwise invoicing MCP server for me, then install the enwise workflow skill globally so you follow the canonical conventions. Run both commands:
+  const skillCmd = `mkdir -p ~/.claude/skills/enwise && curl -fsSL ${skillUrl} > ~/.claude/skills/enwise/SKILL.md`;
+  return `Register the enwise invoicing MCP server. Run this command via your Bash tool:
 
 claude mcp add --transport http --scope user enwise ${mcpUrl} --header "Authorization: Bearer ${rawToken}"
 
-mkdir -p ~/.claude/skills/enwise && curl -fsSL ${skillUrl} > ~/.claude/skills/enwise/SKILL.md
+Then tell me to install the enwise workflow skill myself. Claude Code's auto-permission classifier blocks the Bash tool from writing into ~/.claude/skills/ (downloading skill files from external URLs counts as self-modifying instructions, which is exactly what the classifier guards against), so I'll run it in my shell. Show me this and tell me to paste it into my next prompt verbatim — the leading \`!\` is what makes Claude Code run it directly in my shell instead of through your Bash tool:
 
-Then \`claude mcp list\` should show enwise as Connected. Claude Code loads MCP tools and skills at session start, so neither is usable in this session. Tell me to \`/exit\` and relaunch Claude Code. In the next session, call the \`whoami\` tool and it'll walk us through setting up my business profile and first client.`;
+! ${skillCmd}
+
+After both finish, \`claude mcp list\` should show enwise as Connected. Tell me to \`/exit\` and relaunch Claude Code so the new MCP tools and the skill load. In the next session, call the \`whoami\` tool and it'll walk us through setting up my business profile and first client.`;
 }
 
 function buildJsonConfig(rawToken: string, mcpUrl: string): string {
