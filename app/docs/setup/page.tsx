@@ -141,29 +141,6 @@ export default async function SetupDocsPage() {
 
           <Step
             n="04"
-            title="Install the enwise skill (optional)"
-            body={
-              <>
-                <p>
-                  A Claude Skill teaches Claude how to use enwise in
-                  conventional workflows (onboarding, sending, analytics). It
-                  makes multi-step flows snappier. Not required.
-                </p>
-                <p className="mt-2">
-                  <a
-                    href="/enwise.skill.md"
-                    download
-                    className="text-zinc-200 underline underline-offset-2 hover:text-white"
-                  >
-                    Download enwise.skill.md →
-                  </a>
-                </p>
-              </>
-            }
-          />
-
-          <Step
-            n="05"
             title="First invoice"
             body={
               <>

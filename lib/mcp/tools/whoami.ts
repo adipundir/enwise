@@ -3,7 +3,6 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { businesses, clients, invoices, users } from "@/lib/db/schema";
 import { ctxFromAuthInfo } from "@/lib/mcp/context";
-import { CURRENT_SKILL_VERSION } from "@/lib/skill-version";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const businessSchema = z.object({
@@ -32,13 +31,6 @@ const outputSchema = {
   }),
   businesses: z.array(businessSchema),
   default_business_id: z.string().nullable(),
-  /**
-   * Latest published version of public/enwise.skill.md. Compare against
-   * the `version` frontmatter in the user's locally-installed skill
-   * (~/.claude/skills/enwise/SKILL.md) and tell the user to refresh
-   * if they don't match.
-   */
-  current_skill_version: z.string(),
   hint: z.string(),
 };
 
@@ -119,7 +111,6 @@ export function registerWhoami(server: McpServer) {
         },
         businesses: businessesOut,
         default_business_id: user.defaultBusinessId,
-        current_skill_version: CURRENT_SKILL_VERSION,
         hint: buildHint(businessesOut, totalClientCount, user.defaultBusinessId),
       };
 
