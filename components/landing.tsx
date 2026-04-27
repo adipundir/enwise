@@ -140,17 +140,17 @@ export async function Landing() {
             </h2>
 
             <div className="mt-10">
-              <div className="flex flex-col rounded-2xl border border-zinc-200 bg-zinc-50 p-8 text-zinc-900">
+              <div className="flex flex-col rounded-2xl border border-zinc-900 bg-[#0a0a0a] p-8 text-zinc-100">
                 <div className="text-[11px] uppercase tracking-widest text-zinc-500">
                   All accounts
                 </div>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="display text-4xl text-zinc-900">$0</span>
+                  <span className="display text-4xl text-zinc-100">$0</span>
                 </div>
-                <p className="mt-3 text-sm text-zinc-600">
+                <p className="mt-3 text-sm text-zinc-500">
                   Everything unlocked from day one. No upsell, no metering.
                 </p>
-                <ul className="mt-6 space-y-2.5 text-sm text-zinc-700">
+                <ul className="mt-6 space-y-2.5 text-sm text-zinc-400">
                   <LiDark>Unlimited businesses, clients, invoices</LiDark>
                   <LiDark>Email delivery, share links, hosted PDFs</LiDark>
                   <LiDark>Recurring invoices + auto-send</LiDark>
@@ -159,7 +159,7 @@ export async function Landing() {
                 </ul>
                 <Link
                   href={primaryHref}
-                  className="mt-8 inline-flex items-center justify-center gap-2 self-start rounded-md bg-zinc-900 px-5 py-2.5 text-sm font-medium text-zinc-50 hover:bg-black"
+                  className="mt-8 inline-flex items-center justify-center gap-2 self-start rounded-md bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-900 hover:bg-white"
                 >
                   Get started
                   <ArrowRight />
@@ -214,7 +214,7 @@ function LiDark({ children }: { children: React.ReactNode }) {
     <li className="flex gap-3">
       <svg
         viewBox="0 0 16 16"
-        className="mt-1 size-3.5 shrink-0 text-black"
+        className="mt-1 size-3.5 shrink-0 text-zinc-100"
         fill="none"
         stroke="currentColor"
         strokeWidth="2.5"
