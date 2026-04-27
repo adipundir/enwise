@@ -130,42 +130,33 @@ export async function Landing() {
         </section>
 
         {/* Pricing */}
-        <section id="pricing" className="border-t border-zinc-900 bg-[#070707]">
-          <div className="mx-auto w-full max-w-3xl px-6 py-20 sm:py-24">
+        <section id="pricing" className="border-t border-zinc-900">
+          <div className="mx-auto w-full max-w-6xl px-6 py-16 sm:py-20">
             <div className="text-[11px] uppercase tracking-widest text-zinc-500">
               Pricing
             </div>
             <h2 className="mt-3 display text-2xl leading-tight sm:text-3xl text-zinc-100">
               Free. Every feature. No tiers, no caps.
             </h2>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-500">
+              Everything unlocked from day one. No upsell, no metering.
+            </p>
 
-            <div className="mt-10">
-              <div className="flex flex-col rounded-2xl border border-zinc-900 bg-[#0a0a0a] p-8 text-zinc-100">
-                <div className="text-[11px] uppercase tracking-widest text-zinc-500">
-                  All accounts
-                </div>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className="display text-4xl text-zinc-100">$0</span>
-                </div>
-                <p className="mt-3 text-sm text-zinc-500">
-                  Everything unlocked from day one. No upsell, no metering.
-                </p>
-                <ul className="mt-6 space-y-2.5 text-sm text-zinc-400">
-                  <LiDark>Unlimited businesses, clients, invoices</LiDark>
-                  <LiDark>Email delivery, share links, hosted PDFs</LiDark>
-                  <LiDark>Recurring invoices + auto-send</LiDark>
-                  <LiDark>Custom brand color + logo on PDFs</LiDark>
-                  <LiDark>Up to 10 attachments per line item, 10 MB each</LiDark>
-                </ul>
-                <Link
-                  href={primaryHref}
-                  className="mt-8 inline-flex items-center justify-center gap-2 self-start rounded-md bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-900 hover:bg-white"
-                >
-                  Get started
-                  <ArrowRight />
-                </Link>
-              </div>
-            </div>
+            <ul className="mt-10 grid grid-cols-1 gap-x-8 gap-y-4 text-sm text-zinc-400 sm:grid-cols-2 lg:grid-cols-3">
+              <LiDark>Unlimited businesses, clients, invoices</LiDark>
+              <LiDark>Email delivery, share links, hosted PDFs</LiDark>
+              <LiDark>Recurring invoices + auto-send</LiDark>
+              <LiDark>Custom brand color + logo on PDFs</LiDark>
+              <LiDark>Up to 10 attachments per line item, 10 MB each</LiDark>
+            </ul>
+
+            <Link
+              href={primaryHref}
+              className="mt-10 inline-flex items-center gap-2 rounded-md bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-950 hover:bg-white"
+            >
+              Get started
+              <ArrowRight />
+            </Link>
           </div>
         </section>
       </main>
