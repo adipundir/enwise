@@ -92,7 +92,7 @@ export async function Landing() {
               The full billing surface, exposed as MCP tools.
             </h2>
 
-            <div className="mt-10 grid grid-cols-2 gap-px bg-zinc-900 sm:grid-cols-4">
+            <div className="mt-10 grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-4">
               <Stat
                 big="Clients"
                 label="Contacts with addresses, tax IDs, default currency."
@@ -200,7 +200,7 @@ function Step({ n, title, body }: { n: string; title: string; body: string }) {
 
 function Stat({ big, label }: { big: string; label: string }) {
   return (
-    <div className="bg-[#0a0a0a] px-6 py-8">
+    <div>
       <div className="text-base font-semibold tracking-tight text-zinc-100">
         {big}
       </div>
