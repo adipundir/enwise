@@ -214,10 +214,10 @@ function LiDark({ children }: { children: React.ReactNode }) {
     <li className="flex gap-3">
       <svg
         viewBox="0 0 16 16"
-        className="mt-1 size-3.5 shrink-0 text-zinc-900"
+        className="mt-1 size-3.5 shrink-0 text-black"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="2.5"
       >
         <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
