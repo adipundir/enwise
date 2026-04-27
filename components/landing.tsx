@@ -155,7 +155,7 @@ export async function Landing() {
                   <LiDark>Email delivery, share links, hosted PDFs</LiDark>
                   <LiDark>Recurring invoices + auto-send</LiDark>
                   <LiDark>Custom brand color + logo on PDFs</LiDark>
-                  <LiDark>Up to 10 attachments per line item, 8 MB each</LiDark>
+                  <LiDark>Up to 10 attachments per line item, 10 MB each</LiDark>
                 </ul>
                 <Link
                   href={primaryHref}
@@ -212,7 +212,7 @@ function LiDark({ children }: { children: React.ReactNode }) {
     <li className="flex gap-3">
       <svg
         viewBox="0 0 16 16"
-        className="mt-1 size-3.5 shrink-0 text-emerald-600"
+        className="mt-1 size-3.5 shrink-0 text-zinc-900"
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
