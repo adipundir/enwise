@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { businesses, clients } from "@/lib/db/schema";
 import { getInvoiceBySlug, markInvoiceViewed } from "@/lib/invoices";
 import { formatMoney } from "@/lib/money";
+import { CopyableField } from "./CopyableField";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -454,8 +455,8 @@ function BankRow({
       <dt className="text-[10px] uppercase tracking-widest text-zinc-500">
         {label}
       </dt>
-      <dd className={mono ? "font-mono text-zinc-900" : "text-zinc-900"}>
-        {value}
+      <dd>
+        <CopyableField value={value} mono={mono} />
       </dd>
     </div>
   );
