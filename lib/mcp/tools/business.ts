@@ -50,6 +50,12 @@ const updateInput = {
   email_reply_to: z.string().email().nullish(),
   default_payment_terms_days: z.number().int().min(0).max(365).optional(),
   default_notes: z.string().max(2000).nullish(),
+  bank_account_holder: z.string().max(200).nullish(),
+  bank_name: z.string().max(200).nullish(),
+  bank_account_number: z.string().max(64).nullish(),
+  bank_ifsc: z.string().max(32).nullish(),
+  bank_swift: z.string().max(32).nullish(),
+  bank_iban: z.string().max(64).nullish(),
   logo: logoInput.optional(),
   client_request_id: z.string().max(64).optional(),
 };
@@ -122,7 +128,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Update business profile",
       description:
-        "Update any subset of a business profile (name, tax ID, address, default currency, invoice number prefix, logo, etc.). Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. Pass `business_id` if the user owns multiple businesses.",
+        "Update any subset of a business profile (name, tax ID, address, default currency, invoice number prefix, logo, bank payout details, etc.). Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. Bank fields (`bank_account_holder`, `bank_name`, `bank_account_number`, `bank_ifsc`, `bank_swift`, `bank_iban`) are shown to the client on the invoice; fill the ones that apply for the receiving country (IFSC for India, SWIFT for international wire, IBAN for Europe). Pass `business_id` if the user owns multiple businesses.",
       inputSchema: updateInput,
     },
     async (args, extra) => {
@@ -167,6 +173,12 @@ export function registerBusinessTools(server: McpServer) {
       if (input.default_payment_terms_days !== undefined)
         patch.defaultPaymentTermsDays = input.default_payment_terms_days;
       if (input.default_notes !== undefined) patch.defaultNotes = input.default_notes ?? null;
+      if (input.bank_account_holder !== undefined) patch.bankAccountHolder = input.bank_account_holder ?? null;
+      if (input.bank_name !== undefined) patch.bankName = input.bank_name ?? null;
+      if (input.bank_account_number !== undefined) patch.bankAccountNumber = input.bank_account_number ?? null;
+      if (input.bank_ifsc !== undefined) patch.bankIfsc = input.bank_ifsc ?? null;
+      if (input.bank_swift !== undefined) patch.bankSwift = input.bank_swift ?? null;
+      if (input.bank_iban !== undefined) patch.bankIban = input.bank_iban ?? null;
 
       if (input.logo !== undefined) {
         if (input.logo === null) {

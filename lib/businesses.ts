@@ -29,6 +29,12 @@ export type BusinessPatch = Partial<{
   emailReplyTo: string | null;
   defaultPaymentTermsDays: number;
   defaultNotes: string | null;
+  bankAccountHolder: string | null;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  bankIfsc: string | null;
+  bankSwift: string | null;
+  bankIban: string | null;
 }>;
 
 export async function getBusinessProfile(
@@ -82,6 +88,12 @@ export function formatBusinessForMcp(row: Business) {
     email_reply_to: row.emailReplyTo,
     default_payment_terms_days: row.defaultPaymentTermsDays,
     default_notes: row.defaultNotes,
+    bank_account_holder: row.bankAccountHolder,
+    bank_name: row.bankName,
+    bank_account_number: row.bankAccountNumber,
+    bank_ifsc: row.bankIfsc,
+    bank_swift: row.bankSwift,
+    bank_iban: row.bankIban,
   };
 }
 

@@ -153,6 +153,25 @@ const styles = StyleSheet.create({
     fontSize: 9,
     lineHeight: 1.4,
   },
+  bankGrid: {
+    marginTop: 6,
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  bankCell: {
+    width: "50%",
+    paddingRight: 12,
+    paddingBottom: 8,
+  },
+  bankCellLabel: {
+    color: c.muted,
+    fontSize: 8,
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  bankCellValue: { color: c.ink, fontSize: 10 },
+  bankCellMono: { fontFamily: "Courier" },
 });
 
 // Column widths (fractions of remaining space, tuned)
@@ -204,6 +223,14 @@ export interface InvoicePdfData {
     postalCode: string | null;
     country: string | null;
     taxId: string | null;
+    bank: {
+      accountHolder: string | null;
+      bankName: string | null;
+      accountNumber: string | null;
+      ifsc: string | null;
+      swift: string | null;
+      iban: string | null;
+    } | null;
   };
 }
 
@@ -353,11 +380,56 @@ export function InvoiceDocument({
           </View>
         )}
 
+        {business.bank ? (
+          <View style={{ marginTop: 24 }} wrap={false}>
+            <Text style={styles.blockLabel}>Payment details</Text>
+            <View style={styles.bankGrid}>
+              {business.bank.accountHolder ? (
+                <BankCell label="Account holder" value={business.bank.accountHolder} />
+              ) : null}
+              {business.bank.bankName ? (
+                <BankCell label="Bank" value={business.bank.bankName} />
+              ) : null}
+              {business.bank.accountNumber ? (
+                <BankCell label="Account number" value={business.bank.accountNumber} mono />
+              ) : null}
+              {business.bank.ifsc ? (
+                <BankCell label="IFSC" value={business.bank.ifsc} mono />
+              ) : null}
+              {business.bank.swift ? (
+                <BankCell label="SWIFT / BIC" value={business.bank.swift} mono />
+              ) : null}
+              {business.bank.iban ? (
+                <BankCell label="IBAN" value={business.bank.iban} mono />
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>{invoice.invoiceNumber}</Text>
         </View>
       </Page>
     </Document>
+  );
+}
+
+function BankCell({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <View style={styles.bankCell}>
+      <Text style={styles.bankCellLabel}>{label}</Text>
+      <Text style={mono ? { ...styles.bankCellValue, ...styles.bankCellMono } : styles.bankCellValue}>
+        {value}
+      </Text>
+    </View>
   );
 }
 

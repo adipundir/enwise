@@ -130,6 +130,15 @@ export const businesses = pgTable(
     emailReplyTo: text("email_reply_to"),
     defaultPaymentTermsDays: integer("default_payment_terms_days").default(30),
     defaultNotes: text("default_notes"),
+    // Bank payout details. All optional; the share page renders only the
+    // non-empty fields. IFSC = India, SWIFT/BIC = international wire,
+    // IBAN = Europe. Mix as appropriate for the receiving country.
+    bankAccountHolder: text("bank_account_holder"),
+    bankName: text("bank_name"),
+    bankAccountNumber: text("bank_account_number"),
+    bankIfsc: text("bank_ifsc"),
+    bankSwift: text("bank_swift"),
+    bankIban: text("bank_iban"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -355,6 +364,7 @@ export const invoices = pgTable(
     businessTaxIdSnapshot: text("business_tax_id_snapshot"),
     businessAddressSnapshot: jsonb("business_address_snapshot"),
     businessLogoUrlSnapshot: text("business_logo_url_snapshot"),
+    businessBankDetailsSnapshot: jsonb("business_bank_details_snapshot"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

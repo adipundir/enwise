@@ -41,6 +41,7 @@ export async function buildInvoicePdfData(
 
   const clientSnapshot = (invoice.clientAddressSnapshot as ClientAddressSnapshot | null) ?? null;
   const businessSnapshot = (invoice.businessAddressSnapshot as ClientAddressSnapshot | null) ?? null;
+  const bankSnapshot = (invoice.businessBankDetailsSnapshot as BankDetailsSnapshot | null) ?? null;
 
   return {
     invoice,
@@ -65,8 +66,34 @@ export async function buildInvoicePdfData(
       postalCode: businessSnapshot?.postal_code ?? business?.postalCode ?? null,
       country: businessSnapshot?.country ?? business?.country ?? null,
       taxId: invoice.businessTaxIdSnapshot ?? business?.taxId ?? null,
+      bank: resolveBankForPdf(bankSnapshot, business),
     },
   };
+}
+
+function resolveBankForPdf(
+  snap: BankDetailsSnapshot | null,
+  live: Business | null,
+): InvoicePdfData["business"]["bank"] {
+  const out = {
+    accountHolder: snap?.account_holder ?? live?.bankAccountHolder ?? null,
+    bankName: snap?.bank_name ?? live?.bankName ?? null,
+    accountNumber: snap?.account_number ?? live?.bankAccountNumber ?? null,
+    ifsc: snap?.ifsc ?? live?.bankIfsc ?? null,
+    swift: snap?.swift ?? live?.bankSwift ?? null,
+    iban: snap?.iban ?? live?.bankIban ?? null,
+  };
+  const hasAny = Object.values(out).some((v) => v && v.trim().length > 0);
+  return hasAny ? out : null;
+}
+
+interface BankDetailsSnapshot {
+  account_holder: string | null;
+  bank_name: string | null;
+  account_number: string | null;
+  ifsc: string | null;
+  swift: string | null;
+  iban: string | null;
 }
 
 interface ClientAddressSnapshot {

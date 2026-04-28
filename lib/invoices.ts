@@ -806,7 +806,8 @@ export async function finalizeInvoice(
   // finalize must capture the business it's actually rendered under at
   // send time.
   const bizRows = await db.execute(sql`
-    select name, legal_name, tax_id, logo_url, address_line1, address_line2, city, region, postal_code, country
+    select name, legal_name, tax_id, logo_url, address_line1, address_line2, city, region, postal_code, country,
+           bank_account_holder, bank_name, bank_account_number, bank_ifsc, bank_swift, bank_iban
     from businesses where id = ${inv.businessId}
   `);
   const biz = bizRows.rows[0] as
@@ -821,6 +822,12 @@ export async function finalizeInvoice(
         region: string | null;
         postal_code: string | null;
         country: string | null;
+        bank_account_holder: string | null;
+        bank_name: string | null;
+        bank_account_number: string | null;
+        bank_ifsc: string | null;
+        bank_swift: string | null;
+        bank_iban: string | null;
       }
     | undefined;
   if (!biz) {
@@ -860,10 +867,38 @@ export async function finalizeInvoice(
         postal_code: biz.postal_code,
         country: biz.country,
       },
+      businessBankDetailsSnapshot: hasAnyBankField(biz)
+        ? {
+            account_holder: biz.bank_account_holder,
+            bank_name: biz.bank_name,
+            account_number: biz.bank_account_number,
+            ifsc: biz.bank_ifsc,
+            swift: biz.bank_swift,
+            iban: biz.bank_iban,
+          }
+        : null,
     })
     .where(eq(invoices.id, inv.id));
   await writeEvent(inv.id, "sent", ctx.tokenId);
   return { ok: true, value: (await getInvoice(ctx, inv.id))! };
+}
+
+function hasAnyBankField(b: {
+  bank_account_holder: string | null;
+  bank_name: string | null;
+  bank_account_number: string | null;
+  bank_ifsc: string | null;
+  bank_swift: string | null;
+  bank_iban: string | null;
+}): boolean {
+  return Boolean(
+    b.bank_account_holder ||
+      b.bank_name ||
+      b.bank_account_number ||
+      b.bank_ifsc ||
+      b.bank_swift ||
+      b.bank_iban,
+  );
 }
 
 // ---------- Status transitions ----------
@@ -942,6 +977,7 @@ export async function revertFinalizeInvoice(
       businessTaxIdSnapshot: null,
       businessAddressSnapshot: null,
       businessLogoUrlSnapshot: null,
+      businessBankDetailsSnapshot: null,
       updatedAt: new Date(),
     })
     .where(

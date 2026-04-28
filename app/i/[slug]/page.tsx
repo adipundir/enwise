@@ -38,9 +38,11 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
           logoUrl: invoice.businessLogoUrlSnapshot,
           taxId: invoice.businessTaxIdSnapshot,
           snapshot: invoice.businessAddressSnapshot,
+          bankSnapshot: invoice.businessBankDetailsSnapshot,
         },
       ]
     : await db.select().from(businesses).where(eq(businesses.id, invoice.businessId));
+  const bankDetails = resolveBankDetails(business);
 
   after(async () => {
     try {
@@ -282,6 +284,34 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
             </section>
           )}
 
+          {bankDetails ? (
+            <section className="mt-10">
+              <div className="text-[10px] uppercase tracking-widest text-zinc-500">
+                Payment details
+              </div>
+              <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+                {bankDetails.accountHolder ? (
+                  <BankRow label="Account holder" value={bankDetails.accountHolder} />
+                ) : null}
+                {bankDetails.bankName ? (
+                  <BankRow label="Bank" value={bankDetails.bankName} />
+                ) : null}
+                {bankDetails.accountNumber ? (
+                  <BankRow label="Account number" value={bankDetails.accountNumber} mono />
+                ) : null}
+                {bankDetails.ifsc ? (
+                  <BankRow label="IFSC" value={bankDetails.ifsc} mono />
+                ) : null}
+                {bankDetails.swift ? (
+                  <BankRow label="SWIFT / BIC" value={bankDetails.swift} mono />
+                ) : null}
+                {bankDetails.iban ? (
+                  <BankRow label="IBAN" value={bankDetails.iban} mono />
+                ) : null}
+              </dl>
+            </section>
+          ) : null}
+
           <footer className="mt-10 border-t border-zinc-200 pt-4 text-xs text-zinc-500">
             {invoice.invoiceNumber}
           </footer>
@@ -362,6 +392,73 @@ interface AddressSource {
   postalCode?: string | null;
   country?: string | null;
   snapshot?: unknown;
+}
+
+interface BankSource {
+  bankAccountHolder?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankIfsc?: string | null;
+  bankSwift?: string | null;
+  bankIban?: string | null;
+  bankSnapshot?: unknown;
+}
+
+interface ResolvedBankDetails {
+  accountHolder: string | null;
+  bankName: string | null;
+  accountNumber: string | null;
+  ifsc: string | null;
+  swift: string | null;
+  iban: string | null;
+}
+
+function resolveBankDetails(
+  src: BankSource | undefined,
+): ResolvedBankDetails | null {
+  if (!src) return null;
+  const snap = src.bankSnapshot as
+    | {
+        account_holder?: string | null;
+        bank_name?: string | null;
+        account_number?: string | null;
+        ifsc?: string | null;
+        swift?: string | null;
+        iban?: string | null;
+      }
+    | null
+    | undefined;
+  const out: ResolvedBankDetails = {
+    accountHolder: snap?.account_holder ?? src.bankAccountHolder ?? null,
+    bankName: snap?.bank_name ?? src.bankName ?? null,
+    accountNumber: snap?.account_number ?? src.bankAccountNumber ?? null,
+    ifsc: snap?.ifsc ?? src.bankIfsc ?? null,
+    swift: snap?.swift ?? src.bankSwift ?? null,
+    iban: snap?.iban ?? src.bankIban ?? null,
+  };
+  const hasAny = Object.values(out).some((v) => v && v.trim().length > 0);
+  return hasAny ? out : null;
+}
+
+function BankRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-[10px] uppercase tracking-widest text-zinc-500">
+        {label}
+      </dt>
+      <dd className={mono ? "font-mono text-zinc-900" : "text-zinc-900"}>
+        {value}
+      </dd>
+    </div>
+  );
 }
 
 function buildAddressLines(src: AddressSource | undefined): string[] {
