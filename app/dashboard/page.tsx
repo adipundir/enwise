@@ -74,6 +74,30 @@ export default async function DashboardHome() {
   const outstandingByCurrency = aggregateOutstanding(allInvoices);
   const businessNameById = new Map(allBusinesses.map((b) => [b.id, b.name]));
   const showBusinessLabel = allBusinesses.length > 1;
+  // Group recent invoices by business so multi-business owners see clean
+  // per-entity stacks instead of an interleaved list. First-occurrence
+  // wins for group order, preserving the underlying createdAt sort.
+  const recentByBusiness: Array<{
+    businessId: string;
+    name: string;
+    invoices: typeof recentInvoices;
+  }> = [];
+  if (showBusinessLabel) {
+    const groupIndex = new Map<string, number>();
+    for (const inv of recentInvoices) {
+      const idx = groupIndex.get(inv.businessId);
+      if (idx === undefined) {
+        groupIndex.set(inv.businessId, recentByBusiness.length);
+        recentByBusiness.push({
+          businessId: inv.businessId,
+          name: businessNameById.get(inv.businessId) ?? "—",
+          invoices: [inv],
+        });
+      } else {
+        recentByBusiness[idx]!.invoices.push(inv);
+      }
+    }
+  }
   const baseUrl =
     process.env.PUBLIC_BASE_URL ||
     process.env.AUTH_URL ||
@@ -134,37 +158,28 @@ export default async function DashboardHome() {
               {recentInvoices.length} of {allInvoices.length}
             </span>
           </div>
-          <div className="overflow-hidden rounded-xl border border-zinc-900">
-            {recentInvoices.map((inv) => (
-              <div
-                key={inv.id}
-                className={`flex flex-col gap-3 border-b border-zinc-900 bg-[#0a0a0a] px-4 py-4 last:border-b-0 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4 sm:px-5 ${inv.status === "void" ? "opacity-40" : ""}`}
-              >
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="font-mono text-sm text-zinc-100">
-                    {inv.invoiceNumber}
+          {showBusinessLabel ? (
+            <div className="space-y-6">
+              {recentByBusiness.map((group) => (
+                <div key={group.businessId}>
+                  <div className="mb-2 text-[10px] uppercase tracking-widest text-zinc-500">
+                    {group.name}
                   </div>
-                  <StatusChip status={inv.status} />
-                  {showBusinessLabel ? (
-                    <span className="text-[10px] uppercase tracking-widest text-zinc-500">
-                      {businessNameById.get(inv.businessId) ?? "—"}
-                    </span>
-                  ) : null}
+                  <div className="overflow-hidden rounded-xl border border-zinc-900">
+                    {group.invoices.map((inv) => (
+                      <InvoiceRow key={inv.id} inv={inv} />
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-zinc-300">
-                  <span>{formatMoney(inv.total, inv.currency)}</span>
-                  <span className="text-xs text-zinc-500">Due {inv.dueDate}</span>
-                </div>
-                <Link
-                  href={invoiceShareUrl(inv.shareSlug)}
-                  target="_blank"
-                  className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-center text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
-                >
-                  Share link →
-                </Link>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-zinc-900">
+              {recentInvoices.map((inv) => (
+                <InvoiceRow key={inv.id} inv={inv} />
+              ))}
+            </div>
+          )}
         </section>
       ) : null}
     </div>
@@ -211,6 +226,42 @@ function Stat({
       >
         {value}
       </div>
+    </div>
+  );
+}
+
+function InvoiceRow({
+  inv,
+}: {
+  inv: {
+    id: string;
+    invoiceNumber: string;
+    status: "draft" | "sent" | "paid" | "void";
+    total: string;
+    currency: string;
+    dueDate: string;
+    shareSlug: string;
+  };
+}) {
+  return (
+    <div
+      className={`flex flex-col gap-3 border-b border-zinc-900 bg-[#0a0a0a] px-4 py-4 last:border-b-0 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4 sm:px-5 ${inv.status === "void" ? "opacity-40" : ""}`}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="font-mono text-sm text-zinc-100">{inv.invoiceNumber}</div>
+        <StatusChip status={inv.status} />
+      </div>
+      <div className="flex flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-zinc-300">
+        <span>{formatMoney(inv.total, inv.currency)}</span>
+        <span className="text-xs text-zinc-500">Due {inv.dueDate}</span>
+      </div>
+      <Link
+        href={invoiceShareUrl(inv.shareSlug)}
+        target="_blank"
+        className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-center text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
+      >
+        Share link →
+      </Link>
     </div>
   );
 }
