@@ -21,7 +21,12 @@ export default async function DashboardHome() {
     | undefined;
   const userId = user?.id;
 
-  // One token per user (not per business). Mint on first visit, reveal once.
+  // One token per user (not per business). Mint on first visit. The raw
+  // token is decrypt-at-rest available via getActiveToken().rawToken — we
+  // pass it through so the dashboard can show the install command on every
+  // revisit, no rotation needed. Returns null for legacy hash-only rows or
+  // when TOKEN_ENC_KEY isn't configured; in those cases the SetupSection
+  // falls back to the rotate-to-view path.
   let bootstrapRawToken: string | null = null;
   let currentPrefix: string | null = null;
   if (userId) {
@@ -34,6 +39,7 @@ export default async function DashboardHome() {
       bootstrapRawToken = created.raw;
       currentPrefix = created.token.tokenPrefix;
     } else {
+      bootstrapRawToken = active.rawToken;
       currentPrefix = active.tokenPrefix;
     }
   }

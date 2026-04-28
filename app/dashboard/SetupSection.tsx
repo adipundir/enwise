@@ -22,9 +22,19 @@ function buildClaudeCodeCommands(
   rawToken: string,
   mcpUrl: string,
 ): { remove: string; add: string; restart: string; firstPrompt: string } {
+  // The `add` command is chained with a silent `remove` first so it works in
+  // both cases:
+  //   - First-time install: remove exits 1 ("No user-scoped MCP server
+  //     found"), 2>/dev/null swallows it, add proceeds.
+  //   - Re-install / regenerate: remove cleans up the stale registration
+  //     (which would otherwise make `claude mcp add` a no-op and leave the
+  //     old token in ~/.claude.json), then add registers fresh.
+  // `;` not `&&` — we want add to run regardless of remove's exit code.
+  const removeCmd = `claude mcp remove enwise -s user 2>/dev/null`;
+  const addCmd = `claude mcp add --transport http --scope user enwise ${mcpUrl} --header "Authorization: Bearer ${rawToken}"`;
   return {
     remove: `claude mcp remove enwise -s user`,
-    add: `claude mcp add --transport http --scope user enwise ${mcpUrl} --header "Authorization: Bearer ${rawToken}"`,
+    add: `${removeCmd}; ${addCmd}`,
     restart: `/exit\nclaude`,
     firstPrompt: `Use whoami to show my enwise account, then walk me through setting up my business profile and first client.`,
   };
@@ -322,14 +332,10 @@ function ClaudeCodeSteps({
   pending: boolean;
   onGenerateKey: () => void;
 }) {
-  // We hash the token at rest, so on dashboard revisits we only know the
-  // prefix. Show <YOUR_KEY> as a placeholder in the add command and let the
-  // user paste their actual key from wherever they stored it. The "rotate"
-  // affordance below the commands handles the case where they've truly lost
-  // it.
-  const tokenForCopy = rawToken ?? "<YOUR_KEY>";
-  const c = buildClaudeCodeCommands(tokenForCopy, mcpUrl);
-  const tokenIsPlaceholder = !rawToken;
+  const c = buildClaudeCodeCommands(rawToken ?? "", mcpUrl);
+  const hasToken = Boolean(rawToken);
+  const [confirming, setConfirming] = useState(false);
+  const [justGenerated, setJustGenerated] = useState(false);
 
   return (
     <div className="grid gap-px overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900 md:grid-cols-3">
@@ -337,22 +343,77 @@ function ClaudeCodeSteps({
       <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
         <StepKicker n="01" title="Install enwise MCP" />
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-          {tokenIsPlaceholder
-            ? "One click: generates an API key and copies the install command to your clipboard. Paste it in your terminal."
-            : "Run this in your terminal."}
+          {pending
+            ? "Generating your API key and writing the install command to your clipboard…"
+            : hasToken
+              ? "Install command is ready. Click to copy it to your clipboard, then paste it in your terminal."
+              : "One click: generates an API key and copies the install command to your clipboard."}
         </p>
-        <div className="mt-6">
-          {tokenIsPlaceholder ? (
+        <div className="mt-auto pt-6">
+          {pending ? (
             <button
               type="button"
-              onClick={onGenerateKey}
-              disabled={pending}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 hover:bg-white disabled:opacity-60"
+              disabled
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 opacity-70"
             >
-              {pending ? "Generating…" : "Generate key & copy install command"}
+              <Spinner /> Generating…
             </button>
+          ) : confirming ? (
+            <div className="space-y-3 text-xs">
+              <p className="leading-relaxed text-zinc-300">
+                This regenerates your API key. Any other setups using the
+                previous key will stop working immediately and need to be
+                reinstalled with the new command.
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirming(false);
+                    setJustGenerated(true);
+                    onGenerateKey();
+                  }}
+                  className="rounded-md bg-red-900/70 px-3 py-1.5 text-xs font-medium text-red-50 hover:bg-red-900"
+                >
+                  Yes, regenerate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  className="rounded-md px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : hasToken ? (
+            <div className="space-y-3">
+              <CopyButton
+                command={c.add}
+                label="Copy install command"
+                copiedLabel="Install command copied"
+                initialCopied={justGenerated}
+              />
+              <p className="text-[11px] leading-relaxed text-zinc-500">
+                Suspect your key was leaked?{" "}
+                <button
+                  type="button"
+                  onClick={() => setConfirming(true)}
+                  className="text-zinc-300 underline underline-offset-2 hover:text-white"
+                >
+                  Regenerate
+                </button>
+                .
+              </p>
+            </div>
           ) : (
-            <CommandBlock command={c.add} />
+            <button
+              type="button"
+              onClick={() => setConfirming(true)}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 hover:bg-white"
+            >
+              Generate key & copy install command
+            </button>
           )}
         </div>
       </div>
@@ -399,8 +460,45 @@ function ClaudeCodeSteps({
   );
 }
 
-function CopyButton({ command, label }: { command: string; label: string }) {
-  const [copied, setCopied] = useState(false);
+function Spinner() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="size-3 animate-spin"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden
+    >
+      <circle cx="8" cy="8" r="6" className="opacity-25" />
+      <path d="M14 8a6 6 0 0 0-6-6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CopyButton({
+  command,
+  label,
+  copiedLabel = "Copied",
+  initialCopied = false,
+}: {
+  command: string;
+  label: string;
+  copiedLabel?: string;
+  initialCopied?: boolean;
+}) {
+  const [copied, setCopied] = useState(initialCopied);
+  // If we mounted in the copied state (parent already wrote the value to the
+  // clipboard before this button rendered, e.g. right after regenerating),
+  // auto-revert to the default label after the same window as a manual click.
+  useEffect(() => {
+    if (initialCopied) {
+      const t = setTimeout(() => setCopied(false), 2400);
+      return () => clearTimeout(t);
+    }
+    // intentionally only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   async function copy() {
     try {
       await navigator.clipboard.writeText(command);
@@ -416,7 +514,7 @@ function CopyButton({ command, label }: { command: string; label: string }) {
       onClick={copy}
       className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 hover:bg-white"
     >
-      {copied ? "Copied" : label}
+      {copied ? copiedLabel : label}
     </button>
   );
 }

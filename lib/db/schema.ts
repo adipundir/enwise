@@ -156,6 +156,12 @@ export const apiTokens = pgTable(
     name: text("name").notNull(),
     tokenHash: text("token_hash").notNull(),
     tokenPrefix: text("token_prefix").notNull(),
+    /** AES-256-GCM ciphertext as base64(nonce || ct || authTag). Decrypted
+     *  with TOKEN_ENC_KEY env var (NOT in the DB) so the dashboard can show
+     *  the user their key on revisit without forcing a rotate. Nullable for
+     *  back-compat with rows created before encrypt-at-rest was enabled —
+     *  those still authenticate via tokenHash, just can't be displayed. */
+    tokenEncrypted: text("token_encrypted"),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })

@@ -78,6 +78,13 @@
       "when": 1777320391477,
       "tag": "0010_yummy_hellion",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777366782682,
+      "tag": "0011_brief_tarantula",
+      "breakpoints": true
     }
   ]
 }
