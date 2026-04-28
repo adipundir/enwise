@@ -103,7 +103,7 @@ export default async function DashboardHome() {
         <OutstandingStat
           value={
             outstandingByCurrency.length === 0
-              ? "(none)"
+              ? "—"
               : outstandingByCurrency
                   .map((b) => formatMoney(b.outstanding, b.currency))
                   .join(" · ")
