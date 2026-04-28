@@ -72,6 +72,8 @@ export default async function DashboardHome() {
     : [[], [], []];
 
   const outstandingByCurrency = aggregateOutstanding(allInvoices);
+  const businessNameById = new Map(allBusinesses.map((b) => [b.id, b.name]));
+  const showBusinessLabel = allBusinesses.length > 1;
   const baseUrl =
     process.env.PUBLIC_BASE_URL ||
     process.env.AUTH_URL ||
@@ -143,6 +145,11 @@ export default async function DashboardHome() {
                     {inv.invoiceNumber}
                   </div>
                   <StatusChip status={inv.status} />
+                  {showBusinessLabel ? (
+                    <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+                      {businessNameById.get(inv.businessId) ?? "—"}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="flex flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-zinc-300">
                   <span>{formatMoney(inv.total, inv.currency)}</span>

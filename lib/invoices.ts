@@ -10,7 +10,7 @@ import {
   type Invoice,
   type InvoiceLineItem,
 } from "@/lib/db/schema";
-import type { ScopedCtx } from "@/lib/mcp/context";
+import type { EnwiseCtx, ScopedCtx } from "@/lib/mcp/context";
 import { addAmounts, computeLine, isValidCurrency } from "@/lib/money";
 import { allocateInvoiceNumber } from "@/lib/numbering";
 import {
@@ -432,6 +432,9 @@ export async function getInvoiceBySlug(
 }
 
 export type ListInvoicesOpts = {
+  /** Filter to a specific business. Omit to list across every business
+   *  the user owns — useful for "show me everything I billed last month". */
+  businessId?: string;
   clientId?: string;
   status?: "draft" | "sent" | "paid" | "void" | "overdue";
   dateFrom?: string;
@@ -440,7 +443,7 @@ export type ListInvoicesOpts = {
 };
 
 export async function listInvoices(
-  ctx: ScopedCtx,
+  ctx: EnwiseCtx,
   opts: ListInvoicesOpts = {},
 ): Promise<Invoice[]> {
   const limit = Math.max(1, Math.min(200, opts.limit ?? 25));
@@ -448,6 +451,7 @@ export async function listInvoices(
     eq(invoices.ownerUserId, ctx.userId),
     isNull(invoices.deletedAt),
   ];
+  if (opts.businessId) conditions.push(eq(invoices.businessId, opts.businessId));
   if (opts.clientId) conditions.push(eq(invoices.clientId, opts.clientId));
   if (opts.status === "overdue") {
     conditions.push(eq(invoices.status, "sent"));
@@ -1129,6 +1133,7 @@ export function formatInvoiceSummaryForMcp(inv: Invoice) {
     id: inv.id,
     invoice_number: inv.invoiceNumber,
     status: inv.status,
+    business_id: inv.businessId,
     client_id: inv.clientId,
     issue_date: inv.issueDate,
     due_date: inv.dueDate,

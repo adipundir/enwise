@@ -1,4 +1,7 @@
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { db } from "@/lib/db";
+import { businesses } from "@/lib/db/schema";
 import {
   addLineItem,
   createInvoice,
@@ -108,6 +111,17 @@ const createSchema = {
   terms: z.string().max(4000).nullish(),
   client_request_id: z.string().max(64).optional(),
 };
+
+async function businessBelongsToUser(
+  userId: string,
+  businessId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: businesses.id })
+    .from(businesses)
+    .where(and(eq(businesses.id, businessId), eq(businesses.ownerUserId, userId)));
+  return Boolean(row);
+}
 
 function mapMutateError(code: string): ErrorCode {
   switch (code) {
@@ -387,7 +401,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "List invoices",
       description:
-        "List invoices with optional filters. Order: issue_date desc. Use this for 'get the last 10 invoices to this client', 'what's outstanding?', etc. Status 'overdue' is computed (status=sent AND due_date<today).",
+        "List invoices with optional filters. Order: issue_date desc. Filters compose: pass `business_id` to scope to one business, `client_id` to scope to one client, both to scope to invoices for that client under that business. Omit `business_id` to list across every business the user owns. Status 'overdue' is computed (status=sent AND due_date<today). Use this for 'all invoices from ZK Labs', 'last 10 invoices to this client', 'what's outstanding?', etc.",
       inputSchema: {
         business_id: uuid.optional(),
         client_id: uuid.optional(),
@@ -408,11 +422,22 @@ export function registerInvoiceTools(server: McpServer) {
       });
       const parsed = schema.safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
-      const __u = ctxFromAuthInfo(extra.authInfo);
-      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
-      if (!__s.ok) return __s.error;
-      const ctx = __s.scoped;
+      const ctx = ctxFromAuthInfo(extra.authInfo);
+      // Don't use scopeFromCtx here: this is the one read tool that's
+      // legitimately cross-business. Validate business_id if passed,
+      // otherwise list across every business the user owns.
+      if (parsed.data.business_id) {
+        const owned = await businessBelongsToUser(ctx.userId, parsed.data.business_id);
+        if (!owned) {
+          return toolError(
+            "business_not_found",
+            `No business with id ${parsed.data.business_id} belongs to the authenticated user.`,
+            { hint: "Call `whoami` to list the businesses this token can act on." },
+          );
+        }
+      }
       const rows = await listInvoices(ctx, {
+        businessId: parsed.data.business_id,
         clientId: parsed.data.client_id,
         status: parsed.data.status,
         dateFrom: parsed.data.date_from,
