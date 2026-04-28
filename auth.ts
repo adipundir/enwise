@@ -12,6 +12,7 @@ import {
   verificationTokens,
 } from "@/lib/db/schema";
 import { uniqueSlug } from "@/lib/slug";
+import { createToken } from "@/lib/tokens";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -52,6 +53,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           .set({ defaultBusinessId: created.id })
           .where(eq(users.id, user.id));
       }
+      // Mint the user's API token at signup time so it's encrypted from
+      // creation. The dashboard's lazy fallback stays for safety, but with
+      // this hook in place, new accounts always have a retrievable token
+      // on first dashboard load.
+      await createToken({ createdByUserId: user.id, name: "Default" });
     },
   },
 });

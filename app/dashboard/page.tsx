@@ -21,14 +21,11 @@ export default async function DashboardHome() {
     | undefined;
   const userId = user?.id;
 
-  // One token per user (not per business). Mint on first visit. The raw
-  // token is decrypt-at-rest available via getActiveToken().rawToken — we
-  // pass it through so the dashboard can show the install command on every
-  // revisit, no rotation needed. Returns null for legacy hash-only rows or
-  // when TOKEN_ENC_KEY isn't configured; in those cases the SetupSection
-  // falls back to the rotate-to-view path.
+  // createToken runs in auth.ts on signup, so any user reaching this page
+  // should already have an encrypted token. The lazy create below stays as
+  // a defensive fallback for users who somehow reach the dashboard without
+  // one (e.g., signup hook misfires).
   let bootstrapRawToken: string | null = null;
-  let currentPrefix: string | null = null;
   if (userId) {
     const active = await getActiveToken(userId);
     if (!active) {
@@ -37,10 +34,8 @@ export default async function DashboardHome() {
         name: "Default",
       });
       bootstrapRawToken = created.raw;
-      currentPrefix = created.token.tokenPrefix;
     } else {
       bootstrapRawToken = active.rawToken;
-      currentPrefix = active.tokenPrefix;
     }
   }
 
@@ -123,7 +118,6 @@ export default async function DashboardHome() {
 
       <SetupSection
         initialRawToken={bootstrapRawToken}
-        currentPrefix={currentPrefix}
         mcpUrl={mcpUrl}
         hasInvoices={allInvoices.length > 0}
       />

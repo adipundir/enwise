@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
-import { rotateKeyAction } from "./actions";
+import { useEffect, useRef, useState } from "react";
 
 type AgentId = "claude-code" | "claude-ai" | "cursor" | "codex" | "windsurf";
 
@@ -84,32 +83,26 @@ http_headers = { Authorization = "Bearer ${rawToken}" }`;
 
 /**
  * Setup flow with a per-agent dropdown. Each agent has its own three
- * step layout: configure, restart/reload, verify. The "make a new key
- * and prepare the config" path stays a single combined action for users
- * who lost their key.
+ * step layout: configure, restart/reload, verify. Tokens are minted on
+ * signup (auth.ts) and never rotated — users only ever see their actual
+ * key embedded in the install command.
  */
 export function SetupSection({
   initialRawToken,
-  currentPrefix,
   mcpUrl,
   hasInvoices,
 }: {
   initialRawToken: string | null;
-  currentPrefix: string | null;
   mcpUrl: string;
   hasInvoices: boolean;
 }) {
-  const [rawToken, setRawToken] = useState<string | null>(initialRawToken);
   const [agent, setAgent] = useState<AgentId>("claude-code");
-  const [primaryCopied, setPrimaryCopied] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
   // Once the user has at least one invoice, the setup steps are noise on
   // every dashboard visit. Collapse by default; user can re-open to switch
-  // agent or fetch a fresh prompt.
+  // agent or grab the install command again.
   const [expanded, setExpanded] = useState(!hasInvoices);
 
-  const tokenForCopy = rawToken ?? "<YOUR_KEY>";
+  const rawToken = initialRawToken;
 
   function payloadFor(token: string): string {
     switch (agent) {
@@ -126,47 +119,14 @@ export function SetupSection({
     }
   }
 
-  const primaryPayload = payloadFor(tokenForCopy);
-
-  const payloadNoun =
-    agent === "claude-code"
-      ? "prompt"
-      : agent === "claude-ai"
-        ? "header"
-        : "config";
-
   const primaryLabel =
-    agent === "claude-code"
-      ? "Copy Claude Code prompt"
-      : agent === "claude-ai"
-        ? "Copy bearer header"
-        : agent === "codex"
-          ? "Copy TOML config"
-          : "Copy JSON config";
-
-  const generateLabel = `Generate key and copy ${payloadNoun}`;
-
-  function makeNewKeyAndCopy() {
-    setConfirmOpen(false);
-    startTransition(async () => {
-      const r = await rotateKeyAction();
-      setRawToken(r.rawToken);
-      try {
-        await navigator.clipboard.writeText(payloadFor(r.rawToken));
-        setPrimaryCopied(true);
-        setTimeout(() => setPrimaryCopied(false), 2400);
-      } catch {
-        // clipboard rejected; user can still click copy button
-      }
-    });
-  }
-
-  async function copyPrimary() {
-    if (!rawToken) return;
-    await navigator.clipboard.writeText(payloadFor(rawToken));
-    setPrimaryCopied(true);
-    setTimeout(() => setPrimaryCopied(false), 1800);
-  }
+    agent === "claude-ai"
+      ? "Copy bearer header"
+      : agent === "codex"
+        ? "Copy TOML config"
+        : agent === "cursor" || agent === "windsurf"
+          ? "Copy JSON config"
+          : "Copy install command";
 
   return (
     <section className="space-y-6">
@@ -183,13 +143,7 @@ export function SetupSection({
         </div>
         <div className="flex items-center gap-3">
           {expanded ? (
-            <AgentPicker
-              value={agent}
-              onChange={(next) => {
-                setAgent(next);
-                setPrimaryCopied(false);
-              }}
-            />
+            <AgentPicker value={agent} onChange={setAgent} />
           ) : null}
           <button
             type="button"
@@ -216,12 +170,7 @@ export function SetupSection({
       </div>
 
       {!expanded ? null : agent === "claude-code" ? (
-        <ClaudeCodeSteps
-          rawToken={rawToken}
-          mcpUrl={mcpUrl}
-          pending={pending}
-          onGenerateKey={makeNewKeyAndCopy}
-        />
+        <ClaudeCodeSteps rawToken={rawToken} mcpUrl={mcpUrl} />
       ) : (
       <div className="grid gap-px overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900 md:grid-cols-3">
         {/* STEP 1 */}
@@ -230,55 +179,12 @@ export function SetupSection({
           <p className="mt-4 text-sm leading-relaxed text-zinc-400">
             {step1Body(agent)}
           </p>
-          {!rawToken ? (
-            <p className="mt-4 text-xs leading-relaxed text-zinc-500">
-              Current key:{" "}
-              <code className="font-mono text-zinc-400">
-                {currentPrefix ? `${currentPrefix}…` : "(none)"}
-              </code>
-            </p>
-          ) : null}
-          <div className="mt-auto pt-8 space-y-3">
-            {rawToken ? (
-              <button
-                type="button"
-                onClick={copyPrimary}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 hover:bg-white"
-              >
-                {primaryCopied ? "Copied" : primaryLabel}
-              </button>
-            ) : confirmOpen ? (
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={makeNewKeyAndCopy}
-                  disabled={pending}
-                  className="w-full rounded-md bg-red-900/80 px-3.5 py-2 text-xs font-medium text-red-50 hover:bg-red-900 disabled:opacity-60"
-                >
-                  {pending ? "Generating key..." : `Yes, ${generateLabel.toLowerCase()}`}
-                </button>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-zinc-500">
-                    Your old key will stop working.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmOpen(false)}
-                    className="text-xs text-zinc-500 hover:text-zinc-200"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setConfirmOpen(true)}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 hover:bg-white"
-              >
-                {generateLabel}
-              </button>
-            )}
+          <div className="mt-auto pt-8">
+            <CopyButton
+              command={payloadFor(rawToken ?? "")}
+              label={primaryLabel}
+              copiedLabel={primaryLabel.replace(/^Copy/, "Copied")}
+            />
           </div>
         </div>
 
@@ -324,18 +230,15 @@ export function SetupSection({
 function ClaudeCodeSteps({
   rawToken,
   mcpUrl,
-  pending,
-  onGenerateKey,
 }: {
   rawToken: string | null;
   mcpUrl: string;
-  pending: boolean;
-  onGenerateKey: () => void;
 }) {
+  // The dashboard server route always passes a non-null rawToken — new
+  // signups get one in auth.ts::events.createUser, legacy rows get
+  // auto-rotated on dashboard load. The null-guard here is just a type
+  // narrowing safety net.
   const c = buildClaudeCodeCommands(rawToken ?? "", mcpUrl);
-  const hasToken = Boolean(rawToken);
-  const [confirming, setConfirming] = useState(false);
-  const [justGenerated, setJustGenerated] = useState(false);
 
   return (
     <div className="grid gap-px overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900 md:grid-cols-3">
@@ -343,78 +246,14 @@ function ClaudeCodeSteps({
       <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
         <StepKicker n="01" title="Install enwise MCP" />
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-          {pending
-            ? "Generating your API key and writing the install command to your clipboard…"
-            : hasToken
-              ? "Install command is ready. Click to copy it to your clipboard, then paste it in your terminal."
-              : "One click: generates an API key and copies the install command to your clipboard."}
+          Click to copy the install command to your clipboard, then paste it in your terminal.
         </p>
         <div className="mt-auto pt-6">
-          {pending ? (
-            <button
-              type="button"
-              disabled
-              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 opacity-70"
-            >
-              <Spinner /> Generating…
-            </button>
-          ) : confirming ? (
-            <div className="space-y-3 text-xs">
-              <p className="leading-relaxed text-zinc-300">
-                This regenerates your API key. Any other setups using the
-                previous key will stop working immediately and need to be
-                reinstalled with the new command.
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConfirming(false);
-                    setJustGenerated(true);
-                    onGenerateKey();
-                  }}
-                  className="rounded-md bg-red-900/70 px-3 py-1.5 text-xs font-medium text-red-50 hover:bg-red-900"
-                >
-                  Yes, regenerate
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirming(false)}
-                  className="rounded-md px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-200"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : hasToken ? (
-            <div className="space-y-3">
-              <CopyButton
-                command={c.add}
-                label="Copy install command"
-                copiedLabel="Install command copied"
-                initialCopied={justGenerated}
-              />
-              <p className="text-[11px] leading-relaxed text-zinc-500">
-                Suspect your key was leaked?{" "}
-                <button
-                  type="button"
-                  onClick={() => setConfirming(true)}
-                  className="text-zinc-300 underline underline-offset-2 hover:text-white"
-                >
-                  Regenerate
-                </button>
-                .
-              </p>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirming(true)}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 hover:bg-white"
-            >
-              Generate key & copy install command
-            </button>
-          )}
+          <CopyButton
+            command={c.add}
+            label="Copy install command"
+            copiedLabel="Install command copied"
+          />
         </div>
       </div>
 
@@ -422,35 +261,16 @@ function ClaudeCodeSteps({
       <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
         <StepKicker n="02" title="Restart Claude Code" />
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-          MCP tools only load at session start.
+          MCP tools only load at session start. If Claude Code is already
+          running, exit and reopen it.
         </p>
-        <ol className="mt-6 space-y-3 text-sm text-zinc-300">
-          <li className="flex items-start gap-3">
-            <span className="select-none pt-0.5 font-mono text-xs text-zinc-600">1</span>
-            <span>
-              Inside Claude Code, type{" "}
-              <code className="rounded bg-[#070707] px-1.5 py-0.5 font-mono text-xs text-zinc-100">/exit</code>
-              .
-            </span>
-          </li>
-          <li className="flex items-start gap-3">
-            <span className="select-none pt-0.5 font-mono text-xs text-zinc-600">2</span>
-            <span>
-              In your terminal, run{" "}
-              <code className="rounded bg-[#070707] px-1.5 py-0.5 font-mono text-xs text-zinc-100">claude</code>
-              .
-            </span>
-          </li>
-        </ol>
       </div>
 
       {/* STEP 3 — paste setup prompt in the fresh session */}
       <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
-        <StepKicker n="03" title="Paste this in your new session" />
+        <StepKicker n="03" title="Paste this in Claude Code" />
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-          One prompt that calls{" "}
-          <code className="rounded bg-zinc-900 px-1 text-zinc-200">whoami</code>{" "}
-          and walks you through your business profile and first client.
+          One prompt that guides Claude through setting up your business profile and your first client.
         </p>
         <div className="mt-auto pt-6">
           <CopyButton command={c.firstPrompt} label="Copy setup prompt" />
@@ -460,50 +280,23 @@ function ClaudeCodeSteps({
   );
 }
 
-function Spinner() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      className="size-3 animate-spin"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      aria-hidden
-    >
-      <circle cx="8" cy="8" r="6" className="opacity-25" />
-      <path d="M14 8a6 6 0 0 0-6-6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function CopyButton({
   command,
   label,
   copiedLabel = "Copied",
-  initialCopied = false,
 }: {
   command: string;
   label: string;
   copiedLabel?: string;
-  initialCopied?: boolean;
 }) {
-  const [copied, setCopied] = useState(initialCopied);
-  // If we mounted in the copied state (parent already wrote the value to the
-  // clipboard before this button rendered, e.g. right after regenerating),
-  // auto-revert to the default label after the same window as a manual click.
-  useEffect(() => {
-    if (initialCopied) {
-      const t = setTimeout(() => setCopied(false), 2400);
-      return () => clearTimeout(t);
-    }
-    // intentionally only on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Once copied, the button stays in the copied state — the value really
+  // is on the clipboard until the user replaces it. Reverting to the
+  // original label would lie about that.
+  const [copied, setCopied] = useState(false);
   async function copy() {
     try {
       await navigator.clipboard.writeText(command);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
     } catch {
       // clipboard rejected
     }
@@ -514,58 +307,32 @@ function CopyButton({
       onClick={copy}
       className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 hover:bg-white"
     >
-      {copied ? copiedLabel : label}
+      {copied ? (
+        <>
+          <CheckIcon />
+          {copiedLabel}
+        </>
+      ) : (
+        label
+      )}
     </button>
   );
 }
 
-function CommandBlock({
-  command,
-  label,
-  hint,
-}: {
-  command: string;
-  label?: string;
-  hint?: string;
-}) {
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(command);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    } catch {
-      // clipboard rejected; the user can still select + copy manually
-    }
-  }
+function CheckIcon() {
   return (
-    <div className="space-y-1.5">
-      <div className="group relative rounded-md border border-zinc-800 bg-[#070707] font-mono text-xs text-zinc-200">
-        <div className="flex items-start gap-3 px-3 py-2.5">
-          {label ? (
-            <span className="select-none pt-0.5 text-zinc-600">{label}</span>
-          ) : null}
-          {/* whitespace-pre-wrap preserves explicit \n in multi-line commands
-              while still wrapping long lines inside the box; break-all so a
-              long token without spaces (e.g., env_live_…) wraps too instead
-              of overflowing the column. */}
-          <pre className="flex-1 whitespace-pre-wrap break-all text-zinc-200">
-            {command}
-          </pre>
-          <button
-            type="button"
-            onClick={copy}
-            aria-label="Copy"
-            className="select-none rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-widest text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
-          >
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-      </div>
-      {hint ? (
-        <p className="text-[11px] leading-relaxed text-zinc-500">{hint}</p>
-      ) : null}
-    </div>
+    <svg
+      viewBox="0 0 16 16"
+      className="size-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 8.5 6.5 12 13 4.5" className="animate-draw-check" />
+    </svg>
   );
 }
 
@@ -671,7 +438,7 @@ function StepKicker({
       <div className="text-xs font-mono uppercase tracking-widest text-zinc-600">
         {n}
       </div>
-      <h2 className="mt-6 text-xl font-semibold tracking-tight text-zinc-100">
+      <h2 className="mt-6 min-h-14 text-xl font-semibold tracking-tight leading-7 text-zinc-100">
         {title}
       </h2>
     </div>
