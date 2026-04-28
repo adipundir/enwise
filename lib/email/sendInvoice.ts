@@ -10,6 +10,7 @@ import {
   type InvoiceWithLineItems,
 } from "@/lib/invoices";
 import type { ScopedCtx } from "@/lib/mcp/context";
+import { formatMoney } from "@/lib/money";
 import { buildInvoicePdfData } from "@/lib/pdf/renderInvoice";
 
 export type SendInvoiceOutcome =
@@ -164,7 +165,7 @@ export async function sendInvoiceByEmail(
       cc: ccArray && ccArray.length > 0 ? ccArray : undefined,
       bcc: bccArray && bccArray.length > 0 ? bccArray : undefined,
       replyTo: replyToAddress ?? undefined,
-      subject: `${sanitizeHeaderValue(pdfData.business.name)}. Invoice ${sent.invoiceNumber}`,
+      subject: `Invoice ${sent.invoiceNumber} — ${formatMoney(sent.total, sent.currency)} due ${sent.dueDate}`,
       html,
       text: plainText,
       headers: {
