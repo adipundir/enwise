@@ -136,7 +136,7 @@ export default async function DashboardHome() {
             {recentInvoices.map((inv) => (
               <div
                 key={inv.id}
-                className="flex flex-col gap-3 border-b border-zinc-900 bg-[#0a0a0a] px-4 py-4 last:border-b-0 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4 sm:px-5"
+                className={`flex flex-col gap-3 border-b border-zinc-900 bg-[#0a0a0a] px-4 py-4 last:border-b-0 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4 sm:px-5 ${inv.status === "void" ? "opacity-40" : ""}`}
               >
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="font-mono text-sm text-zinc-100">
