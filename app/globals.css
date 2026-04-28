@@ -24,10 +24,6 @@ body {
   font-weight: 700;
 }
 
-::selection {
-  background: rgba(250, 250, 250, 0.15);
-}
-
 /* Checkmark draw-in for the "copied" feedback on copy buttons. The path's
  * stroke-dasharray equals its length; animating the offset from full to zero
  * looks like a hand drawing the check. */
