@@ -125,6 +125,7 @@ export async function sendInvoiceByEmail(
   const emailProps = {
     invoiceNumber: sent.invoiceNumber,
     clientName: pdfData.client.name,
+    contactName: pdfData.client.contactName,
     businessName: pdfData.business.name,
     logoUrl: pdfData.business.logoUrl,
     total: sent.total,

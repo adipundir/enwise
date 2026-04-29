@@ -20,6 +20,7 @@ const uuid = z.string().uuid();
 const createSchema = {
   business_id: uuid.optional(),
   name: z.string().min(1).max(200),
+  contact_name: z.string().max(200).nullish(),
   email: z.string().email().nullish(),
   phone: z.string().max(32).nullish(),
   address_line1: z.string().max(200).nullish(),
@@ -46,6 +47,7 @@ const updateSchema = {
   business_id: uuid.optional(),
   client_id: clientIdSchema,
   name: z.string().min(1).max(200).optional(),
+  contact_name: z.string().max(200).nullish(),
   email: z.string().email().nullish(),
   phone: z.string().max(32).nullish(),
   address_line1: z.string().max(200).nullish(),
@@ -70,6 +72,7 @@ const updateSchema = {
 function toClientCreate(input: z.infer<z.ZodObject<typeof createSchema>>): ClientCreate {
   return {
     name: input.name,
+    contactName: input.contact_name ?? null,
     email: input.email ?? null,
     phone: input.phone ?? null,
     addressLine1: input.address_line1 ?? null,
@@ -87,6 +90,7 @@ function toClientCreate(input: z.infer<z.ZodObject<typeof createSchema>>): Clien
 function toClientPatch(input: z.infer<z.ZodObject<typeof updateSchema>>): ClientPatch {
   const patch: ClientPatch = {};
   if (input.name !== undefined) patch.name = input.name;
+  if (input.contact_name !== undefined) patch.contactName = input.contact_name ?? null;
   if (input.email !== undefined) patch.email = input.email ?? null;
   if (input.phone !== undefined) patch.phone = input.phone ?? null;
   if (input.address_line1 !== undefined) patch.addressLine1 = input.address_line1 ?? null;
@@ -108,7 +112,7 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Create client",
       description:
-        "Add a new client using details the user has explicitly given you. NEVER invent a client name, email, address, or tax ID. if the user hasn't told you these, ASK before calling this tool. Name is required; everything else is optional. Pass `business_id` when the user owns multiple businesses. Returns the created client including its id. Remember the id for follow-up tool calls in this session.",
+        "Add a new client using details the user has explicitly given you. NEVER invent a client name, email, address, or tax ID. if the user hasn't told you these, ASK before calling this tool. `name` is the legal entity (the company billed); `contact_name` is the optional human at that company who'll receive the email — used as the email greeting (\"Hi Aditya,\"). For sole proprietors / freelancers, `contact_name` can equal `name`. Pass `business_id` when the user owns multiple businesses. Returns the created client including its id. Remember the id for follow-up tool calls in this session.",
       inputSchema: createSchema,
     },
     async (args, extra) => {

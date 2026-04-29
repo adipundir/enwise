@@ -195,6 +195,9 @@ export const clients = pgTable(
       onDelete: "set null",
     }),
     name: text("name").notNull(),
+    // Optional human contact at the client. If set, used as the email
+    // greeting ("Hi Aditya,") instead of the entity name.
+    contactName: text("contact_name"),
     // Normalized for fuzzy search. immutable_unaccent is defined by lib/db/migrate.ts
     // because the stock unaccent() is STABLE and can't be used in a generated column.
     nameNormalized: text("name_normalized").generatedAlwaysAs(
@@ -357,6 +360,7 @@ export const invoices = pgTable(
     ),
     // Snapshots. captured at finalize so later edits to client/business don't mutate sent invoices
     clientNameSnapshot: text("client_name_snapshot"),
+    clientContactNameSnapshot: text("client_contact_name_snapshot"),
     clientEmailSnapshot: text("client_email_snapshot"),
     clientAddressSnapshot: jsonb("client_address_snapshot"),
     businessNameSnapshot: text("business_name_snapshot"),

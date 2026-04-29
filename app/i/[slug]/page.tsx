@@ -26,6 +26,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
     ? [
         {
           name: invoice.clientNameSnapshot,
+          contactName: invoice.clientContactNameSnapshot,
           email: invoice.clientEmailSnapshot,
           snapshot: invoice.clientAddressSnapshot,
         },
@@ -128,6 +129,9 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
             </div>
             <div className="mt-2">
               <div className="font-medium">{client?.name}</div>
+              {client && "contactName" in client && client.contactName ? (
+                <div className="text-sm text-zinc-600">Attn: {client.contactName}</div>
+              ) : null}
               {client?.email ? (
                 <div className="text-sm text-zinc-600">{client.email}</div>
               ) : null}

@@ -47,6 +47,8 @@ export async function buildInvoicePdfData(
     invoice,
     client: {
       name: invoice.clientNameSnapshot ?? client?.name ?? "(unknown client)",
+      contactName:
+        invoice.clientContactNameSnapshot ?? client?.contactName ?? null,
       email: invoice.clientEmailSnapshot ?? client?.email ?? null,
       addressLine1: clientSnapshot?.line1 ?? client?.addressLine1 ?? null,
       addressLine2: clientSnapshot?.line2 ?? client?.addressLine2 ?? null,

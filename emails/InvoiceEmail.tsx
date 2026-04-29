@@ -15,6 +15,7 @@ import { formatMoney } from "@/lib/money";
 export interface InvoiceEmailProps {
   invoiceNumber: string;
   clientName: string;
+  contactName: string | null;
   businessName: string;
   logoUrl: string | null;
   total: string;
@@ -37,6 +38,7 @@ export interface InvoiceEmailProps {
 export function InvoiceEmail({
   invoiceNumber,
   clientName,
+  contactName,
   businessName,
   logoUrl,
   total,
@@ -102,7 +104,7 @@ export function InvoiceEmail({
 
           {/* Body copy */}
           <Section>
-            <Text style={styles.greeting}>Hi {clientName},</Text>
+            <Text style={styles.greeting}>Hi {contactName ?? clientName},</Text>
             <Text style={styles.body1}>
               Please find the invoice above. Full details and the PDF are on
               the hosted page linked below.

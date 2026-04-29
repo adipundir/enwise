@@ -850,6 +850,7 @@ export async function finalizeInvoice(
       sentAt: now,
       updatedAt: now,
       clientNameSnapshot: client.name,
+      clientContactNameSnapshot: client.contactName,
       clientEmailSnapshot: client.email,
       clientAddressSnapshot: {
         line1: client.addressLine1,
@@ -974,6 +975,7 @@ export async function revertFinalizeInvoice(
       status: "draft",
       sentAt: null,
       clientNameSnapshot: null,
+      clientContactNameSnapshot: null,
       clientEmailSnapshot: null,
       clientAddressSnapshot: null,
       businessNameSnapshot: null,

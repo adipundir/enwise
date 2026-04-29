@@ -190,6 +190,7 @@ export interface InvoicePdfData {
   invoice: InvoiceWithLineItems;
   client: {
     name: string;
+    contactName: string | null;
     email: string | null;
     addressLine1: string | null;
     addressLine2: string | null;
@@ -269,6 +270,9 @@ export function InvoiceDocument({
           <Text style={styles.blockLabel}>Bill to</Text>
           <View style={styles.billTo}>
             <Text style={styles.billToName}>{client.name}</Text>
+            {client.contactName ? (
+              <Text style={styles.brandMeta}>Attn: {client.contactName}</Text>
+            ) : null}
             {client.email ? (
               <Text style={styles.brandMeta}>{client.email}</Text>
             ) : null}

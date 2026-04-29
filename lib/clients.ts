@@ -9,6 +9,7 @@ const MAX_LIST_LIMIT = 200;
 
 export type ClientCreate = {
   name: string;
+  contactName?: string | null;
   email?: string | null;
   phone?: string | null;
   addressLine1?: string | null;
@@ -173,6 +174,7 @@ export function formatClientForMcp(row: Client) {
   return {
     id: row.id,
     name: row.name,
+    contact_name: row.contactName,
     email: row.email,
     phone: row.phone,
     address_line1: row.addressLine1,
