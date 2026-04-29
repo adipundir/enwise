@@ -127,6 +127,7 @@ export async function sendInvoiceByEmail(
     clientName: pdfData.client.name,
     contactName: pdfData.client.contactName,
     businessName: pdfData.business.name,
+    businessLegalName: pdfData.business.legalName,
     logoUrl: pdfData.business.logoUrl,
     total: sent.total,
     currency: sent.currency,

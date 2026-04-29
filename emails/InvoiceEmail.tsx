@@ -17,6 +17,7 @@ export interface InvoiceEmailProps {
   clientName: string;
   contactName: string | null;
   businessName: string;
+  businessLegalName: string | null;
   logoUrl: string | null;
   total: string;
   currency: string;
@@ -40,6 +41,7 @@ export function InvoiceEmail({
   clientName,
   contactName,
   businessName,
+  businessLegalName,
   logoUrl,
   total,
   currency,
@@ -137,7 +139,7 @@ export function InvoiceEmail({
 
           {/* Footer letterhead echo */}
           <Section style={styles.footer}>
-            <Text style={styles.footerBrand}>{businessName}</Text>
+            <Text style={styles.footerBrand}>{businessLegalName ?? businessName}</Text>
             {businessAddressLines.length > 0 ? (
               <Text style={styles.footerText}>
                 {businessAddressLines.join(" · ")}
