@@ -158,6 +158,10 @@ const styles = StyleSheet.create({
   },
   bankCellValue: { color: c.ink, fontSize: 10 },
   bankCellMono: { fontFamily: "Courier" },
+  walletRow: {
+    marginTop: 6,
+    marginBottom: 8,
+  },
 });
 
 // Column widths (fractions of remaining space, tuned)
@@ -192,6 +196,7 @@ export interface InvoicePdfData {
     name: string;
     contactName: string | null;
     email: string | null;
+    walletAddress: string | null;
     addressLine1: string | null;
     addressLine2: string | null;
     city: string | null;
@@ -203,6 +208,8 @@ export interface InvoicePdfData {
     name: string;
     legalName: string | null;
     logoUrl: string | null;
+    contactName: string | null;
+    walletAddress: string | null;
     addressLine1: string | null;
     addressLine2: string | null;
     city: string | null;
@@ -248,6 +255,9 @@ export function InvoiceDocument({
                 {l}
               </Text>
             ))}
+            {business.contactName ? (
+              <Text style={styles.brandMeta}>Contact: {business.contactName}</Text>
+            ) : null}
             {business.taxId ? (
               <Text style={styles.brandMeta}>Tax ID: {business.taxId}</Text>
             ) : null}
@@ -281,6 +291,9 @@ export function InvoiceDocument({
                 {l}
               </Text>
             ))}
+            {client.walletAddress ? (
+              <Text style={styles.brandMeta}>Wallet: {client.walletAddress}</Text>
+            ) : null}
           </View>
         </View>
 
@@ -367,29 +380,39 @@ export function InvoiceDocument({
           </View>
         )}
 
-        {business.bank ? (
+        {business.bank || business.walletAddress ? (
           <View style={{ marginTop: 24 }} wrap={false}>
             <Text style={styles.blockLabel}>Payment details</Text>
-            <View style={styles.bankGrid}>
-              {business.bank.accountHolder ? (
-                <BankCell label="Account holder" value={business.bank.accountHolder} />
-              ) : null}
-              {business.bank.bankName ? (
-                <BankCell label="Bank" value={business.bank.bankName} />
-              ) : null}
-              {business.bank.accountNumber ? (
-                <BankCell label="Account number" value={business.bank.accountNumber} mono />
-              ) : null}
-              {business.bank.ifsc ? (
-                <BankCell label="IFSC" value={business.bank.ifsc} mono />
-              ) : null}
-              {business.bank.swift ? (
-                <BankCell label="SWIFT / BIC" value={business.bank.swift} mono />
-              ) : null}
-              {business.bank.iban ? (
-                <BankCell label="IBAN" value={business.bank.iban} mono />
-              ) : null}
-            </View>
+            {business.walletAddress ? (
+              <View style={styles.walletRow}>
+                <Text style={styles.bankCellLabel}>Wallet address</Text>
+                <Text style={{ ...styles.bankCellValue, ...styles.bankCellMono }}>
+                  {business.walletAddress}
+                </Text>
+              </View>
+            ) : null}
+            {business.bank ? (
+              <View style={styles.bankGrid}>
+                {business.bank.accountHolder ? (
+                  <BankCell label="Account holder" value={business.bank.accountHolder} />
+                ) : null}
+                {business.bank.bankName ? (
+                  <BankCell label="Bank" value={business.bank.bankName} />
+                ) : null}
+                {business.bank.accountNumber ? (
+                  <BankCell label="Account number" value={business.bank.accountNumber} mono />
+                ) : null}
+                {business.bank.ifsc ? (
+                  <BankCell label="IFSC" value={business.bank.ifsc} mono />
+                ) : null}
+                {business.bank.swift ? (
+                  <BankCell label="SWIFT / BIC" value={business.bank.swift} mono />
+                ) : null}
+                {business.bank.iban ? (
+                  <BankCell label="IBAN" value={business.bank.iban} mono />
+                ) : null}
+              </View>
+            ) : null}
           </View>
         ) : null}
 

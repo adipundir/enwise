@@ -50,6 +50,8 @@ export async function buildInvoicePdfData(
       contactName:
         invoice.clientContactNameSnapshot ?? client?.contactName ?? null,
       email: invoice.clientEmailSnapshot ?? client?.email ?? null,
+      walletAddress:
+        invoice.clientWalletAddressSnapshot ?? client?.walletAddress ?? null,
       addressLine1: clientSnapshot?.line1 ?? client?.addressLine1 ?? null,
       addressLine2: clientSnapshot?.line2 ?? client?.addressLine2 ?? null,
       city: clientSnapshot?.city ?? client?.city ?? null,
@@ -61,6 +63,10 @@ export async function buildInvoicePdfData(
       name: invoice.businessNameSnapshot ?? business?.name ?? "(unknown business)",
       legalName: invoice.businessLegalNameSnapshot ?? business?.legalName ?? null,
       logoUrl: invoice.businessLogoUrlSnapshot ?? business?.logoUrl ?? null,
+      contactName:
+        invoice.businessContactNameSnapshot ?? business?.contactName ?? null,
+      walletAddress:
+        invoice.businessWalletAddressSnapshot ?? business?.walletAddress ?? null,
       addressLine1: businessSnapshot?.line1 ?? business?.addressLine1 ?? null,
       addressLine2: businessSnapshot?.line2 ?? business?.addressLine2 ?? null,
       city: businessSnapshot?.city ?? business?.city ?? null,

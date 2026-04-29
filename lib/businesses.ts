@@ -15,6 +15,8 @@ export type BusinessPatch = Partial<{
   name: string;
   legalName: string | null;
   taxId: string | null;
+  contactName: string | null;
+  walletAddress: string | null;
   addressLine1: string | null;
   addressLine2: string | null;
   city: string | null;
@@ -74,6 +76,8 @@ export function formatBusinessForMcp(row: Business) {
     slug: row.slug,
     legal_name: row.legalName,
     tax_id: row.taxId,
+    contact_name: row.contactName,
+    wallet_address: row.walletAddress,
     address_line1: row.addressLine1,
     address_line2: row.addressLine2,
     city: row.city,

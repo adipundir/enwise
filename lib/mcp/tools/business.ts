@@ -29,6 +29,8 @@ const updateInput = {
   name: z.string().min(1).max(200).optional(),
   legal_name: z.string().max(200).nullish(),
   tax_id: z.string().max(64).nullish(),
+  contact_name: z.string().max(200).nullish(),
+  wallet_address: z.string().max(200).nullish(),
   address_line1: z.string().max(200).nullish(),
   address_line2: z.string().max(200).nullish(),
   city: z.string().max(100).nullish(),
@@ -128,7 +130,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Update business profile",
       description:
-        "Update any subset of a business profile (name, tax ID, address, default currency, invoice number prefix, logo, bank payout details, etc.). Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. Bank fields (`bank_account_holder`, `bank_name`, `bank_account_number`, `bank_ifsc`, `bank_swift`, `bank_iban`) are shown to the client on the invoice; fill the ones that apply for the receiving country (IFSC for India, SWIFT for international wire, IBAN for Europe). Pass `business_id` if the user owns multiple businesses.",
+        "Update any subset of a business profile (name, tax ID, address, default currency, invoice number prefix, logo, bank payout details, contact person, wallet address, etc.). Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. Bank fields (`bank_account_holder`, `bank_name`, `bank_account_number`, `bank_ifsc`, `bank_swift`, `bank_iban`) are shown to the client on the invoice; fill the ones that apply for the receiving country (IFSC for India, SWIFT for international wire, IBAN for Europe). `contact_name` is the person at the business who handles invoicing — used in PDF letterhead / email footer. `wallet_address` is the onchain payout address (raw 0x… or ENS name like `acme.eth`); shown alongside bank details on the invoice. Pass `business_id` if the user owns multiple businesses.",
       inputSchema: updateInput,
     },
     async (args, extra) => {
@@ -143,6 +145,8 @@ export function registerBusinessTools(server: McpServer) {
       if (input.name !== undefined) patch.name = input.name;
       if (input.legal_name !== undefined) patch.legalName = input.legal_name ?? null;
       if (input.tax_id !== undefined) patch.taxId = input.tax_id ?? null;
+      if (input.contact_name !== undefined) patch.contactName = input.contact_name ?? null;
+      if (input.wallet_address !== undefined) patch.walletAddress = input.wallet_address ?? null;
       if (input.address_line1 !== undefined) patch.addressLine1 = input.address_line1 ?? null;
       if (input.address_line2 !== undefined) patch.addressLine2 = input.address_line2 ?? null;
       if (input.city !== undefined) patch.city = input.city ?? null;

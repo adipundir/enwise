@@ -99,6 +99,13 @@
       "when": 1777422679121,
       "tag": "0013_calm_franklin_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1777487594497,
+      "tag": "0014_living_solo",
+      "breakpoints": true
     }
   ]
 }

@@ -28,6 +28,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
           name: invoice.clientNameSnapshot,
           contactName: invoice.clientContactNameSnapshot,
           email: invoice.clientEmailSnapshot,
+          walletAddress: invoice.clientWalletAddressSnapshot,
           snapshot: invoice.clientAddressSnapshot,
         },
       ]
@@ -39,12 +40,20 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
           legalName: invoice.businessLegalNameSnapshot,
           logoUrl: invoice.businessLogoUrlSnapshot,
           taxId: invoice.businessTaxIdSnapshot,
+          contactName: invoice.businessContactNameSnapshot,
+          walletAddress: invoice.businessWalletAddressSnapshot,
           snapshot: invoice.businessAddressSnapshot,
           bankSnapshot: invoice.businessBankDetailsSnapshot,
         },
       ]
     : await db.select().from(businesses).where(eq(businesses.id, invoice.businessId));
   const bankDetails = resolveBankDetails(business);
+  const businessWallet =
+    (business && "walletAddress" in business ? business.walletAddress : null) ?? null;
+  const clientWallet =
+    (client && "walletAddress" in client ? client.walletAddress : null) ?? null;
+  const businessContact =
+    (business && "contactName" in business ? business.contactName : null) ?? null;
 
   after(async () => {
     try {
@@ -127,6 +136,11 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                 <div className="text-sm text-zinc-600">{business.legalName}</div>
               ) : null}
               <AddressLines lines={businessAddr} />
+              {businessContact ? (
+                <div className="mt-1 text-xs text-zinc-500">
+                  Contact: {businessContact}
+                </div>
+              ) : null}
               {business && "taxId" in business && business.taxId ? (
                 <div className="mt-1 text-xs text-zinc-500">Tax ID: {business.taxId}</div>
               ) : null}
@@ -158,6 +172,14 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                 <div className="text-sm text-zinc-600">{client.email}</div>
               ) : null}
               <AddressLines lines={clientAddr} />
+              {clientWallet ? (
+                <div className="mt-1 flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+                    Wallet
+                  </span>
+                  <CopyableField value={clientWallet} mono />
+                </div>
+              ) : null}
             </div>
           </section>
 
@@ -300,31 +322,43 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
             </section>
           )}
 
-          {bankDetails ? (
+          {bankDetails || businessWallet ? (
             <section className="mt-10">
               <div className="text-[10px] uppercase tracking-widest text-zinc-500">
                 Payment details
               </div>
-              <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
-                {bankDetails.accountHolder ? (
-                  <BankRow label="Account holder" value={bankDetails.accountHolder} />
-                ) : null}
-                {bankDetails.bankName ? (
-                  <BankRow label="Bank" value={bankDetails.bankName} />
-                ) : null}
-                {bankDetails.accountNumber ? (
-                  <BankRow label="Account number" value={bankDetails.accountNumber} mono />
-                ) : null}
-                {bankDetails.ifsc ? (
-                  <BankRow label="IFSC" value={bankDetails.ifsc} mono />
-                ) : null}
-                {bankDetails.swift ? (
-                  <BankRow label="SWIFT / BIC" value={bankDetails.swift} mono />
-                ) : null}
-                {bankDetails.iban ? (
-                  <BankRow label="IBAN" value={bankDetails.iban} mono />
-                ) : null}
-              </dl>
+              {businessWallet ? (
+                <div className="mt-3 flex flex-col gap-0.5">
+                  <dt className="text-[10px] uppercase tracking-widest text-zinc-500">
+                    Wallet address
+                  </dt>
+                  <dd>
+                    <CopyableField value={businessWallet} mono />
+                  </dd>
+                </div>
+              ) : null}
+              {bankDetails ? (
+                <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+                  {bankDetails.accountHolder ? (
+                    <BankRow label="Account holder" value={bankDetails.accountHolder} />
+                  ) : null}
+                  {bankDetails.bankName ? (
+                    <BankRow label="Bank" value={bankDetails.bankName} />
+                  ) : null}
+                  {bankDetails.accountNumber ? (
+                    <BankRow label="Account number" value={bankDetails.accountNumber} mono />
+                  ) : null}
+                  {bankDetails.ifsc ? (
+                    <BankRow label="IFSC" value={bankDetails.ifsc} mono />
+                  ) : null}
+                  {bankDetails.swift ? (
+                    <BankRow label="SWIFT / BIC" value={bankDetails.swift} mono />
+                  ) : null}
+                  {bankDetails.iban ? (
+                    <BankRow label="IBAN" value={bankDetails.iban} mono />
+                  ) : null}
+                </dl>
+              ) : null}
             </section>
           ) : null}
 

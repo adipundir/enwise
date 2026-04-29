@@ -112,6 +112,13 @@ export const businesses = pgTable(
     slug: text("slug").notNull().unique(),
     legalName: text("legal_name"),
     taxId: text("tax_id"),
+    // Optional human contact at the business — counterpart to clients.contactName.
+    // Surfaced in the email footer / PDF letterhead when present.
+    contactName: text("contact_name"),
+    // Onchain payment address. Free-form string so users can enter a raw
+    // 0x… address, an ENS name, or a multi-chain identifier. No format
+    // enforcement — UI just renders what's there.
+    walletAddress: text("wallet_address"),
     addressLine1: text("address_line1"),
     addressLine2: text("address_line2"),
     city: text("city"),
@@ -198,6 +205,9 @@ export const clients = pgTable(
     // Optional human contact at the client. If set, used as the email
     // greeting ("Hi Aditya,") instead of the entity name.
     contactName: text("contact_name"),
+    // Onchain identity / payout address for the client. Free-form string
+    // (raw 0x… address or ENS name); no format enforcement.
+    walletAddress: text("wallet_address"),
     // Normalized for fuzzy search. immutable_unaccent is defined by lib/db/migrate.ts
     // because the stock unaccent() is STABLE and can't be used in a generated column.
     nameNormalized: text("name_normalized").generatedAlwaysAs(
@@ -362,10 +372,13 @@ export const invoices = pgTable(
     clientNameSnapshot: text("client_name_snapshot"),
     clientContactNameSnapshot: text("client_contact_name_snapshot"),
     clientEmailSnapshot: text("client_email_snapshot"),
+    clientWalletAddressSnapshot: text("client_wallet_address_snapshot"),
     clientAddressSnapshot: jsonb("client_address_snapshot"),
     businessNameSnapshot: text("business_name_snapshot"),
     businessLegalNameSnapshot: text("business_legal_name_snapshot"),
     businessTaxIdSnapshot: text("business_tax_id_snapshot"),
+    businessContactNameSnapshot: text("business_contact_name_snapshot"),
+    businessWalletAddressSnapshot: text("business_wallet_address_snapshot"),
     businessAddressSnapshot: jsonb("business_address_snapshot"),
     businessLogoUrlSnapshot: text("business_logo_url_snapshot"),
     businessBankDetailsSnapshot: jsonb("business_bank_details_snapshot"),
