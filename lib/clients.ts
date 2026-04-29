@@ -32,7 +32,7 @@ export async function createClient(
 ): Promise<Client> {
   const [row] = await db
     .insert(clients)
-    .values({ ownerUserId: ctx.userId, businessId: ctx.businessId, ...input })
+    .values({ ownerUserId: ctx.userId, ...input })
     .returning();
   return row!;
 }

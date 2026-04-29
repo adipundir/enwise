@@ -24,7 +24,7 @@ export async function createProduct(
 ): Promise<Product> {
   const [row] = await db
     .insert(products)
-    .values({ ownerUserId: ctx.userId, businessId: ctx.businessId, ...input })
+    .values({ ownerUserId: ctx.userId, ...input })
     .returning();
   return row!;
 }

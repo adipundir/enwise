@@ -157,10 +157,8 @@ export const businesses = pgTable(
 );
 
 // API tokens. issued from web dashboard, presented as Authorization: Bearer <raw>.
-// Tokens are user-scoped (createdByUserId is the auth subject); businessId
-// is a legacy hint kept nullable for back-compat but has no semantic
-// weight — `resolveBearer` returns userId and the rest is figured out per
-// tool call via `business_id` arg or owner-level fallback.
+// User-scoped: `resolveBearer` returns the `userId` and the per-call business
+// is resolved from the tool's `business_id` arg or the user's default business.
 
 export const apiTokens = pgTable(
   "api_tokens",
@@ -188,8 +186,7 @@ export const apiTokens = pgTable(
 );
 
 // Clients. Owned by the user (account-level, shared across all the user's
-// businesses). The legacy businessId column stays populated for back-compat
-// but reads scope by ownerUserId now.
+// businesses). Reads scope by ownerUserId.
 
 export const clients = pgTable(
   "clients",
@@ -198,9 +195,6 @@ export const clients = pgTable(
     ownerUserId: uuid("owner_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    businessId: uuid("business_id").references(() => businesses.id, {
-      onDelete: "set null",
-    }),
     name: text("name").notNull(),
     // Optional human contact at the client. If set, used as the email
     // greeting ("Hi Aditya,") instead of the entity name.
@@ -250,9 +244,6 @@ export const products = pgTable(
     ownerUserId: uuid("owner_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    businessId: uuid("business_id").references(() => businesses.id, {
-      onDelete: "set null",
-    }),
     name: text("name").notNull(),
     nameNormalized: text("name_normalized").generatedAlwaysAs(
       sql`lower(immutable_unaccent(name))`,
