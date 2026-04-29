@@ -87,6 +87,28 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
         </header>
 
         <article className="relative rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200 sm:p-10">
+          {invoice.status === "void" ? (
+            <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+              <svg
+                viewBox="0 0 20 20"
+                className="mt-0.5 size-5 shrink-0 text-red-600"
+                fill="currentColor"
+                aria-hidden
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 1.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17ZM10 6a1 1 0 0 1 1 1v3.5a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1Zm0 7.25a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <div>
+                <div className="font-semibold">This invoice has been voided.</div>
+                <div className="mt-0.5 text-red-800">
+                  No payment is due. If you have already paid, please contact the issuer.
+                </div>
+              </div>
+            </div>
+          ) : null}
           <section className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
               {business?.logoUrl ? (
