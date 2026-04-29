@@ -249,7 +249,6 @@ function InvoiceRow({
     >
       <div className="flex flex-wrap items-center gap-3">
         <div className="font-mono text-sm text-zinc-100">{inv.invoiceNumber}</div>
-        <StatusChip status={inv.status} />
       </div>
       <div className="flex flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-zinc-300">
         <span>{formatMoney(inv.total, inv.currency)}</span>
@@ -266,18 +265,3 @@ function InvoiceRow({
   );
 }
 
-function StatusChip({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    draft: "border-zinc-700 text-zinc-400",
-    sent: "border-blue-900/60 text-blue-300",
-    paid: "border-emerald-900/60 text-emerald-300",
-    void: "border-zinc-800 text-zinc-500",
-  };
-  return (
-    <span
-      className={`rounded-full border bg-zinc-950 px-2 py-0.5 text-[10px] uppercase tracking-widest ${styles[status] ?? "border-zinc-700 text-zinc-400"}`}
-    >
-      {status}
-    </span>
-  );
-}

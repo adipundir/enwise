@@ -59,20 +59,6 @@ const styles = StyleSheet.create({
   },
   metaRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 4 },
   metaRowLabel: { color: c.muted, marginRight: 8 },
-  statusBadge: {
-    marginTop: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    backgroundColor: c.bg,
-    borderColor: c.line,
-    borderWidth: 1,
-    borderRadius: 4,
-    fontSize: 8,
-    letterSpacing: 1.1,
-    textTransform: "uppercase",
-    color: c.ink,
-    alignSelf: "flex-end",
-  },
   block: { marginBottom: 24 },
   blockLabel: {
     color: c.muted,
@@ -276,9 +262,6 @@ export function InvoiceDocument({
               <Text style={styles.metaRowLabel}>Due date</Text>
               <Text>{invoice.dueDate}</Text>
             </View>
-            {invoice.status !== "draft" ? (
-              <Text style={styles.statusBadge}>{invoice.status}</Text>
-            ) : null}
           </View>
         </View>
 

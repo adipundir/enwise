@@ -86,7 +86,6 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
         </header>
 
         <article className="relative rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200 sm:p-10">
-          <StatusBadge status={invoice.status} />
           <section className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
               {business?.logoUrl ? (
@@ -119,16 +118,6 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
               <dl className="mt-4 space-y-1 text-sm">
                 <DlRow label="Issue date" value={invoice.issueDate} />
                 <DlRow label="Due date" value={invoice.dueDate} />
-                {invoice.status !== "draft" ? (
-                  <DlRow
-                    label="Status"
-                    value={
-                      <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-[10px] uppercase tracking-widest text-zinc-700">
-                        {invoice.status}
-                      </span>
-                    }
-                  />
-                ) : null}
               </dl>
             </div>
           </section>
@@ -319,29 +308,6 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
         </article>
       </div>
     </main>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  if (status === "draft" || status === "sent") return null;
-  const { label, cls } =
-    status === "paid"
-      ? {
-          label: "PAID",
-          cls: "border-emerald-200 bg-emerald-50 text-emerald-700",
-        }
-      : status === "void"
-        ? {
-            label: "VOID",
-            cls: "border-zinc-300 bg-zinc-100 text-zinc-500",
-          }
-        : { label: status.toUpperCase(), cls: "border-zinc-300 bg-zinc-100 text-zinc-500" };
-  return (
-    <div
-      className={`pointer-events-none absolute right-4 top-4 rotate-[-8deg] rounded-md border-2 px-2 py-0.5 text-xs font-bold tracking-[0.15em] sm:right-8 sm:top-8 sm:px-3 sm:py-1 sm:text-sm ${cls}`}
-    >
-      {label}
-    </div>
   );
 }
 
