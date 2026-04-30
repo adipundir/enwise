@@ -146,6 +146,18 @@ export const businesses = pgTable(
     bankIfsc: text("bank_ifsc"),
     bankSwift: text("bank_swift"),
     bankIban: text("bank_iban"),
+    // RAILGUN private-payments setup. Generated once at first opt-in; immutable
+    // once set (to prevent funds-misdirection bugs from a re-issue). The 0zk
+    // address is what's printed on invoices as the receiving identity.
+    railgunZkAddress: text("railgun_zk_address"),
+    // Shareable viewing key — read-only access for our scanner to detect
+    // incoming shielded payments. Encrypted at rest with TOKEN_ENC_KEY (env)
+    // so a DB-only breach doesn't leak payment history.
+    railgunViewingKeyEncrypted: text("railgun_viewing_key_encrypted"),
+    // Which chain this RAILGUN wallet is registered on. Stored as the
+    // chain id (e.g. 42161 = Arbitrum One). One chain per business for now.
+    railgunChainId: integer("railgun_chain_id"),
+    railgunSetupAt: timestamp("railgun_setup_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -454,6 +466,40 @@ export const invoiceEvents = pgTable(
   (t) => [index("invoice_events_invoice_idx").on(t.invoiceId)],
 );
 
+// Onchain payments against an invoice. One row per confirmed payment; an
+// invoice can have multiple if partial payments come in. Used for both
+// shielded RAILGUN deposits and (in future) direct ERC-20 transfers.
+//
+// For a RAILGUN shield: tx_hash is the public shield tx on the host chain,
+// payer_address is the public wallet that did the shield, amount is the
+// USDC amount that left the public side. The encrypted commitment lives
+// onchain in RAILGUN's contract; we don't duplicate it here.
+
+export const invoicePayments = pgTable(
+  "invoice_payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    chainId: integer("chain_id").notNull(),
+    txHash: text("tx_hash").notNull(),
+    // "railgun_shield" | "direct_transfer" | "manual"
+    paymentMethod: text("payment_method").notNull(),
+    payerAddress: text("payer_address"),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: char("currency", { length: 3 }).notNull(),
+    paidAt: timestamp("paid_at", { withTimezone: true }).notNull(),
+    recordedAt: timestamp("recorded_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("invoice_payments_tx_idx").on(t.chainId, t.txHash),
+    index("invoice_payments_invoice_idx").on(t.invoiceId),
+  ],
+);
+
 // Idempotency cache for one-shot operations (send_invoice, etc.)
 
 export const idempotencyKeys = pgTable(
@@ -503,3 +549,5 @@ export type NewRecurringInvoiceTemplate =
   typeof recurringInvoiceTemplates.$inferInsert;
 export type InvoiceEvent = typeof invoiceEvents.$inferSelect;
 export type NewInvoiceEvent = typeof invoiceEvents.$inferInsert;
+export type InvoicePayment = typeof invoicePayments.$inferSelect;
+export type NewInvoicePayment = typeof invoicePayments.$inferInsert;
