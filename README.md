@@ -7,8 +7,9 @@ An MCP server for running an invoicing business entirely through natural languag
 - **MCP server** at `/api/mcp`. Claude calls tools to create invoices, manage clients, send emails, and more.
 - **Public invoice page** at `/i/[slug]`. shareable link for recipients with a downloadable PDF.
 - **Web dashboard** at `/dashboard`. exists for sign-in, API token generation, and a quick overview of what Claude has done. Everything else happens in Claude.
+- **Attachment uploads** via presigned PUT. Claude calls `request_attachment_upload`, gets a 30-min scoped URL, PUTs bytes directly to Vercel Blob — the user's API token never leaves the MCP server, bytes never traverse our function.
 
-40 MCP tools shipped: `whoami`, business profile (2), clients (6), products (6), invoices (14), analytics (3), recurring (7), `send_invoice`. Share links, PDFs, and emails are automatic.
+41 MCP tools shipped: `whoami`, business profile (2), clients (6), products (6), invoices (14), analytics (3), recurring (7), `send_invoice`, `request_attachment_upload`. Share links, PDFs, and emails are automatic.
 
 ## Local development
 
@@ -38,7 +39,7 @@ AUTH_GOOGLE_SECRET=...
 
 # Optional. features degrade gracefully if absent:
 RESEND_API_KEY=...                  # email sending
-BLOB_READ_WRITE_TOKEN=...           # logo uploads (else URLs stored verbatim)
+BLOB_READ_WRITE_TOKEN=...           # logo + attachment uploads (else logo URLs stored verbatim, attachments disabled)
 PUBLIC_BASE_URL=http://localhost:3000
 ```
 
@@ -138,6 +139,7 @@ lib/
 ├─ pdf/               # React-PDF rendering
 ├─ email/             # Resend wrappers
 ├─ storage/           # Vercel Blob helpers + SSRF guard
+├─ uploads/           # presigned PUT mint for attachment uploads
 ├─ analytics.ts       # client/revenue/outstanding aggregates
 ├─ recurring.ts       # recurring-invoice service + runner
 ├─ idempotency.ts     # withIdempotency() wrapper
