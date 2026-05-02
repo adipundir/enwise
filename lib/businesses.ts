@@ -98,6 +98,9 @@ export function formatBusinessForMcp(row: Business) {
     bank_ifsc: row.bankIfsc,
     bank_swift: row.bankSwift,
     bank_iban: row.bankIban,
+    railgun_zk_address: row.railgunZkAddress,
+    railgun_chain_id: row.railgunChainId,
+    railgun_setup_at: row.railgunSetupAt?.toISOString() ?? null,
   };
 }
 

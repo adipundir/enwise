@@ -13,6 +13,7 @@ import {
   type FallbackProviderJsonConfig,
 } from "@railgun-community/shared-models";
 import MemDOWN from "memdown";
+import { activeRailgunNetwork, rpcUrlsFor } from "./config";
 
 /**
  * RAILGUN engine — lazy singleton. Starts the engine once per Node process,
@@ -115,38 +116,45 @@ export async function ensureNetworkLoaded(
   const cfg = NETWORK_CONFIG[network];
   if (!cfg) throw new Error(`Unknown RAILGUN network: ${network}`);
 
-  const rpcUrl = rpcUrlForNetwork(network);
-  // Probe RPC availability before loadProvider; engine throws cryptic errors
-  // if the URL is unreachable.
-  const probe = new JsonRpcProvider(rpcUrl);
-  await probe.getBlockNumber();
+  const urls = rpcUrlsForNetwork(network);
+  // Probe the primary URL before loadProvider; engine throws cryptic errors
+  // if the URL is unreachable. If primary is down we still proceed —
+  // loadProvider will route to the secondary on actual calls.
+  try {
+    const probe = new JsonRpcProvider(urls[0]);
+    await probe.getBlockNumber();
+  } catch {
+    // Probe failure is informational only; the FallbackProvider has the
+    // public URL as a backup. Don't refuse to start the engine here.
+  }
+
+  // FallbackProvider requires total weight >= 2 (quorum invariant). With a
+  // single URL, weight=2 satisfies it. With primary + fallback, two
+  // providers at weight 1 each total 2 and route by priority (1 = preferred).
+  const providers =
+    urls.length === 1
+      ? [{ provider: urls[0]!, priority: 1, weight: 2 }]
+      : urls.map((url, i) => ({ provider: url, priority: i + 1, weight: 1 }));
 
   const fallbackConfig: FallbackProviderJsonConfig = {
     chainId: cfg.chain.id,
-    // FallbackProvider requires total weight >= 2 (quorum invariant). With a
-    // single RPC URL, weight=2 satisfies it. To add redundancy later, list
-    // multiple providers each with weight 1.
-    providers: [{ provider: rpcUrl, priority: 1, weight: 2 }],
+    providers,
   };
   await loadProvider(fallbackConfig, network, 10_000);
   loadedNetworks.add(network);
 }
 
-function rpcUrlForNetwork(network: NetworkName): string {
-  // Single chain for now: Ethereum mainnet. RAILGUN doesn't support Base, and
-  // we deliberately don't fan out to Arbitrum/Polygon/BSC even though RAILGUN
-  // does — sticking with one chain keeps anonymity-set + UX coherent.
-  switch (network) {
-    case NetworkName.Ethereum:
-      // publicnode.com is the most reliable free public RPC at the moment;
-      // cloudflare-eth.com and llamarpc both rate-limit aggressively. For
-      // production, set ETH_RPC_URL to a paid endpoint (Alchemy, dRPC, etc.).
-      return process.env.ETH_RPC_URL ?? "https://ethereum-rpc.publicnode.com";
-    default:
-      throw new Error(
-        `Network ${network} is not supported. enwise only ships Ethereum mainnet RAILGUN integration.`,
-      );
+function rpcUrlsForNetwork(network: NetworkName): string[] {
+  // We support whatever RAILGUN_NETWORK env points at — mainnet by default,
+  // Sepolia for testing. Other RAILGUN-supported chains (Polygon, Arbitrum,
+  // BNB) are deliberately not wired up to keep anonymity-set + UX coherent.
+  const cfg = activeRailgunNetwork();
+  if (network !== cfg.network) {
+    throw new Error(
+      `Network ${network} is not the active RAILGUN network (${cfg.network}).`,
+    );
   }
+  return rpcUrlsFor(cfg);
 }
 
-export const PRIMARY_NETWORK: NetworkName = NetworkName.Ethereum;
+export const PRIMARY_NETWORK: NetworkName = activeRailgunNetwork().network;

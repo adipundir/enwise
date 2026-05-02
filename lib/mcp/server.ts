@@ -3,6 +3,7 @@ import { registerAnalyticsTools } from "@/lib/mcp/tools/analytics";
 import { registerBusinessTools } from "@/lib/mcp/tools/business";
 import { registerClientTools } from "@/lib/mcp/tools/clients";
 import { registerInvoiceTools } from "@/lib/mcp/tools/invoices";
+import { registerPrivatePaymentTools } from "@/lib/mcp/tools/private_payments";
 import { registerProductTools } from "@/lib/mcp/tools/products";
 import { registerRecurringTools } from "@/lib/mcp/tools/recurring";
 import { registerUploadTools } from "@/lib/mcp/tools/uploads";
@@ -132,6 +133,7 @@ Each error includes a \`hint\` string. Relay the hint to the user; don't rephras
   registerInvoiceTools(server);
   registerAnalyticsTools(server);
   registerRecurringTools(server);
+  registerPrivatePaymentTools(server);
   registerUploadTools(server);
 
   return server;

@@ -5,8 +5,12 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { businesses, clients } from "@/lib/db/schema";
 import { getInvoiceBySlug, markInvoiceViewed } from "@/lib/invoices";
-import { formatMoney } from "@/lib/money";
+import { addAmounts, formatMoney } from "@/lib/money";
+import { publicRailgunNetwork } from "@/lib/railgun/config";
 import { CopyableField } from "./CopyableField";
+import { PayButton } from "./PayButton";
+
+const USDC_DECIMALS = 6;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +52,29 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
       ]
     : await db.select().from(businesses).where(eq(businesses.id, invoice.businessId));
   const bankDetails = resolveBankDetails(business);
+  // RAILGUN setup is live — never snapshotted onto the invoice — so the share
+  // page reflects the current state of the issuing business: enabling it
+  // mid-flight makes the Pay button appear on already-sent invoices.
+  const [railgun] = await db
+    .select({
+      zkAddress: businesses.railgunZkAddress,
+      chainId: businesses.railgunChainId,
+    })
+    .from(businesses)
+    .where(eq(businesses.id, invoice.businessId));
+  const outstandingDecimal = addAmounts(invoice.total, `-${invoice.amountPaid}`);
+  const outstandingUsdcUnits = decimalToUsdcUnits(outstandingDecimal);
+  const network = publicRailgunNetwork();
+  const canPayPrivately =
+    invoice.status === "sent" &&
+    invoice.currency.toUpperCase() === "USD" &&
+    Boolean(railgun?.zkAddress) &&
+    outstandingUsdcUnits > 0n &&
+    // Setup chain must match the chain we're shipping a Pay button for —
+    // otherwise the wallet would prompt the wrong chain switch.
+    (railgun?.chainId == null || railgun.chainId === network.chainId);
+  const walletConnectProjectId =
+    process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? null;
   const businessWallet =
     (business && "walletAddress" in business ? business.walletAddress : null) ?? null;
   const clientWallet =
@@ -84,14 +111,19 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
             >
               Download PDF
             </a>
-            <button
-              type="button"
-              disabled
-              title="Online payment coming soon"
-              className="cursor-not-allowed rounded-md border border-zinc-300 bg-white px-3.5 py-1.5 text-zinc-400"
-            >
-              Pay here (coming soon)
-            </button>
+            {canPayPrivately ? (
+              <PayButton
+                slug={slug}
+                amountLabel={fmt(outstandingDecimal)}
+                amountUnits={outstandingUsdcUnits.toString()}
+                walletConnectProjectId={walletConnectProjectId}
+                network={network}
+              />
+            ) : invoice.status === "paid" ? (
+              <span className="rounded-md bg-emerald-50 px-3.5 py-1.5 text-sm font-medium text-emerald-900 ring-1 ring-emerald-200">
+                Paid ✓
+              </span>
+            ) : null}
           </div>
         </header>
 
@@ -514,6 +546,15 @@ function buildAddressLines(src: AddressSource | undefined): string[] {
   if (cityLine) out.push(cityLine);
   if (country) out.push(country);
   return out;
+}
+
+function decimalToUsdcUnits(decimal: string): bigint {
+  const negative = decimal.startsWith("-");
+  const body = negative ? decimal.slice(1) : decimal;
+  const [intPart, decPart = ""] = body.split(".");
+  const padded = decPart.padEnd(USDC_DECIMALS, "0").slice(0, USDC_DECIMALS);
+  const units = BigInt(intPart || "0") * 1_000_000n + BigInt(padded || "0");
+  return negative ? -units : units;
 }
 
 function stripTrailingZeros(s: string): string {

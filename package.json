@@ -23,6 +23,7 @@
     "@react-pdf/renderer": "^4.5.1",
     "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.3.3",
+    "@walletconnect/ethereum-provider": "^2.23.9",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.2",
     "ethers": "^6.13.1",
@@ -35,6 +36,7 @@
     "react-dom": "19.2.4",
     "resend": "^6.12.2",
     "snarkjs": "^0.7.6",
+    "viem": "^2.48.7",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -6,9 +6,11 @@ import {
   clients,
   invoiceEvents,
   invoiceLineItems,
+  invoicePayments,
   invoices,
   type Invoice,
   type InvoiceLineItem,
+  type InvoicePayment,
 } from "@/lib/db/schema";
 import type { EnwiseCtx, ScopedCtx } from "@/lib/mcp/context";
 import { addAmounts, computeLine, isValidCurrency } from "@/lib/money";
@@ -963,6 +965,109 @@ export async function markInvoicePaid(
     amount_paid: newAmountPaid,
   });
   return { ok: true, value: (await getInvoice(ctx, inv.id))! };
+}
+
+// ---------- Onchain payments (no ScopedCtx) ----------
+//
+// recordOnchainPayment is the entry point for chain-verified payments
+// (RAILGUN shields, plain ERC-20 transfers, etc.). The chain itself is the
+// authority — anyone who can submit a (chainId, txHash) pair we've already
+// verified gets the invoice marked paid. Idempotent on (chainId, txHash):
+// re-submitting the same tx returns the existing record.
+
+export type RecordOnchainPaymentInput = {
+  invoiceId: string;
+  chainId: number;
+  txHash: string;
+  paymentMethod: "railgun_shield" | "direct_transfer" | "manual";
+  payerAddress: string | null;
+  amount: string;
+  currency: string;
+  paidAt: Date;
+};
+
+export type RecordOnchainPaymentResult = {
+  alreadyRecorded: boolean;
+  payment: InvoicePayment;
+  invoiceStatus: "sent" | "paid";
+};
+
+export async function recordOnchainPayment(
+  input: RecordOnchainPaymentInput,
+): Promise<RecordOnchainPaymentResult> {
+  const [existing] = await db
+    .select()
+    .from(invoicePayments)
+    .where(
+      and(
+        eq(invoicePayments.chainId, input.chainId),
+        eq(invoicePayments.txHash, input.txHash),
+      ),
+    );
+  if (existing) {
+    const [inv] = await db
+      .select({ status: invoices.status })
+      .from(invoices)
+      .where(eq(invoices.id, existing.invoiceId));
+    return {
+      alreadyRecorded: true,
+      payment: existing,
+      invoiceStatus: (inv?.status === "paid" ? "paid" : "sent"),
+    };
+  }
+
+  const [inserted] = await db
+    .insert(invoicePayments)
+    .values({
+      invoiceId: input.invoiceId,
+      chainId: input.chainId,
+      txHash: input.txHash,
+      paymentMethod: input.paymentMethod,
+      payerAddress: input.payerAddress,
+      amount: input.amount,
+      currency: input.currency,
+      paidAt: input.paidAt,
+    })
+    .returning();
+  if (!inserted) throw new Error("Failed to insert invoice_payment row.");
+
+  const [inv] = await db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.id, input.invoiceId));
+  if (!inv) throw new Error(`Invoice ${input.invoiceId} missing.`);
+
+  const newAmountPaid = addAmounts(inv.amountPaid, input.amount);
+  const fullyPaid = Number(addAmounts(inv.total, `-${newAmountPaid}`)) <= 0;
+
+  await db
+    .update(invoices)
+    .set({
+      status: fullyPaid ? "paid" : inv.status,
+      amountPaid: newAmountPaid,
+      paidAt: fullyPaid ? input.paidAt : inv.paidAt,
+      updatedAt: new Date(),
+    })
+    .where(eq(invoices.id, inv.id));
+
+  await db.insert(invoiceEvents).values({
+    invoiceId: inv.id,
+    eventType: fullyPaid ? "paid" : "partial_paid",
+    actor: "chain",
+    metadata: {
+      payment_id: inserted.id,
+      chain_id: input.chainId,
+      tx_hash: input.txHash,
+      method: input.paymentMethod,
+      amount: input.amount,
+    },
+  });
+
+  return {
+    alreadyRecorded: false,
+    payment: inserted,
+    invoiceStatus: fullyPaid ? "paid" : "sent",
+  };
 }
 
 /**

@@ -6,17 +6,19 @@ import {
   getRailgunWalletPrivateViewingKey,
   unloadWalletByID,
 } from "@railgun-community/wallet";
-import { ensureEngineStarted, ensureNetworkLoaded, PRIMARY_NETWORK } from "./setup";
+import { ensureEngineStarted } from "./setup";
 
 /**
  * RAILGUN wallet generation via the high-level SDK.
  *
- * Used at signup-time only (one call per business). Subsequent verification
- * does NOT use this path — verification uses lower-level note primitives
- * directly without engine state.
+ * Used at signup-time only (one call per business). Verification
+ * (`lib/railgun/verify.ts`) uses lower-level note primitives directly with
+ * no engine state at all.
  *
- * Cold-start cost: ~1s (engine init + Ethereum network probe). Fine for an
- * onboarding flow that runs once per business.
+ * Cold-start cost: ~75ms total (engine init <2ms, createRailgunWallet ~70ms,
+ * unload + extract <1ms). Confirmed by isolated smoke test. Wallet creation
+ * does NOT require a chain RPC connection — `loadProvider` was previously
+ * called here but is unnecessary for the create path.
  *
  * Returns:
  *   - mnemonic: 12-word BIP-39, returned to user once for backup; we never
@@ -27,22 +29,15 @@ import { ensureEngineStarted, ensureNetworkLoaded, PRIMARY_NETWORK } from "./set
  *     verification via ShieldNote primitives. STORE ENCRYPTED AT REST.
  */
 
-const ENCRYPTION_KEY = (() => {
-  const env = process.env.RAILGUN_ENCRYPTION_KEY;
-  if (env) {
-    if (!/^[0-9a-fA-F]{64}$/.test(env)) {
-      throw new Error(
-        "RAILGUN_ENCRYPTION_KEY must be 32-byte hex (64 hex chars). " +
-          "Generate one with: openssl rand -hex 32",
-      );
-    }
-    return env;
-  }
-  // Per-process random key. Wallets in memdown don't outlive the process,
-  // so a fresh per-process key works (we never need to re-load the wallet
-  // we just generated; the mnemonic + viewing key are returned to the caller).
-  return randomBytes(32).toString("hex");
-})();
+// Per-process random key. The SDK requires an encryption key to create a
+// wallet (it AES-encrypts the wallet record before writing to the LevelDOWN
+// backend), but we use memdown — the encrypted blob lives in RAM for ~70ms
+// and is unloaded right after we extract the address + viewing key. Nothing
+// is ever decrypted from this key after creation; persistence of the actual
+// viewing key happens at the app layer via TOKEN_ENC_KEY (lib/tokens.ts).
+// `RAILGUN_ENCRYPTION_KEY` env var is intentionally not honored — it would
+// imply consistency that doesn't exist in our usage.
+const ENCRYPTION_KEY = randomBytes(32).toString("hex");
 
 export type GeneratedWallet = {
   mnemonic: string;
@@ -52,9 +47,8 @@ export type GeneratedWallet = {
 
 export async function generateRailgunWallet(): Promise<GeneratedWallet> {
   await ensureEngineStarted();
-  await ensureNetworkLoaded(PRIMARY_NETWORK);
 
-  // Fresh 12-word BIP-39 mnemonic.
+  // Fresh 12-word BIP-39 mnemonic. 16 bytes of entropy → 128 bits.
   const mnemonic = Mnemonic.fromEntropy(ethersRandomBytes(16)).phrase;
 
   const info = await createRailgunWallet(ENCRYPTION_KEY, mnemonic, undefined);
@@ -66,7 +60,7 @@ export async function generateRailgunWallet(): Promise<GeneratedWallet> {
   const viewingPrivKeyBytes = getRailgunWalletPrivateViewingKey(info.id);
   const viewingPrivateKeyHex = Buffer.from(viewingPrivKeyBytes).toString("hex");
 
-  // We have everything we need; the in-memory wallet is no longer useful.
+  // We have everything we need; drop the in-memory wallet.
   unloadWalletByID(info.id);
 
   return {
