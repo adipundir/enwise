@@ -1,9 +1,14 @@
 import { put } from "@vercel/blob";
-import { generateClientTokenFromReadWriteToken } from "@vercel/blob/client";
 import { fileTypeFromBuffer } from "file-type";
 import { nanoid } from "nanoid";
 import type { NextRequest } from "next/server";
 import { authenticateMcpRequest } from "@/lib/mcp/auth";
+import {
+  ALLOWED_ATTACHMENT_MIME,
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_MIME_EXT,
+  presignAttachmentUpload,
+} from "@/lib/uploads/presign";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,27 +17,20 @@ export const dynamic = "force-dynamic";
 // the request body at 4.5 MB across all plans (https://vercel.com/docs/functions/runtimes#request-body-size).
 // We refuse just under that with a clear hint pointing at the JSON path.
 const MULTIPART_MAX_BYTES = 4 * 1024 * 1024;
-// Direct-to-blob path: bytes go straight to Vercel Blob (vercel.com/api/blob),
-// not through us, so this cap is whatever we want it to be.
-const DIRECT_MAX_BYTES = 10 * 1024 * 1024;
-
-const ALLOWED_MIME = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "application/pdf",
-]);
-const MIME_EXT: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/webp": "webp",
-  "application/pdf": "pdf",
-};
 
 /**
- * Attachment upload endpoint. Two modes, picked by Content-Type:
+ * Attachment upload HTTP endpoint.
  *
- * (1) `multipart/form-data` with `file=@…` — easiest, works for files ≤ 4 MB.
+ * AUDIENCE: web app drag-drop, browser code, and human-run scripts that
+ * already hold the user's `env_live_…` API token. **MCP / Claude callers
+ * should NOT use this endpoint** — they have no way to obtain the bearer
+ * token. Use the `request_attachment_upload` MCP tool instead, which mints
+ * the same presigned PUT and returns it through the authenticated MCP
+ * channel.
+ *
+ * Two modes, picked by Content-Type:
+ *
+ * (1) `multipart/form-data` with `file=@…` — works for files ≤ 4 MB.
  *     curl -X POST https://enwise.app/api/upload \
  *       -H "Authorization: Bearer env_live_…" \
  *       -F "file=@/path/to/receipt.pdf"
@@ -44,7 +42,7 @@ const MIME_EXT: Record<string, string> = {
  *       -H "Authorization: Bearer env_live_…" \
  *       -H "Content-Type: application/json" \
  *       -d '{"filename":"receipt.pdf","mime_type":"application/pdf"}'
- *     → 200 {ok, next_step: {method:"PUT", url, headers}, public_url, ...}
+ *     → 200 {ok, next_step: {method:"PUT", url, headers}, ...}
  *
  *     Then PUT the bytes:
  *     curl -X PUT "<next_step.url>" \
@@ -58,8 +56,7 @@ const MIME_EXT: Record<string, string> = {
  * Both modes:
  *   - Bearer auth (same env_live_… token used for /api/mcp)
  *   - Allowed types: PNG, JPEG, WebP, PDF
- *   - NEVER chunk or split a file. If you can't fit a 10 MB upload, the
- *     endpoint will say so explicitly — don't try to base64 + slice.
+ *   - NEVER chunk or split a file.
  */
 export async function POST(request: NextRequest): Promise<Response> {
   const auth = await authenticateMcpRequest(request);
@@ -95,65 +92,40 @@ async function handleDirectUpload(
     });
   }
   const filename = typeof body.filename === "string" ? body.filename : null;
-  const mimeType = typeof body.mime_type === "string" ? body.mime_type.toLowerCase() : null;
+  const mimeType = typeof body.mime_type === "string" ? body.mime_type : null;
   if (!filename || !mimeType) {
     return json(400, {
       ok: false,
       error: "JSON body must include both `filename` and `mime_type`.",
     });
   }
-  if (!ALLOWED_MIME.has(mimeType)) {
-    return json(415, {
-      ok: false,
-      error: `Unsupported mime_type "${mimeType}". Allowed: PNG, JPEG, WebP, PDF.`,
-    });
+
+  const result = await presignAttachmentUpload({ userId, filename, mimeType });
+  if (!result.ok) {
+    const status =
+      result.error.code === "storage_unavailable"
+        ? 503
+        : result.error.code === "invalid_mime"
+          ? 415
+          : 500;
+    return json(status, { ok: false, error: result.error.message });
   }
 
-  const ext = MIME_EXT[mimeType] ?? "bin";
-  const pathname = `attachments/${userId}/${nanoid(16)}.${ext}`;
-  const validUntil = Date.now() + 30 * 60 * 1000; // 30 min
-
-  let clientToken: string;
-  try {
-    clientToken = await generateClientTokenFromReadWriteToken({
-      token: process.env.BLOB_READ_WRITE_TOKEN!,
-      pathname,
-      validUntil,
-      addRandomSuffix: false,
-      allowOverwrite: false,
-      maximumSizeInBytes: DIRECT_MAX_BYTES,
-      allowedContentTypes: [mimeType],
-    });
-  } catch (err) {
-    return json(500, {
-      ok: false,
-      error: `Failed to mint upload token: ${(err as Error).message}`,
-    });
-  }
-
-  // Vercel Blob's API expects the pathname as a `?pathname=` query param,
-  // not a path segment. Discovered by reading @vercel/blob/dist client.put.
-  const putUrl = `https://vercel.com/api/blob/?pathname=${encodeURIComponent(pathname)}`;
-
+  const p = result.presigned;
   return json(200, {
     ok: true,
     next_step: {
-      method: "PUT",
-      url: putUrl,
-      headers: {
-        authorization: `Bearer ${clientToken}`,
-        "x-api-version": "12",
-        "x-content-type": mimeType,
-        "x-vercel-blob-access": "public",
-      },
+      method: p.method,
+      url: p.url,
+      headers: p.headers,
       instructions:
         "PUT the file bytes to `url` with these `headers`. The PUT response body is JSON with a `url` field — pass that URL as `attachment_url` when creating / updating an invoice line item.",
     },
-    pathname,
-    mime_type: mimeType,
-    filename,
-    max_size_bytes: DIRECT_MAX_BYTES,
-    expires_at: new Date(validUntil).toISOString(),
+    pathname: p.pathname,
+    mime_type: p.mime_type,
+    filename: p.filename,
+    max_size_bytes: p.max_size_bytes,
+    expires_at: p.expires_at,
   });
 }
 
@@ -185,7 +157,7 @@ async function handleMultipartUpload(
       ok: false,
       error: `File is ${formatBytes(file.size)}. Multipart cap is ${formatBytes(MULTIPART_MAX_BYTES)} (Vercel platform limit).`,
       hint:
-        `For files larger than ${formatBytes(MULTIPART_MAX_BYTES)}, use the JSON mode (up to ${formatBytes(DIRECT_MAX_BYTES)}). POST application/json {filename, mime_type} to this same endpoint and follow the returned next_step.`,
+        `For files larger than ${formatBytes(MULTIPART_MAX_BYTES)}, use the JSON mode (up to ${formatBytes(ATTACHMENT_MAX_BYTES)}). POST application/json {filename, mime_type} to this same endpoint and follow the returned next_step.`,
     });
   }
 
@@ -194,14 +166,14 @@ async function handleMultipartUpload(
   // Trust the bytes, not the multipart content-type header — sniff the
   // actual file type and reject anything not in our allow list.
   const sniffed = await fileTypeFromBuffer(buffer);
-  if (!sniffed || !ALLOWED_MIME.has(sniffed.mime)) {
+  if (!sniffed || !ALLOWED_ATTACHMENT_MIME.has(sniffed.mime)) {
     return json(415, {
       ok: false,
       error: "Unsupported file type. Allowed: PNG, JPEG, WebP, PDF.",
     });
   }
 
-  const ext = MIME_EXT[sniffed.mime] ?? "bin";
+  const ext = ATTACHMENT_MIME_EXT[sniffed.mime] ?? "bin";
   const pathname = `attachments/${userId}/${nanoid(16)}.${ext}`;
 
   let blobUrl: string;

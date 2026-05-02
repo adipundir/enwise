@@ -5,6 +5,7 @@ import { registerClientTools } from "@/lib/mcp/tools/clients";
 import { registerInvoiceTools } from "@/lib/mcp/tools/invoices";
 import { registerProductTools } from "@/lib/mcp/tools/products";
 import { registerRecurringTools } from "@/lib/mcp/tools/recurring";
+import { registerUploadTools } from "@/lib/mcp/tools/uploads";
 import { registerWhoami } from "@/lib/mcp/tools/whoami";
 
 export function createMcpServer(): McpServer {
@@ -56,42 +57,48 @@ Rule of thumb: context about ONE line item not visible from the attachment → \
 
 # Attachments — supported types: PNG, JPEG, WebP, PDF only. Up to 10 MB per file, 10 files per line item.
 
-ALWAYS upload via curl, never inline file bytes, never split or chunk a file.
+Use the \`request_attachment_upload\` tool. Always two steps, never more, never fewer:
 
-Files ≤ 4 MB — one curl:
-
-\`\`\`
-curl -X POST https://enwise.app/api/upload \\
-  -H "Authorization: Bearer <THE_USER_KEY>" \\
-  -F "file=@/path/to/receipt.pdf"
-\`\`\`
-
-Returns \`{ok: true, url, mime_type, size_bytes, filename}\`. Pass \`url\` to the MCP tool as \`{attachment_url, label}\`.
-
-Files 4–10 MB — two curls (bypasses Vercel's 4.5 MB function body limit):
+**Step 1.** \`request_attachment_upload({filename, mime_type})\` returns:
 
 \`\`\`
-# 1. Ask for a presigned PUT URL
-RESP=$(curl -sS -X POST https://enwise.app/api/upload \\
-  -H "Authorization: Bearer <THE_USER_KEY>" \\
-  -H "Content-Type: application/json" \\
-  -d '{"filename":"receipt.pdf","mime_type":"application/pdf"}')
+{
+  "upload": {
+    "method": "PUT",
+    "url": "https://vercel.com/api/blob/?pathname=…",
+    "headers": {
+      "authorization": "Bearer vercel_blob_client_…",
+      "x-api-version": "12",
+      "x-content-type": "application/pdf",
+      "x-vercel-blob-access": "public"
+    }
+  },
+  "expires_at": "…",
+  ...
+}
+\`\`\`
 
-# 2. PUT bytes directly to Vercel Blob
-PUT_URL=$(echo "$RESP" | jq -r .next_step.url)
-TOKEN=$(echo "$RESP"  | jq -r .next_step.headers.authorization)
-PUT_RESP=$(curl -sS -X PUT "$PUT_URL" \\
-  -H "$TOKEN" \\
+**Step 2.** PUT the bytes with one curl:
+
+\`\`\`
+PUT_RESP=$(curl -sS -X PUT "<upload.url>" \\
+  -H "authorization: <upload.headers.authorization>" \\
   -H "x-api-version: 12" \\
-  -H "x-content-type: application/pdf" \\
+  -H "x-content-type: <upload.headers.x-content-type>" \\
   -H "x-vercel-blob-access: public" \\
-  --data-binary @/path/to/receipt.pdf)
-
-# 3. PUT response includes a public \`url\` — use it as attachment_url
+  --data-binary @/absolute/path/to/file.pdf)
 PUBLIC_URL=$(echo "$PUT_RESP" | jq -r .url)
 \`\`\`
 
-DO NOT base64-encode and inline the file. DO NOT split a file into chunks. DO NOT ask the user for a public URL of their file — take it from disk and upload it yourself.
+Then pass \`PUBLIC_URL\` as \`attachment_url\` to \`create_invoice\` / \`add_line_item\` / \`update_line_item\`, with a natural human label ("Apple receipt", "Hotel folio").
+
+Why this shape: the presigned PUT URL carries its own scoped, 30-min credential — you don't need the user's API token, and you should not try to obtain it. The HTTP endpoint at \`/api/upload\` is for the web app's drag-drop only; do NOT curl it from MCP.
+
+Hard rules:
+- ONE file per \`request_attachment_upload\` call. Don't batch.
+- DO NOT base64-encode and inline file bytes as a tool argument. Bytes go through curl.
+- DO NOT chunk, split, or compress in flight. If the source is >10 MB, ask the user to give you a smaller version.
+- DO NOT ask the user to upload the file themselves or to provide a public URL — read it from the path they gave you and PUT it.
 
 # Other common asks
 
@@ -125,6 +132,7 @@ Each error includes a \`hint\` string. Relay the hint to the user; don't rephras
   registerInvoiceTools(server);
   registerAnalyticsTools(server);
   registerRecurringTools(server);
+  registerUploadTools(server);
 
   return server;
 }
