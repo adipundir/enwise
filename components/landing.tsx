@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { RotatingWord } from "@/components/rotating-word";
+import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
 export async function Landing() {
@@ -148,6 +149,7 @@ export async function Landing() {
               <LiDark>Recurring invoices + auto-send</LiDark>
               <LiDark>Custom brand color + logo on PDFs</LiDark>
               <LiDark>Up to 10 attachments per line item, 10 MB each</LiDark>
+              <LiDark>Open source — fork it, self-host, audit the code</LiDark>
             </ul>
 
             <Link
@@ -161,16 +163,7 @@ export async function Landing() {
         </section>
       </main>
 
-      <footer className="border-t border-zinc-900">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-8 text-xs text-zinc-600">
-          <span className="text-base font-semibold text-zinc-400">enwise</span>
-          <span className="flex items-center gap-3">
-            <span>Invoicing from inside Claude</span>
-            <span aria-hidden className="text-zinc-700">·</span>
-            <span>© {new Date().getFullYear()}</span>
-          </span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { auth } from "@/auth";
 
@@ -161,14 +162,7 @@ export default async function SetupDocsPage() {
         </ol>
       </main>
 
-      <footer className="border-t border-zinc-900">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-8 text-xs text-zinc-600">
-          <span className="text-base font-semibold text-zinc-400">enwise</span>
-          <span>
-            Invoicing from inside Claude. © {new Date().getFullYear()}.
-          </span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
