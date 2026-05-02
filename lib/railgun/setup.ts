@@ -1,6 +1,3 @@
-import path from "node:path";
-import fs from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { JsonRpcProvider } from "ethers";
 import {
   ArtifactStore,
@@ -17,73 +14,53 @@ import { activeRailgunNetwork, rpcUrlsFor } from "./config";
 
 /**
  * RAILGUN engine — lazy singleton. Starts the engine once per Node process,
- * subsequent callers await the same promise. Tuned for "verify a tx hash"
- * use cases: shield-only mode, no merkletree scanning, no proving artifacts.
+ * subsequent callers await the same promise. Tuned for "create wallet +
+ * verify a tx hash" use cases: shield-only mode, no proving artifacts, no
+ * filesystem persistence.
  *
- * If the deployment context is serverless (Vercel), each cold function pays
- * the init cost (~3-5s); warm reuses are free. Long-running workers init once.
+ * Cold-start cost: ~1ms for engine init alone (no merkle scan, no provider
+ * load). Wallet creation (createRailgunWallet) adds ~70ms. Network connect
+ * via ensureNetworkLoaded is the only slow path and is opt-in.
+ *
+ * Designed to run cleanly on Vercel / read-only-FS environments: nothing
+ * is mkdir'd, the ArtifactStore is in-memory (we never generate proofs
+ * server-side, so it's never consulted in practice).
  */
-
-const ENGINE_DATA_DIR = path.resolve(
-  process.env.RAILGUN_DATA_DIR ?? ".railgun-data",
-);
-const ARTIFACTS_DIR = path.join(ENGINE_DATA_DIR, "artifacts");
-const LEVELDB_DIR = path.join(ENGINE_DATA_DIR, "leveldb");
 
 let initPromise: Promise<void> | null = null;
 const loadedNetworks = new Set<NetworkName>();
 
-async function ensureDirs() {
-  if (!existsSync(ENGINE_DATA_DIR)) await fs.mkdir(ENGINE_DATA_DIR, { recursive: true });
-  if (!existsSync(ARTIFACTS_DIR)) await fs.mkdir(ARTIFACTS_DIR, { recursive: true });
-  if (!existsSync(LEVELDB_DIR)) await fs.mkdir(LEVELDB_DIR, { recursive: true });
-}
-
 function buildArtifactStore(): ArtifactStore {
-  // Filesystem-backed; sufficient for verify-only flows (proofs not generated
-  // here). If we later add unshield/withdraw on the server, the store needs
-  // to be writable to download Groth16 artifacts on first proof attempt.
+  // No-op store. We never generate Groth16 proofs server-side — wallet
+  // creation doesn't need them, and verify reads on-chain Shield events
+  // directly without any proof. So the read/write/exists handlers are
+  // never actually invoked during normal operation.
+  //
+  // Crucially: no filesystem access. Vercel function bundles live under
+  // a read-only /var/task; only /tmp is writable. Touching the FS at
+  // engine init time would crash setup_private_payments. If we ever add
+  // server-side proof generation (unshield/transfer), this store needs
+  // a real backend (an in-memory Map cache + Vercel Blob fetcher would
+  // work; see RAILGUN docs §Build a persistent store).
   return new ArtifactStore(
-    async (key) => {
-      const file = path.join(ARTIFACTS_DIR, key);
-      try {
-        return await fs.readFile(file);
-      } catch {
-        return null;
-      }
-    },
-    async (dir, key, value) => {
-      const target = path.join(ARTIFACTS_DIR, key);
-      await fs.mkdir(path.dirname(target), { recursive: true });
-      await fs.writeFile(
-        target,
-        typeof value === "string" ? value : Buffer.from(value),
-      );
-    },
-    async (key) => {
-      try {
-        await fs.access(path.join(ARTIFACTS_DIR, key));
-        return true;
-      } catch {
-        return false;
-      }
-    },
+    async () => null, // get
+    async () => {},   // store (no-op)
+    async () => false, // exists
   );
 }
 
 export async function ensureEngineStarted(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    await ensureDirs();
-    // memdown: pure-JS in-memory backend. Ephemeral (lost on process restart),
-    // which is fine because we run with skipMerkletreeScans=true — there's no
-    // long-lived state to preserve. Avoids native compilation headaches on
-    // Vercel serverless.
+    // memdown: pure-JS in-memory backend. Avoids native compilation
+    // headaches on Vercel serverless. Wallet records live here for ~70ms
+    // during createRailgunWallet, then we unloadWalletByID and the slot
+    // is freed.
     const db = new MemDOWN();
     const artifactStore = buildArtifactStore();
     // POI (Proof Of Innocence) is required for Arbitrum. Default test
-    // aggregator works for now; for production we'd self-host or pin a paid
-    // node URL via RAILGUN_POI_NODE_URL env.
+    // aggregator works for now; for production we'd self-host or pin a
+    // paid node URL via RAILGUN_POI_NODE_URL env.
     const poiNodeUrl =
       process.env.RAILGUN_POI_NODE_URL ?? "https://ppoi-agg.horsewithsixlegs.xyz";
     await startRailgunEngine(
@@ -92,10 +69,10 @@ export async function ensureEngineStarted(): Promise<void> {
       false, // shouldDebug
       artifactStore,
       false, // useNativeArtifacts (false for nodejs)
-      false, // skipMerkletreeScans — we'd love to skip this for verify-only
-             // flows, but the SDK refuses to load any wallet (even view-only)
-             // when this is true. We accept the merkletree-scan cost and run
-             // the engine in a long-lived worker process for the scanner.
+      false, // skipMerkletreeScans — SDK refuses to create a wallet with
+             // this true ("Cannot load wallet: skipMerkletreeScans set to
+             // true"), so we leave it false. With memdown the cost is
+             // moot since the in-memory tree is discarded on unloadWalletByID.
       [poiNodeUrl],
     );
   })();
