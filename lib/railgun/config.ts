@@ -5,10 +5,12 @@ import { NetworkName } from "@railgun-community/shared-models";
  * Single source of truth for the chain RAILGUN payments run on.
  *
  * Switched at build/deploy time via env:
- *   - RAILGUN_NETWORK=sepolia → Ethereum Sepolia testnet
- *   - anything else (incl. unset) → Ethereum mainnet
+ *   - RAILGUN_NETWORK=mainnet (or unset)  → Ethereum mainnet
+ *   - RAILGUN_NETWORK=sepolia              → Ethereum Sepolia testnet
  *
- * The browser side reads NEXT_PUBLIC_RAILGUN_NETWORK; both must agree.
+ * Any other value throws. Silent fallback to mainnet for typos
+ * (sepoolia, polygon, arbitrum) is the kind of bug that drains real
+ * funds — explicit list, explicit error.
  *
  * Why testnet exists: shielding on mainnet costs gas + USDC, so e2e tests
  * happen on Sepolia where gas is free and Circle hands out USDC.
@@ -52,9 +54,23 @@ const SEPOLIA: RailgunNetworkConfig = {
   isTestnet: true,
 };
 
+const SUPPORTED: Record<string, RailgunNetworkConfig> = {
+  "": MAINNET, // unset = mainnet
+  mainnet: MAINNET,
+  ethereum: MAINNET,
+  sepolia: SEPOLIA,
+};
+
 export function activeRailgunNetwork(): RailgunNetworkConfig {
   const choice = (process.env.RAILGUN_NETWORK ?? "").toLowerCase();
-  return choice === "sepolia" ? SEPOLIA : MAINNET;
+  const cfg = SUPPORTED[choice];
+  if (!cfg) {
+    throw new Error(
+      `Unsupported RAILGUN_NETWORK="${process.env.RAILGUN_NETWORK}". ` +
+        `Allowed: ${Object.keys(SUPPORTED).filter(Boolean).join(", ")} (or unset for mainnet).`,
+    );
+  }
+  return cfg;
 }
 
 export function rpcUrlFor(cfg: RailgunNetworkConfig): string {

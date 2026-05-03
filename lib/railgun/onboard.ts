@@ -1,5 +1,5 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { businesses } from "@/lib/db/schema";
 import type { ScopedCtx } from "@/lib/mcp/context";
@@ -17,6 +17,11 @@ import { generateRailgunWallet } from "@/lib/railgun/wallet";
  * printed on the next invoice and silently misdirect funds. If the user truly
  * wants a new wallet, that's a separate (manual) reset operation we haven't
  * built.
+ *
+ * Race-free: the persist step uses a conditional UPDATE
+ * (WHERE railgun_zk_address IS NULL) so two concurrent setups for the same
+ * business can't both win. The losing call discards its mnemonic, re-reads
+ * the row, and returns alreadySetUp with the winning address.
  */
 
 export type SetupPrivatePaymentsResult =
@@ -25,6 +30,7 @@ export type SetupPrivatePaymentsResult =
       alreadySetUp: false;
       zkAddress: string;
       mnemonic: string;
+      shareableViewingKey: string | null;
       chainId: number;
     }
   | {
@@ -77,7 +83,10 @@ export async function setupPrivatePayments(
     };
   }
 
-  await db
+  // Conditional UPDATE: only writes if no zk address is set yet. If a
+  // concurrent caller raced us and already populated the column, our UPDATE
+  // affects 0 rows and we re-read to return their address.
+  const updated = await db
     .update(businesses)
     .set({
       railgunZkAddress: wallet.zkAddress,
@@ -86,13 +95,50 @@ export async function setupPrivatePayments(
       railgunSetupAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(businesses.id, ctx.businessId));
+    .where(
+      and(
+        eq(businesses.id, ctx.businessId),
+        isNull(businesses.railgunZkAddress),
+      ),
+    )
+    .returning({ id: businesses.id });
+
+  if (updated.length === 0) {
+    // Lost the race. Re-read and return whatever the winner persisted.
+    // The mnemonic we just generated is discarded — its keys were never
+    // published anywhere, so no funds can be addressed to it.
+    const [winner] = await db
+      .select({
+        railgunZkAddress: businesses.railgunZkAddress,
+        railgunChainId: businesses.railgunChainId,
+      })
+      .from(businesses)
+      .where(eq(businesses.id, ctx.businessId));
+    if (winner?.railgunZkAddress) {
+      return {
+        ok: true,
+        alreadySetUp: true,
+        zkAddress: winner.railgunZkAddress,
+        chainId: winner.railgunChainId ?? cfg.chainId,
+      };
+    }
+    // Shouldn't happen unless the business row was deleted between our
+    // initial read and the UPDATE. Surface as an internal error rather
+    // than fake-succeeding.
+    return {
+      ok: false,
+      code: "encryption_unavailable",
+      message: "Business row vanished mid-setup; no wallet was persisted.",
+      hint: "Re-run setup_private_payments after confirming the business still exists.",
+    };
+  }
 
   return {
     ok: true,
     alreadySetUp: false,
     zkAddress: wallet.zkAddress,
     mnemonic: wallet.mnemonic,
+    shareableViewingKey: wallet.shareableViewingKey,
     chainId: cfg.chainId,
   };
 }

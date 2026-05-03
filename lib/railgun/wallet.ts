@@ -4,6 +4,7 @@ import {
   createRailgunWallet,
   getRailgunAddress,
   getRailgunWalletPrivateViewingKey,
+  getWalletShareableViewingKey,
   unloadWalletByID,
 } from "@railgun-community/wallet";
 import { ensureEngineStarted } from "./setup";
@@ -27,6 +28,11 @@ import { ensureEngineStarted } from "./setup";
  *   - zkAddress: 0zk1q… string, stored on the business row, displayed on invoices.
  *   - viewingPrivateKeyHex: raw bytes hex-encoded; used for stateless tx
  *     verification via ShieldNote primitives. STORE ENCRYPTED AT REST.
+ *   - shareableViewingKey: the bundled, importable viewing-key string that
+ *     pastes directly into Railway Wallet (and any other RAILGUN-compatible
+ *     view-only client) via createViewOnlyRailgunWallet. Same wallet,
+ *     "Railway-format" export. Useful for the user to verify equivalence,
+ *     or to share with an accountant for read-only access.
  */
 
 // Per-process random key. The SDK requires an encryption key to create a
@@ -43,6 +49,7 @@ export type GeneratedWallet = {
   mnemonic: string;
   zkAddress: string;
   viewingPrivateKeyHex: string;
+  shareableViewingKey: string | null;
 };
 
 export async function generateRailgunWallet(): Promise<GeneratedWallet> {
@@ -60,6 +67,13 @@ export async function generateRailgunWallet(): Promise<GeneratedWallet> {
   const viewingPrivKeyBytes = getRailgunWalletPrivateViewingKey(info.id);
   const viewingPrivateKeyHex = Buffer.from(viewingPrivKeyBytes).toString("hex");
 
+  // Shareable viewing key — the same string Railway Wallet shows under
+  // "viewing key". Bundles viewing key + spending pubkey + creation block
+  // into one importable blob for `createViewOnlyRailgunWallet`. Returned
+  // to the caller for parity / read-only sharing; not persisted server-side.
+  const shareableViewingKey =
+    (await getWalletShareableViewingKey(info.id)) ?? null;
+
   // We have everything we need; drop the in-memory wallet.
   unloadWalletByID(info.id);
 
@@ -67,5 +81,6 @@ export async function generateRailgunWallet(): Promise<GeneratedWallet> {
     mnemonic,
     zkAddress,
     viewingPrivateKeyHex,
+    shareableViewingKey,
   };
 }
