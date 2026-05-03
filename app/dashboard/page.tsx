@@ -239,7 +239,6 @@ function InvoiceRow({
     status: "draft" | "sent" | "paid" | "void";
     total: string;
     currency: string;
-    dueDate: string;
     shareSlug: string;
   };
 }) {
@@ -249,10 +248,14 @@ function InvoiceRow({
     >
       <div className="flex flex-wrap items-center gap-3">
         <div className="font-mono text-sm text-zinc-100">{inv.invoiceNumber}</div>
+        {inv.status === "void" ? (
+          <span className="rounded-sm border border-zinc-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+            Void
+          </span>
+        ) : null}
       </div>
       <div className="flex flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-zinc-300">
         <span>{formatMoney(inv.total, inv.currency)}</span>
-        <span className="text-xs text-zinc-500">Due {inv.dueDate}</span>
       </div>
       <Link
         href={invoiceShareUrl(inv.shareSlug)}

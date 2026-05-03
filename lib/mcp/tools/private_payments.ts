@@ -1,10 +1,17 @@
 import { z } from "zod";
 import { ctxFromAuthInfo, scopeFromCtx } from "@/lib/mcp/context";
 import { toolError, toolOk, zodToToolError } from "@/lib/mcp/errors";
-import { setupPrivatePayments } from "@/lib/railgun/onboard";
+import {
+  resetPrivatePayments,
+  setupPrivatePayments,
+} from "@/lib/railgun/onboard";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const setupInput = {
+  business_id: z.string().uuid().optional(),
+};
+
+const resetInput = {
   business_id: z.string().uuid().optional(),
 };
 
@@ -69,6 +76,49 @@ export function registerPrivatePaymentTools(server: McpServer) {
           "DELIVER THE MNEMONIC TO THE USER NOW, VERBATIM, IN A CODE BLOCK, WITH THE WARNING. See the tool description for the exact format. This is the only time it will exist; if you do not show it now, it is lost.",
         viewing_key_note:
           "`shareable_viewing_key` is the same string Railway Wallet shows under 'viewing key'. The user can paste it into another RAILGUN-compatible client to add a read-only view of this wallet (see all incoming/outgoing private payments without spending power). Mention it as a secondary, optional output AFTER the mnemonic — most users won't need it. The mnemonic is the only thing that's strictly mandatory to save.",
+      });
+    },
+  );
+
+  server.registerTool(
+    "reset_private_payments",
+    {
+      title: "Reset / forget the RAILGUN wallet for a business",
+      description:
+        "DESTRUCTIVE. NULLs out the RAILGUN wallet on a business so the next setup_private_payments call mints a fresh one. Use this when the chain config has changed (e.g. flipping RAILGUN_NETWORK between sepolia and mainnet) and the existing wallet is locked to the wrong chain — that's the only legitimate reason to reset.\n\n" +
+        "## What this does\n\n" +
+        "Sets `railgun_zk_address`, `railgun_viewing_key_encrypted`, `railgun_chain_id`, and `railgun_setup_at` to NULL on the business row. After this, the share-page Pay button hides on all that business's invoices until setup_private_payments runs again.\n\n" +
+        "## What this costs (NON-OBVIOUS — explain to the user before firing)\n\n" +
+        "1. **Already-sent invoices that printed the old `0zk` address are no longer auto-verifiable here.** We deleted the viewing key, so the server can't decrypt new Shield events to that old address. Those invoices stay in their current status forever from our side. The user (or a recipient) can still see those funds via Railway Wallet by importing the original mnemonic — funds aren't lost, our visibility into them is.\n" +
+        "2. **The mnemonic itself is unaffected** (we never had it). Anyone who saved the original 12 words can still spend any USDC ever shielded to the old address.\n" +
+        "3. **The new wallet has a different `0zk` address** — future invoices print the new one. Clients who try to pay an old invoice's old address would still successfully shield to the user (if they import the old mnemonic), but our server will never mark that old invoice paid.\n\n" +
+        "## How to handle the conversation\n\n" +
+        "Before calling, tell the user verbatim: \"Resetting will: (a) issue a new private wallet on the next setup, (b) stop the dashboard from auto-marking payments to your old address as paid, (c) leave any existing shielded balance recoverable only via the original mnemonic + Railway Wallet. The old mnemonic still works — but enwise loses sight of it. Confirm you want to proceed?\" Wait for explicit confirmation. Then fire this tool, then suggest they run `setup_private_payments` to mint the new wallet.\n\n" +
+        "## Returns\n\n" +
+        "On success when a wallet existed: `{was_set_up: true, previous_zk_address, previous_chain_id}`. Show these so the user has a record.\n" +
+        "On success when nothing was set up: `{was_set_up: false}` — no-op.",
+      inputSchema: resetInput,
+    },
+    async (args, extra) => {
+      const parsed = z.object(resetInput).safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const scope = await scopeFromCtx(ctx, parsed.data.business_id);
+      if (!scope.ok) return scope.error;
+
+      const result = await resetPrivatePayments(scope.scoped);
+      if (!result.wasSetUp) {
+        return toolOk({
+          was_set_up: false,
+          message: "No RAILGUN wallet was set up on this business; nothing to reset.",
+        });
+      }
+      return toolOk({
+        was_set_up: true,
+        previous_zk_address: result.previousZkAddress,
+        previous_chain_id: result.previousChainId,
+        next_step:
+          "Wallet forgotten. Run `setup_private_payments` to mint a fresh wallet on the current active chain.",
       });
     },
   );

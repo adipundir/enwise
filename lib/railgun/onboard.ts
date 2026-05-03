@@ -24,6 +24,73 @@ import { generateRailgunWallet } from "@/lib/railgun/wallet";
  * the row, and returns alreadySetUp with the winning address.
  */
 
+export type ResetPrivatePaymentsResult =
+  | {
+      ok: true;
+      wasSetUp: true;
+      previousZkAddress: string;
+      previousChainId: number | null;
+    }
+  | {
+      ok: true;
+      wasSetUp: false;
+    };
+
+/**
+ * Forget the RAILGUN wallet on a business — NULL out address, viewing key,
+ * chain id, setup timestamp. After this, setupPrivatePayments will mint a
+ * fresh wallet on the next call.
+ *
+ * Why this exists: a wallet's railgun_chain_id is locked at setup time. If
+ * someone set up while RAILGUN_NETWORK=mainnet and later flips it to
+ * sepolia (or vice versa), the share-page Pay button silently disappears
+ * because the chain check fails. Reset + re-setup is the only way to
+ * re-anchor to the current chain.
+ *
+ * What it costs:
+ * - Future invoices stop printing the old 0zk address (good — no more
+ *   payments going to a wallet we'll lose track of).
+ * - Already-sent invoices that already printed the old address are no
+ *   longer auto-verifiable here — we threw away the viewing key. The user
+ *   can still see those funds via Railway Wallet using the original
+ *   mnemonic, but our server stops marking those invoices paid.
+ * - The mnemonic itself is unaffected (it was never on our server). Funds
+ *   shielded to the old address remain spendable by anyone who holds it.
+ */
+export async function resetPrivatePayments(
+  ctx: ScopedCtx,
+): Promise<ResetPrivatePaymentsResult> {
+  const [biz] = await db
+    .select({
+      railgunZkAddress: businesses.railgunZkAddress,
+      railgunChainId: businesses.railgunChainId,
+    })
+    .from(businesses)
+    .where(eq(businesses.id, ctx.businessId));
+
+  if (!biz?.railgunZkAddress) {
+    return { ok: true, wasSetUp: false };
+  }
+
+  await db
+    .update(businesses)
+    .set({
+      railgunZkAddress: null,
+      railgunViewingKeyEncrypted: null,
+      railgunChainId: null,
+      railgunSetupAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(businesses.id, ctx.businessId));
+
+  return {
+    ok: true,
+    wasSetUp: true,
+    previousZkAddress: biz.railgunZkAddress,
+    previousChainId: biz.railgunChainId ?? null,
+  };
+}
+
 export type SetupPrivatePaymentsResult =
   | {
       ok: true;
