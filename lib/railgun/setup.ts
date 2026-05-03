@@ -53,8 +53,11 @@ export async function ensureEngineStarted(): Promise<void> {
     const t0 = Date.now();
     const db = new MemDOWN();
     const artifactStore = buildArtifactStore();
+    // Treat empty string as unset. `??` only triggers on null/undefined, so
+    // RAILGUN_POI_NODE_URL="" in .env would otherwise pass through and the
+    // engine would hang trying to talk to "" as a POI URL.
     const poiNodeUrl =
-      process.env.RAILGUN_POI_NODE_URL ??
+      (process.env.RAILGUN_POI_NODE_URL?.trim() || undefined) ??
       "https://ppoi-agg.horsewithsixlegs.xyz";
     console.log(`[railgun] engine_start poi=${poiNodeUrl}`);
     try {
