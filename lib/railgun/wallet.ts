@@ -53,34 +53,45 @@ export type GeneratedWallet = {
 };
 
 export async function generateRailgunWallet(): Promise<GeneratedWallet> {
-  await ensureEngineStarted();
+  const t0 = Date.now();
+  console.log("[railgun] generate_wallet_start");
+  try {
+    await ensureEngineStarted();
+    const tEng = Date.now();
 
-  // Fresh 12-word BIP-39 mnemonic. 16 bytes of entropy → 128 bits.
-  const mnemonic = Mnemonic.fromEntropy(ethersRandomBytes(16)).phrase;
+    // Fresh 12-word BIP-39 mnemonic. 16 bytes of entropy → 128 bits.
+    const mnemonic = Mnemonic.fromEntropy(ethersRandomBytes(16)).phrase;
 
-  const info = await createRailgunWallet(ENCRYPTION_KEY, mnemonic, undefined);
-  const zkAddress = getRailgunAddress(info.id);
-  if (!zkAddress) {
-    throw new Error("Wallet created but address resolution failed.");
+    const info = await createRailgunWallet(ENCRYPTION_KEY, mnemonic, undefined);
+    const tCreate = Date.now();
+
+    const zkAddress = getRailgunAddress(info.id);
+    if (!zkAddress) {
+      throw new Error("Wallet created but address resolution failed.");
+    }
+    const viewingPrivKeyBytes = getRailgunWalletPrivateViewingKey(info.id);
+    const viewingPrivateKeyHex = Buffer.from(viewingPrivKeyBytes).toString("hex");
+    const shareableViewingKey =
+      (await getWalletShareableViewingKey(info.id)) ?? null;
+
+    unloadWalletByID(info.id);
+
+    const tEnd = Date.now();
+    console.log(
+      `[railgun] generate_wallet_ok engine_ms=${tEng - t0} create_ms=${tCreate - tEng} extract_ms=${tEnd - tCreate} total_ms=${tEnd - t0} addr=${zkAddress.slice(0, 12)}…${zkAddress.slice(-6)}`,
+    );
+
+    return {
+      mnemonic,
+      zkAddress,
+      viewingPrivateKeyHex,
+      shareableViewingKey,
+    };
+  } catch (err) {
+    console.error(
+      `[railgun] generate_wallet_failed ms=${Date.now() - t0}`,
+      err,
+    );
+    throw err;
   }
-  // Extract raw viewing private key for stateless verification later.
-  const viewingPrivKeyBytes = getRailgunWalletPrivateViewingKey(info.id);
-  const viewingPrivateKeyHex = Buffer.from(viewingPrivKeyBytes).toString("hex");
-
-  // Shareable viewing key — the same string Railway Wallet shows under
-  // "viewing key". Bundles viewing key + spending pubkey + creation block
-  // into one importable blob for `createViewOnlyRailgunWallet`. Returned
-  // to the caller for parity / read-only sharing; not persisted server-side.
-  const shareableViewingKey =
-    (await getWalletShareableViewingKey(info.id)) ?? null;
-
-  // We have everything we need; drop the in-memory wallet.
-  unloadWalletByID(info.id);
-
-  return {
-    mnemonic,
-    zkAddress,
-    viewingPrivateKeyHex,
-    shareableViewingKey,
-  };
 }

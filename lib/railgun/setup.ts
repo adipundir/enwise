@@ -50,14 +50,13 @@ function buildArtifactStore(): ArtifactStore {
 export async function ensureEngineStarted(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
+    const t0 = Date.now();
     const db = new MemDOWN();
     const artifactStore = buildArtifactStore();
-    // POI (Proof Of Innocence) is required by the SDK signature even though
-    // we don't generate POIs server-side (we receive only). Default test
-    // aggregator is used unless RAILGUN_POI_NODE_URL is set.
     const poiNodeUrl =
       process.env.RAILGUN_POI_NODE_URL ??
       "https://ppoi-agg.horsewithsixlegs.xyz";
+    console.log(`[railgun] engine_start poi=${poiNodeUrl}`);
     try {
       await startRailgunEngine(
         "enwise",
@@ -65,17 +64,17 @@ export async function ensureEngineStarted(): Promise<void> {
         false, // shouldDebug
         artifactStore,
         false, // useNativeArtifacts (false for nodejs)
-        false, // skipMerkletreeScans — SDK refuses to create a wallet with
-               // this true ("Cannot load wallet: skipMerkletreeScans set
-               // to true"). With memdown the cost is moot since the
-               // in-memory tree is discarded on unloadWalletByID.
+        false, // skipMerkletreeScans
         [poiNodeUrl],
       );
+      console.log(`[railgun] engine_ready ms=${Date.now() - t0}`);
     } catch (err) {
-      // Clear the cached promise so a subsequent call retries instead of
-      // returning the stuck rejection forever. Without this, one transient
-      // POI/network hiccup at first call would brick the engine for the
-      // process lifetime.
+      console.error(
+        `[railgun] engine_init_failed ms=${Date.now() - t0} poi=${poiNodeUrl}`,
+        err,
+      );
+      // Clear cached promise so next call retries instead of returning
+      // the stuck rejection forever.
       initPromise = null;
       throw err;
     }

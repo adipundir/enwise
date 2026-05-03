@@ -110,13 +110,16 @@ export type VerifyRailgunPaymentResult =
 export async function verifyAndRecordRailgunPayment(
   input: VerifyRailgunPaymentInput,
 ): Promise<VerifyRailgunPaymentResult> {
+  const t0 = Date.now();
   const txHash = normalizeHex(input.txHash);
+  console.log(`[railgun] verify_start slug=${input.slug} tx=${txHash}`);
 
   const [inv] = await db
     .select()
     .from(invoices)
     .where(eq(invoices.shareSlug, input.slug));
   if (!inv) {
+    console.warn(`[railgun] verify_invoice_not_found slug=${input.slug}`);
     return {
       ok: false,
       code: "invoice_not_found",
@@ -124,6 +127,9 @@ export async function verifyAndRecordRailgunPayment(
     };
   }
   if (inv.status === "draft" || inv.status === "void" || inv.status === "paid") {
+    console.warn(
+      `[railgun] verify_not_payable inv=${inv.invoiceNumber} status=${inv.status}`,
+    );
     return {
       ok: false,
       code: "invoice_not_payable",
@@ -160,6 +166,7 @@ export async function verifyAndRecordRailgunPayment(
   const provider = new FallbackRpc(rpcUrlsFor(cfg));
   const receipt = await provider.getTransactionReceipt(txHash);
   if (!receipt) {
+    console.log(`[railgun] verify_tx_not_mined tx=${txHash}`);
     return {
       ok: false,
       code: "tx_not_mined",
@@ -167,6 +174,7 @@ export async function verifyAndRecordRailgunPayment(
     };
   }
   if (receipt.status !== 1) {
+    console.warn(`[railgun] verify_tx_reverted tx=${txHash}`);
     return {
       ok: false,
       code: "tx_failed",
@@ -253,6 +261,10 @@ export async function verifyAndRecordRailgunPayment(
     currency: "USD",
     paidAt,
   });
+
+  console.log(
+    `[railgun] verify_ok inv=${inv.invoiceNumber} tx=${txHash} amount=${formatUsdc(gross)} status=${recorded.invoiceStatus} already_recorded=${recorded.alreadyRecorded} ms=${Date.now() - t0}`,
+  );
 
   return {
     ok: true,

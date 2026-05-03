@@ -60,6 +60,9 @@ export type ResetPrivatePaymentsResult =
 export async function resetPrivatePayments(
   ctx: ScopedCtx,
 ): Promise<ResetPrivatePaymentsResult> {
+  console.log(
+    `[railgun] reset_start business=${ctx.businessId} user=${ctx.userId}`,
+  );
   const [biz] = await db
     .select({
       railgunZkAddress: businesses.railgunZkAddress,
@@ -69,6 +72,7 @@ export async function resetPrivatePayments(
     .where(eq(businesses.id, ctx.businessId));
 
   if (!biz?.railgunZkAddress) {
+    console.log(`[railgun] reset_noop business=${ctx.businessId}`);
     return { ok: true, wasSetUp: false };
   }
 
@@ -83,6 +87,9 @@ export async function resetPrivatePayments(
     })
     .where(eq(businesses.id, ctx.businessId));
 
+  console.log(
+    `[railgun] reset_ok business=${ctx.businessId} prev_addr=${biz.railgunZkAddress.slice(0, 12)}…${biz.railgunZkAddress.slice(-6)} prev_chain=${biz.railgunChainId}`,
+  );
   return {
     ok: true,
     wasSetUp: true,
@@ -116,6 +123,9 @@ export type SetupPrivatePaymentsResult =
 export async function setupPrivatePayments(
   ctx: ScopedCtx,
 ): Promise<SetupPrivatePaymentsResult> {
+  console.log(
+    `[railgun] setup_start business=${ctx.businessId} user=${ctx.userId}`,
+  );
   const [biz] = await db
     .select({
       railgunZkAddress: businesses.railgunZkAddress,
@@ -127,6 +137,9 @@ export async function setupPrivatePayments(
   const cfg = activeRailgunNetwork();
 
   if (biz?.railgunZkAddress) {
+    console.log(
+      `[railgun] setup_already business=${ctx.businessId} addr=${biz.railgunZkAddress.slice(0, 12)}…${biz.railgunZkAddress.slice(-6)} chain=${biz.railgunChainId}`,
+    );
     return {
       ok: true,
       alreadySetUp: true,
@@ -135,12 +148,12 @@ export async function setupPrivatePayments(
     };
   }
 
-  // Refuse to mint a wallet if we can't encrypt the viewing key. Storing it
-  // in plaintext would leak the entire payment ledger to anyone with DB read
-  // access.
   const wallet = await generateRailgunWallet();
   const encrypted = encryptRawToken(wallet.viewingPrivateKeyHex);
   if (!encrypted) {
+    console.error(
+      `[railgun] setup_failed_no_token_enc_key business=${ctx.businessId}`,
+    );
     return {
       ok: false,
       code: "encryption_unavailable",
@@ -150,9 +163,6 @@ export async function setupPrivatePayments(
     };
   }
 
-  // Conditional UPDATE: only writes if no zk address is set yet. If a
-  // concurrent caller raced us and already populated the column, our UPDATE
-  // affects 0 rows and we re-read to return their address.
   const updated = await db
     .update(businesses)
     .set({
@@ -171,9 +181,9 @@ export async function setupPrivatePayments(
     .returning({ id: businesses.id });
 
   if (updated.length === 0) {
-    // Lost the race. Re-read and return whatever the winner persisted.
-    // The mnemonic we just generated is discarded — its keys were never
-    // published anywhere, so no funds can be addressed to it.
+    console.warn(
+      `[railgun] setup_race_lost business=${ctx.businessId} — mnemonic discarded, re-reading winner`,
+    );
     const [winner] = await db
       .select({
         railgunZkAddress: businesses.railgunZkAddress,
@@ -182,6 +192,9 @@ export async function setupPrivatePayments(
       .from(businesses)
       .where(eq(businesses.id, ctx.businessId));
     if (winner?.railgunZkAddress) {
+      console.log(
+        `[railgun] setup_race_returning_winner business=${ctx.businessId} addr=${winner.railgunZkAddress.slice(0, 12)}…${winner.railgunZkAddress.slice(-6)}`,
+      );
       return {
         ok: true,
         alreadySetUp: true,
@@ -189,9 +202,9 @@ export async function setupPrivatePayments(
         chainId: winner.railgunChainId ?? cfg.chainId,
       };
     }
-    // Shouldn't happen unless the business row was deleted between our
-    // initial read and the UPDATE. Surface as an internal error rather
-    // than fake-succeeding.
+    console.error(
+      `[railgun] setup_business_vanished business=${ctx.businessId}`,
+    );
     return {
       ok: false,
       code: "encryption_unavailable",
@@ -199,6 +212,10 @@ export async function setupPrivatePayments(
       hint: "Re-run setup_private_payments after confirming the business still exists.",
     };
   }
+
+  console.log(
+    `[railgun] setup_persisted business=${ctx.businessId} addr=${wallet.zkAddress.slice(0, 12)}…${wallet.zkAddress.slice(-6)} chain=${cfg.chainId} — RETURNING MNEMONIC TO CALLER`,
+  );
 
   return {
     ok: true,
