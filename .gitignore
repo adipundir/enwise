@@ -1,8 +1,6 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
+# ───── Dependencies + build output (any depth) ──────────────────────────────
+node_modules/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -10,33 +8,63 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
+.next/
+out/
+dist/
+build/
+coverage/
 
-# next.js
-/.next/
-/out/
+# ───── Env files (any depth) ────────────────────────────────────────────────
+# Real secrets live here. .env.example / .env.sample are committed (kept by
+# !-rules below).
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+!.env.example
+!.env.sample
 
-# production
-/build
-
-# misc
+# ───── OS / editor ──────────────────────────────────────────────────────────
 .DS_Store
 *.pem
+.vscode/
+.idea/
 
-# debug
+# ───── TypeScript ───────────────────────────────────────────────────────────
+*.tsbuildinfo
+next-env.d.ts
+
+# ───── Vercel ───────────────────────────────────────────────────────────────
+.vercel
+
+# ───── Logs ─────────────────────────────────────────────────────────────────
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# ───── Hardhat / contracts ──────────────────────────────────────────────────
+artifacts/
+cache/
+typechain-types/
+contract/ignition/deployments/
 
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# ───── Test / scratch payloads ──────────────────────────────────────────────
 scripts/.test-payer.json
+
+# ───── Local Claude / memory ────────────────────────────────────────────────
+.claude/
+memory/
+
+# ───── Large binary research / one-off files ────────────────────────────────
+# These live at repo root but aren't code — keep them off origin.
+*.docx
+*.pptx
+*.tex
+*.skill
+image.png
+INSTRUCTIONS.md
+# Ethereum reference docs (downloaded from ethskills.com — reference, not source)
+eth-skills/
