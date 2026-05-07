@@ -65,9 +65,22 @@ function validate(body: unknown): { ok: true; body: PayBody } | { ok: false; err
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
-) {
-  const { slug } = await params;
+): Promise<Response> {
+  try {
+    return await handle(req, await params);
+  } catch (e) {
+    // Catch-all so the client sees a JSON body instead of an empty 500 from
+    // Next.js's default error boundary.
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("[private-payments] /pay unhandled:", e);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
 
+async function handle(
+  req: NextRequest,
+  { slug }: { slug: string },
+): Promise<Response> {
   const validated = validate(await req.json().catch(() => null));
   if (!validated.ok) {
     return NextResponse.json({ error: validated.error }, { status: 400 });

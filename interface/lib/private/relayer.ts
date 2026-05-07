@@ -43,14 +43,23 @@ export function getRelayerWallet(): ReturnType<typeof createWalletClient> {
   const chain = chainFor(chainId);
 
   // ─── KMS migration point ──────────────────────────────────────────────────
-  const pk = process.env.RELAYER_PRIVATE_KEY as `0x${string}` | undefined;
-  if (!pk) {
+  const pkRaw = process.env.RELAYER_PRIVATE_KEY?.trim();
+  if (!pkRaw) {
     throw new Error(
       "RELAYER_PRIVATE_KEY is not set. In dev, populate interface/.env. " +
       "In prod, swap this block for a KMS-backed signer."
     );
   }
-  const account = privateKeyToAccount(pk);
+  // Accept hex with or without 0x prefix — viem requires 0x; the env file is
+  // commonly populated either way. Validate the byte length so a typo
+  // surfaces here, not from inside privateKeyToAccount.
+  const pkHex = (pkRaw.startsWith("0x") ? pkRaw : `0x${pkRaw}`) as `0x${string}`;
+  if (!/^0x[a-fA-F0-9]{64}$/.test(pkHex)) {
+    throw new Error(
+      "RELAYER_PRIVATE_KEY must be 32 bytes of hex (64 hex chars, optionally 0x-prefixed).",
+    );
+  }
+  const account = privateKeyToAccount(pkHex);
   // ──────────────────────────────────────────────────────────────────────────
 
   _walletClient = createWalletClient({ account, chain, transport: http(rpcUrl()) });
