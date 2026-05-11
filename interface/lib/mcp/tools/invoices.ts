@@ -232,8 +232,11 @@ export function registerInvoiceTools(server: McpServer) {
         businessId: d.business_id,
         issueDate: d.issue_date,
         dueDate: d.due_date,
-        notes: d.notes ?? undefined,
-        terms: d.terms ?? undefined,
+        // Preserve null (= "clear field") vs undefined (= "don't touch"). The
+        // core updateInvoice keys off `!== undefined`, so `?? undefined` would
+        // silently drop a caller's request to clear notes/terms.
+        ...(d.notes !== undefined && { notes: d.notes }),
+        ...(d.terms !== undefined && { terms: d.terms }),
       });
       if (!r.ok)
         return toolError(mapMutateError(r.code), r.message, {
