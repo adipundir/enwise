@@ -54,7 +54,7 @@ grep ENWISE_PAY_ADDRESS .env        # confirm it's set
 
 ### 6. DB migrated
 ```bash
-make db-push                        # applies 0017 (add private payments cols) + 0018 (drop Railgun cols)
+make db-push                        # applies 0017 (add private payments cols) + 0018 (drop legacy private-payment cols)
 ```
 
 ### 7. Smoke
