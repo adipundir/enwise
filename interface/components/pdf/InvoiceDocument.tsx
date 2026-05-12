@@ -364,15 +364,15 @@ export function InvoiceDocument({
           </View>
         </View>
 
-        {(invoice.notes || invoice.terms) && (
+        {(invoice.notes?.trim() || invoice.terms?.trim()) && (
           <View style={{ marginTop: 24 }}>
-            {invoice.notes ? (
+            {invoice.notes?.trim() ? (
               <View style={styles.block}>
                 <Text style={styles.blockLabel}>Notes</Text>
                 <Text style={{ lineHeight: 1.5, color: c.ink }}>{invoice.notes}</Text>
               </View>
             ) : null}
-            {invoice.terms ? (
+            {invoice.terms?.trim() ? (
               <View style={styles.block}>
                 <Text style={styles.blockLabel}>Terms</Text>
                 <Text style={{ lineHeight: 1.5, color: c.ink }}>{invoice.terms}</Text>
@@ -395,7 +395,7 @@ export function InvoiceDocument({
             {business.bank ? (
               <View style={styles.bankGrid}>
                 {business.bank.accountHolder ? (
-                  <BankCell label="Account holder" value={business.bank.accountHolder} />
+                  <BankCell label="Account holder" value={business.bank.accountHolder} fullWidth />
                 ) : null}
                 {business.bank.bankName ? (
                   <BankCell label="Bank" value={business.bank.bankName} />
@@ -410,10 +410,10 @@ export function InvoiceDocument({
                   <BankCell label="SWIFT / BIC" value={business.bank.swift} mono />
                 ) : null}
                 {business.bank.iban ? (
-                  <BankCell label="IBAN" value={business.bank.iban} mono />
+                  <BankCell label="IBAN" value={business.bank.iban} mono fullWidth />
                 ) : null}
                 {business.bank.branchAddress ? (
-                  <BankCell label="Branch address" value={business.bank.branchAddress} />
+                  <BankCell label="Branch address" value={business.bank.branchAddress} fullWidth />
                 ) : null}
               </View>
             ) : null}
@@ -432,13 +432,15 @@ function BankCell({
   label,
   value,
   mono,
+  fullWidth,
 }: {
   label: string;
   value: string;
   mono?: boolean;
+  fullWidth?: boolean;
 }) {
   return (
-    <View style={styles.bankCell}>
+    <View style={fullWidth ? { ...styles.bankCell, width: "100%", paddingRight: 0 } : styles.bankCell}>
       <Text style={styles.bankCellLabel}>{label}</Text>
       <Text style={mono ? { ...styles.bankCellValue, ...styles.bankCellMono } : styles.bankCellValue}>
         {value}

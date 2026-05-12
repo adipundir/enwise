@@ -347,9 +347,9 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
             </dl>
           </section>
 
-          {(invoice.notes || invoice.terms) && (
+          {(invoice.notes?.trim() || invoice.terms?.trim()) && (
             <section className="mt-10 space-y-6 text-sm text-zinc-700">
-              {invoice.notes && (
+              {invoice.notes?.trim() && (
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-zinc-500">
                     Notes
@@ -357,7 +357,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                   <p className="mt-2 whitespace-pre-wrap">{invoice.notes}</p>
                 </div>
               )}
-              {invoice.terms && (
+              {invoice.terms?.trim() && (
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-zinc-500">
                     Terms
@@ -386,7 +386,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
               {bankDetails ? (
                 <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
                   {bankDetails.accountHolder ? (
-                    <BankRow label="Account holder" value={bankDetails.accountHolder} />
+                    <BankRow label="Account holder" value={bankDetails.accountHolder} fullWidth />
                   ) : null}
                   {bankDetails.bankName ? (
                     <BankRow label="Bank" value={bankDetails.bankName} />
@@ -401,10 +401,10 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                     <BankRow label="SWIFT / BIC" value={bankDetails.swift} mono />
                   ) : null}
                   {bankDetails.iban ? (
-                    <BankRow label="IBAN" value={bankDetails.iban} mono />
+                    <BankRow label="IBAN" value={bankDetails.iban} mono fullWidth />
                   ) : null}
                   {bankDetails.branchAddress ? (
-                    <BankRow label="Branch address" value={bankDetails.branchAddress} />
+                    <BankRow label="Branch address" value={bankDetails.branchAddress} fullWidth />
                   ) : null}
                 </dl>
               ) : null}
@@ -630,13 +630,15 @@ function BankRow({
   label,
   value,
   mono,
+  fullWidth,
 }: {
   label: string;
   value: string;
   mono?: boolean;
+  fullWidth?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className={`flex flex-col gap-0.5${fullWidth ? " sm:col-span-2" : ""}`}>
       <dt className="text-[10px] uppercase tracking-widest text-zinc-500">
         {label}
       </dt>
