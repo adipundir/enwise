@@ -547,6 +547,11 @@ export type UpdateInvoiceInput = {
   dueDate?: string;
   notes?: string | null;
   terms?: string | null;
+  /** Per-invoice atomic field overrides. See lib/invoices/displayResolver.ts.
+   *  Pass `null` to clear all overrides on this invoice. */
+  displayOverrides?: unknown;
+  /** Payment-rail gate. NULL = show everything configured (default). */
+  acceptedPaymentMethods?: string[] | null;
 };
 
 export type MutateResult<T> =
@@ -642,6 +647,12 @@ export async function updateInvoice(
   if (patch.dueDate !== undefined) values.dueDate = patch.dueDate;
   if (patch.notes !== undefined) values.notes = patch.notes;
   if (patch.terms !== undefined) values.terms = patch.terms;
+  if (patch.displayOverrides !== undefined) {
+    values.displayOverrides = patch.displayOverrides;
+  }
+  if (patch.acceptedPaymentMethods !== undefined) {
+    values.acceptedPaymentMethods = patch.acceptedPaymentMethods;
+  }
 
   await db.update(invoices).set(values).where(eq(invoices.id, inv.id));
   await writeEvent(inv.id, "updated", ctx.tokenId, {

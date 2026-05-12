@@ -152,7 +152,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Create invoice",
       description:
-        "Create a draft invoice for a client under a specific business. If the user owns multiple businesses, pass `business_id`. ASK the user which business this invoice is under before calling. If they own one, `business_id` can be omitted. Every line item description, quantity, unit price, and tax rate MUST come from the user. NEVER invent them.\n\nFIELD SEPARATION RULES:\n- `line_items[].description`: just the product or service name. Short and specific (e.g., `MacBook Pro 14\" M5 Pro (24GB / 1TB)`, `Consulting April 2026`). No 'Reimbursement' prefix, no reference numbers, no conversion math, no 'see attached'.\n- `line_items[].note` (per-item): context that ISN'T already shown elsewhere on the invoice. Conversion math, FX rates, billing periods, dates the recipient can't see otherwise. **Do NOT include 'Source: Invoice X' or filenames in the note when you've also attached the source PDF — the attachment label is the citation, repeating it as text is visual noise.** Keep it terse.\n- `notes` (invoice-level): context for the WHOLE invoice — payment instructions, thank-yous, reimbursement framing.\n- `terms` (invoice-level): standing terms like `Payment due within 30 days via bank transfer`.\n- `attachments` on a line item: supporting files. The label IS the source citation; name them naturally (`Apple receipt`, `Hotel folio`).\n\nATTACHMENTS — supported types: PNG / JPEG / WebP / PDF, up to 10 MB per file, up to 10 files per line item. ALWAYS upload via curl first, then reference by URL. NEVER inline file bytes, NEVER chunk/split files.\n\n  Step 1 — upload from disk (one curl, any size up to 10 MB):\n    curl -X POST https://enwise.app/api/upload \\\n      -H \"Authorization: Bearer <YOUR_TOKEN>\" \\\n      -F \"file=@/path/to/receipt.pdf\"\n  Returns `{url, mime_type, size_bytes, filename}`. If the file is larger than 4 MB the endpoint hands back a presigned PUT URL instead — follow the `next_step` field in the response and curl the bytes one more time. Either way you get back `{url}`.\n\n  Step 2 — pass the url as attachment_url on the line item:\n    `{attachment_url: \"https://...blob.vercel-storage.com/...\", label?}`\n\n  Pass PDFs through as-is — don't rasterize.\n\nInvoice number is allocated automatically. Dates default to today + net-30; currency defaults to the client's default then the business's. Returns the full invoice + share URL. To email it, call send_invoice next.",
+        "Create a draft invoice for a client under a specific business. If the user owns multiple businesses, pass `business_id`. ASK the user which business this invoice is under before calling. If they own one, `business_id` can be omitted. Every line item description, quantity, unit price, and tax rate MUST come from the user. NEVER invent them.\n\nFIELD SEPARATION RULES:\n- `line_items[].description`: just the product or service name. Short and specific (e.g., `MacBook Pro 14\" M5 Pro (24GB / 1TB)`, `Consulting April 2026`). No 'Reimbursement' prefix, no reference numbers, no conversion math, no 'see attached'.\n- `line_items[].note` (per-item): context that ISN'T already shown elsewhere on the invoice. Conversion math, FX rates, billing periods, dates the recipient can't see otherwise. **Do NOT include 'Source: Invoice X' or filenames in the note when you've also attached the source PDF — the attachment label is the citation, repeating it as text is visual noise.** Keep it terse.\n- `notes` (invoice-level): context for the WHOLE invoice — payment instructions, thank-yous, reimbursement framing.\n- `terms` (invoice-level): standing terms like `Payment due within 30 days via bank transfer`.\n- `attachments` on a line item: supporting files. The label IS the source citation; name them naturally (`Apple receipt`, `Hotel folio`).\n\nATTACHMENTS — supported types: PNG / JPEG / WebP / PDF, up to 10 MB per file, up to 10 files per line item. ALWAYS upload via curl first, then reference by URL. NEVER inline file bytes, NEVER chunk/split files.\n\n  Step 1 — upload from disk (one curl, any size up to 10 MB):\n    curl -X POST https://enwise.app/api/upload \\\n      -H \"Authorization: Bearer <YOUR_TOKEN>\" \\\n      -F \"file=@/path/to/receipt.pdf\"\n  Returns `{url, mime_type, size_bytes, filename}`. If the file is larger than 4 MB the endpoint hands back a presigned PUT URL instead — follow the `next_step` field in the response and curl the bytes one more time. Either way you get back `{url}`.\n\n  Step 2 — pass the url as attachment_url on the line item:\n    `{attachment_url: \"https://...blob.vercel-storage.com/...\", label?}`\n\n  Pass PDFs through as-is — don't rasterize.\n\nInvoice number is allocated automatically. Dates default to today + net-30; currency defaults to the client's default then the business's. To email it, call send_invoice next.\n\n**ALWAYS display the returned `share_url` to the user verbatim after this call.** That's the public, copyable link to the invoice — it's the primary artifact the user expects to see.",
       inputSchema: createSchema,
     },
     async (args, extra) => {
@@ -193,12 +193,68 @@ export function registerInvoiceTools(server: McpServer) {
     },
   );
 
+  // Sub-schemas for per-invoice display overrides. Every field is optional.
+  // Key PRESENCE distinguishes override-with-explicit-null (= hide) from
+  // "don't touch" (key absent). nullish() preserves that.
+  const overrideAddress = z
+    .object({
+      line1: z.string().max(200).nullish(),
+      line2: z.string().max(200).nullish(),
+      city: z.string().max(120).nullish(),
+      region: z.string().max(120).nullish(),
+      postal_code: z.string().max(40).nullish(),
+      country: z.string().length(2).nullish(),
+    })
+    .partial()
+    .nullable();
+  const overrideBank = z
+    .object({
+      account_holder: z.string().max(200).nullish(),
+      bank_name: z.string().max(200).nullish(),
+      account_number: z.string().max(200).nullish(),
+      ifsc: z.string().max(40).nullish(),
+      swift: z.string().max(40).nullish(),
+      iban: z.string().max(60).nullish(),
+    })
+    .partial()
+    .nullable();
+  const displayOverridesSchema = z
+    .object({
+      business: z
+        .object({
+          name: z.string().max(200).nullish(),
+          legal_name: z.string().max(200).nullish(),
+          tax_id: z.string().max(80).nullish(),
+          contact_name: z.string().max(120).nullish(),
+          wallet_address: z.string().max(200).nullish(),
+          logo_url: z.string().url().nullish(),
+          address: overrideAddress.optional(),
+          bank_details: overrideBank.optional(),
+        })
+        .partial()
+        .optional(),
+      client: z
+        .object({
+          name: z.string().max(200).nullish(),
+          contact_name: z.string().max(120).nullish(),
+          email: z.string().email().nullish(),
+          wallet_address: z.string().max(200).nullish(),
+          address: overrideAddress.optional(),
+        })
+        .partial()
+        .optional(),
+    })
+    .nullable();
+  const paymentMethodsSchema = z
+    .array(z.enum(["bank", "crypto_wallet", "private_pay"]))
+    .nullable();
+
   server.registerTool(
     "update_invoice",
     {
       title: "Update invoice (draft only)",
       description:
-        "Update draft invoice headers. Only drafts are editable. Pass `business_id` to MOVE the invoice to render under a different business — a new invoice number is allocated under that business automatically. To change line items use add_line_item / update_line_item / remove_line_item. For finalized invoices use void_invoice + duplicate_invoice.",
+        "Update draft invoice headers. Only drafts are editable. Pass `business_id` to MOVE the invoice to render under a different business — a new invoice number is allocated under that business automatically. To change line items use add_line_item / update_line_item / remove_line_item. For finalized invoices use void_invoice + duplicate_invoice.\n\n`display_overrides` lets you override any business/client field shown on this specific invoice WITHOUT mutating the underlying business/client record. Resolution order: override > snapshot > live. Key presence = override; null value = explicitly hide. Pass `display_overrides: null` to clear all overrides.\n  Example — hide just the business wallet on this invoice:\n    `{ display_overrides: { business: { wallet_address: null } } }`\n  Example — override the legal name without touching the business record:\n    `{ display_overrides: { business: { legal_name: 'ZK Labs Pte. Ltd.' } } }`\n\n`accepted_payment_methods` gates which payment rails are displayed. Values: 'bank' (bank details block), 'crypto_wallet' (business wallet address), 'private_pay' (Inco private-pay button). NULL = show everything configured (default). Pass `[]` to hide all payment methods. Pass `['bank']` to show only bank details, etc.\n\nReturns the updated invoice including `share_url`. **Always show the share_url** so the user can re-view the updated invoice.",
       inputSchema: {
         invoice_id: uuid,
         business_id: uuid.optional(),
@@ -207,6 +263,8 @@ export function registerInvoiceTools(server: McpServer) {
         due_date: isoDate.optional(),
         notes: z.string().max(4000).nullish(),
         terms: z.string().max(4000).nullish(),
+        display_overrides: displayOverridesSchema.optional(),
+        accepted_payment_methods: paymentMethodsSchema.optional(),
       },
     },
     async (args, extra) => {
@@ -219,6 +277,8 @@ export function registerInvoiceTools(server: McpServer) {
           due_date: isoDate.optional(),
           notes: z.string().max(4000).nullish(),
           terms: z.string().max(4000).nullish(),
+          display_overrides: displayOverridesSchema.optional(),
+          accepted_payment_methods: paymentMethodsSchema.optional(),
         })
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
@@ -237,6 +297,12 @@ export function registerInvoiceTools(server: McpServer) {
         // silently drop a caller's request to clear notes/terms.
         ...(d.notes !== undefined && { notes: d.notes }),
         ...(d.terms !== undefined && { terms: d.terms }),
+        ...(d.display_overrides !== undefined && {
+          displayOverrides: d.display_overrides,
+        }),
+        ...(d.accepted_payment_methods !== undefined && {
+          acceptedPaymentMethods: d.accepted_payment_methods,
+        }),
       });
       if (!r.ok)
         return toolError(mapMutateError(r.code), r.message, {
@@ -256,7 +322,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Add line item (draft only)",
       description:
-        'Append a line item to a draft invoice. Totals are recomputed automatically. Optional `attachments` (PNG/JPEG/WebP/PDF, up to 10 MB each, up to 10 per item): upload first via `curl -X POST -H "Authorization: Bearer <TOKEN>" -F "file=@/path/to/file.pdf" https://enwise.app/api/upload` and pass the returned `url` as `{attachment_url, label?}`. NEVER inline bytes, NEVER chunk a file. Pass PDFs through as-is, don\'t rasterize.',
+        'Append a line item to a draft invoice. Totals are recomputed automatically. Optional `attachments` (PNG/JPEG/WebP/PDF, up to 10 MB each, up to 10 per item): upload first via `curl -X POST -H "Authorization: Bearer <TOKEN>" -F "file=@/path/to/file.pdf" https://enwise.app/api/upload` and pass the returned `url` as `{attachment_url, label?}`. NEVER inline bytes, NEVER chunk a file. Pass PDFs through as-is, don\'t rasterize.\n\nReturns the updated invoice including `share_url`. Show the share_url to the user when reporting the result.',
       inputSchema: {
         business_id: uuid.optional(),
         invoice_id: uuid,
@@ -298,7 +364,7 @@ export function registerInvoiceTools(server: McpServer) {
         attachments: d.attachments,
       });
       if (!r.ok) return toolError(mapMutateError(r.code), r.message, { hint: r.hint });
-      return toolOk(formatInvoiceForMcp(r.value));
+      return toolOk({ ...formatInvoiceForMcp(r.value), share_url: invoiceShareUrl(r.value.shareSlug) });
     },
   );
 
@@ -307,7 +373,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Update line item (draft only)",
       description:
-        "Update fields on a draft invoice line item. Pass only the fields you want to change. Passing `attachments` REPLACES the whole list (send every file you want on the line item; anything you don't re-send is removed). Pass `attachments: []` to clear. Attachment shape: `{attachment_url, label?}` — upload first via POST /api/upload (curl from disk), then pass the returned `url`. PNG / JPEG / WebP / PDF, 10 MB cap each.",
+        "Update fields on a draft invoice line item. Pass only the fields you want to change. Passing `attachments` REPLACES the whole list (send every file you want on the line item; anything you don't re-send is removed). Pass `attachments: []` to clear. Attachment shape: `{attachment_url, label?}` — upload first via POST /api/upload (curl from disk), then pass the returned `url`. PNG / JPEG / WebP / PDF, 10 MB cap each.\n\nReturns the updated invoice including `share_url`. Show the share_url to the user when reporting the result.",
       inputSchema: {
         business_id: uuid.optional(),
         invoice_id: uuid,
@@ -351,7 +417,7 @@ export function registerInvoiceTools(server: McpServer) {
       if (d.attachments !== undefined) patch.attachments = d.attachments;
       const r = await updateLineItem(ctx, d.invoice_id, d.line_item_id, patch);
       if (!r.ok) return toolError(mapMutateError(r.code), r.message, { hint: r.hint });
-      return toolOk(formatInvoiceForMcp(r.value));
+      return toolOk({ ...formatInvoiceForMcp(r.value), share_url: invoiceShareUrl(r.value.shareSlug) });
     },
   );
 
@@ -359,6 +425,8 @@ export function registerInvoiceTools(server: McpServer) {
     "remove_line_item",
     {
       title: "Remove line item (draft only)",
+      description:
+        "Remove a line item from a draft invoice by id. Totals are recomputed automatically. Only drafts are editable; sent/paid/void invoices reject this call. Use this to delete a single line; to clear and rebuild, call remove_line_item per id or duplicate_invoice + edit. Returns the updated invoice including `share_url`. Show the share_url to the user when reporting the result.",
       inputSchema: {
     business_id: uuid.optional(), invoice_id: uuid, line_item_id: uuid },
     },
@@ -373,7 +441,7 @@ export function registerInvoiceTools(server: McpServer) {
       const ctx = __s.scoped;
       const r = await removeLineItem(ctx, parsed.data.invoice_id, parsed.data.line_item_id);
       if (!r.ok) return toolError(mapMutateError(r.code), r.message);
-      return toolOk(formatInvoiceForMcp(r.value));
+      return toolOk({ ...formatInvoiceForMcp(r.value), share_url: invoiceShareUrl(r.value.shareSlug) });
     },
   );
 
@@ -381,7 +449,8 @@ export function registerInvoiceTools(server: McpServer) {
     "get_invoice",
     {
       title: "Get invoice",
-      description: "Fetch an invoice by id. full header, line items, and totals.",
+      description:
+        "Fetch a single invoice by id. Returns the full header (status, dates, totals, currency, notes, terms, snapshot fields, display_overrides, accepted_payment_methods, private-pay fields) plus the ordered line items (description, qty, unit_price, tax, attachments) and `share_url`. Use this when you have an id and need the full payload; for searching by invoice number use find_invoice; for lists use list_invoices.",
       inputSchema: {
     business_id: uuid.optional(), invoice_id: uuid },
     },
@@ -455,7 +524,8 @@ export function registerInvoiceTools(server: McpServer) {
     "find_invoice",
     {
       title: "Find invoice by number",
-      description: "Resolve an invoice_number like 'INV-0042' to an invoice id.",
+      description:
+        "Resolve an invoice_number like 'INV-0042' to an invoice id (and a summary). Invoice numbers are unique within a business but not across businesses, so pass `business_id` when the user owns multiple. Returns the matching invoice summary (id, status, client, totals) on hit, or a not_found error. Follow up with get_invoice if you need the full payload including line items.",
       inputSchema: {
     business_id: uuid.optional(), invoice_number: z.string().min(1).max(40) },
     },
@@ -478,7 +548,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Duplicate invoice",
       description:
-        "Clone an existing invoice's line items into a new draft. Optionally retarget to a different client. Returns the new draft invoice.",
+        "Clone an existing invoice's line items into a new draft under the same business. Optionally retarget to a different client via `client_id`, or change the issue date via `new_issue_date` (due_date is recomputed from the business's default net terms). Returns the new DRAFT invoice including `share_url`. **Always show the share_url** so the user can open the new draft and confirm before sending.",
       inputSchema: {
         business_id: uuid.optional(),
         invoice_id: uuid,
@@ -518,7 +588,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Mark invoice paid",
       description:
-        "Record payment for an invoice. Defaults amount to the invoice total and paid_at to today. Supports partial payments. pass an amount less than total to reflect that. Amount must be >= 0.",
+        "Record payment for an invoice. Defaults amount to the invoice total and paid_at to today. Supports partial payments — pass an amount less than total to reflect that. Amount must be >= 0. Returns the updated invoice including `share_url`. Show the share_url to the user when reporting the result so they can re-view or forward the (now paid) invoice.",
       inputSchema: {
         business_id: uuid.optional(),
         invoice_id: uuid,
@@ -544,7 +614,7 @@ export function registerInvoiceTools(server: McpServer) {
         paidAt: parsed.data.paid_at,
       });
       if (!r.ok) return toolError(mapMutateError(r.code), r.message);
-      return toolOk(formatInvoiceForMcp(r.value));
+      return toolOk({ ...formatInvoiceForMcp(r.value), share_url: invoiceShareUrl(r.value.shareSlug) });
     },
   );
 
@@ -553,7 +623,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Void invoice",
       description:
-        "Void an invoice (any status). Voided invoices are kept for audit, but can't be paid or edited. Use this when a sent invoice needs correction. then call duplicate_invoice for the replacement.",
+        "Void an invoice (any status). Voided invoices are kept for audit, but can't be paid or edited. Use this when a sent invoice needs correction — then call duplicate_invoice for the replacement. Optional `reason` is recorded in the invoice event log. Returns the voided invoice including `share_url` (the share page will render a 'voided' banner). Show the share_url so the user can confirm the void state visually.",
       inputSchema: {
     business_id: uuid.optional(), invoice_id: uuid, reason: z.string().max(500).optional() },
     },
@@ -567,7 +637,7 @@ export function registerInvoiceTools(server: McpServer) {
       const ctx = __s.scoped;
       const r = await voidInvoice(ctx, parsed.data.invoice_id, { reason: parsed.data.reason });
       if (!r.ok) return toolError(mapMutateError(r.code), r.message);
-      return toolOk(formatInvoiceForMcp(r.value));
+      return toolOk({ ...formatInvoiceForMcp(r.value), share_url: invoiceShareUrl(r.value.shareSlug) });
     },
   );
 
@@ -576,7 +646,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Delete invoice (draft only)",
       description:
-        "Soft-delete a draft invoice. Sent/paid/void invoices must be kept for audit. use void_invoice instead.",
+        "Soft-delete a draft invoice. Sent / paid / void invoices must be kept for audit — call void_invoice on those instead. Soft-deleted invoices are excluded from list_invoices and the dashboard but remain in the database for recovery. Returns a small status object, NOT the invoice; nothing to display except confirmation.",
       inputSchema: {
     business_id: uuid.optional(), invoice_id: uuid },
     },
@@ -599,7 +669,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Get invoice share URL",
       description:
-        "Return the public share URL for an invoice. The URL is unguessable and public until share_enabled is set to false via set_invoice_share_enabled.",
+        "Return the public share URL for an invoice plus its `enabled` flag. The URL is unguessable (long random slug) and is publicly accessible until `share_enabled` is set to false via set_invoice_share_enabled. Use this when the user asks 'what's the link for INV-X' on an already-known invoice; for newly-created/updated invoices, prefer the `share_url` returned from the mutating tool itself.",
       inputSchema: {
     business_id: uuid.optional(), invoice_id: uuid },
     },
@@ -625,7 +695,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Mark invoice as sent (no email)",
       description:
-        "Flip a draft invoice to 'sent' status WITHOUT emailing anyone. Use this when the user delivered the invoice some other way (handed it over in person, WhatsApp, Slack, printed and mailed, etc.) or just wants to lock it in for their own records. Takes the client + business snapshot onto the row. For email delivery, use send_invoice instead. Returns the updated invoice. Already-sent / paid / void invoices are left untouched.",
+        "Flip a draft invoice to 'sent' status WITHOUT emailing anyone. Use this when the user delivered the invoice some other way (handed it over in person, WhatsApp, Slack, printed and mailed, etc.) or just wants to lock it in for their own records. Takes the client + business snapshot onto the row. For email delivery, use send_invoice instead. Already-sent / paid / void invoices are left untouched.\n\nReturns the updated invoice including `share_url`. **Always show the share_url** so the user has a copyable link to forward.",
       inputSchema: {
     business_id: uuid.optional(), invoice_id: uuid },
     },
@@ -639,7 +709,7 @@ export function registerInvoiceTools(server: McpServer) {
       const ctx = __s.scoped;
       const r = await finalizeInvoice(ctx, parsed.data.invoice_id);
       if (!r.ok) return toolError(mapMutateError(r.code), r.message);
-      return toolOk(formatInvoiceForMcp(r.value));
+      return toolOk({ ...formatInvoiceForMcp(r.value), share_url: invoiceShareUrl(r.value.shareSlug) });
     },
   );
 
@@ -648,7 +718,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Email invoice to client",
       description:
-        "Send an invoice to the client by email. Generates the PDF as an attachment and includes a link to the public share page. Defaults `to` to the client's email; pass `to` to override. Flips the invoice from draft to sent and freezes the client+business snapshot onto the invoice (so later edits to the client don't mutate the sent copy). Safe to call again on an already-sent invoice. it just re-sends without re-snapshotting.",
+        "Send an invoice to the client by email. Generates the PDF as an attachment and includes a link to the public share page. Defaults `to` to the client's email; pass `to` to override. Flips the invoice from draft to sent and freezes the client+business snapshot onto the invoice (so later edits to the client don't mutate the sent copy). Safe to call again on an already-sent invoice — it just re-sends without re-snapshotting.\n\nReturns the invoice with `share_url`, `sent_to` (list of recipients), and `resend_id`. **Always show the share_url and the list of recipients** when reporting the result.",
       inputSchema: {
         business_id: uuid.optional(),
         invoice_id: uuid,

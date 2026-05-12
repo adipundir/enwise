@@ -138,7 +138,8 @@ export function registerProductTools(server: McpServer) {
     "update_product",
     {
       title: "Update product",
-      description: "Partial update for a catalog product. Pass null to clear nullable fields.",
+      description:
+        "Partial update of a catalog product (name, description, unit_price, default_tax_rate, default_currency, sku). Only the fields you pass are changed; omitted fields stay as they are. Pass `null` to clear a nullable field. Products are account-level (shared across every business the user owns), so updating a product affects future invoices across all businesses — but already-snapshotted line items are unchanged.",
       inputSchema: updateSchema,
     },
     async (args, extra) => {
@@ -161,7 +162,8 @@ export function registerProductTools(server: McpServer) {
     "get_product",
     {
       title: "Get product",
-      description: "Fetch a catalog product by id.",
+      description:
+        "Fetch a single catalog product by id. Returns name, description, unit_price, default_tax_rate, default_currency, sku, and archived state. Use this when you have a product_id and need full details; for searching by name use find_product.",
       inputSchema: {
     business_id: uuid.optional(), product_id: productIdSchema },
     },

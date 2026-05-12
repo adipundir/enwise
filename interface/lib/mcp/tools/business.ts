@@ -123,7 +123,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Get business profile",
       description:
-        "Return the full profile for a business. If the user owns only one business, `business_id` can be omitted. If they own multiple, pass `business_id`.",
+        "Return the full profile for a business: name, legal_name, tax_id, contact_name, default_currency, invoice_number_prefix, logo_url, brand_color, email_reply_to, default_payment_terms_days, default_notes, full address, wallet_address, all bank payout fields (account_holder/name/number, IFSC/SWIFT/IBAN), private-payments setup state (settlement wallet + enabled timestamp), and timestamps. If the user owns only one business, `business_id` can be omitted; if they own multiple, pass `business_id`. Call this before update_business_profile to show the user what's currently on file.",
       inputSchema: getProfileInput,
     },
     async (args, extra) => {

@@ -174,6 +174,8 @@ export function registerRecurringTools(server: McpServer) {
     "list_recurring_invoices",
     {
       title: "List recurring invoice templates",
+      description:
+        "List recurring invoice templates on this account, ordered by `next_run_at` ascending (next-to-fire first). Filter by `client_id` to only see templates for one client. By default includes both active and paused; pass `active_only: true` to filter to currently-firing templates. Each row includes id, client, cadence, currency, last_run_at, next_run_at, auto_send flag, and active status. Pass `business_id` if the user owns multiple businesses.",
       inputSchema: {
         business_id: uuid.optional(),
         client_id: uuid.optional(),
@@ -227,6 +229,8 @@ export function registerRecurringTools(server: McpServer) {
     "resume_recurring_invoice",
     {
       title: "Resume recurring template",
+      description:
+        "Set active=true on a paused recurring template. Invoice generation resumes on the next cron fire (does NOT immediately generate; use run_recurring_invoice_now for that). Inverse of pause_recurring_invoice.",
       inputSchema: {
     business_id: uuid.optional(), recurring_id: uuid },
     },

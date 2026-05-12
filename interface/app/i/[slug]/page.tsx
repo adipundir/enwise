@@ -9,6 +9,10 @@ import { addAmounts, formatMoney } from "@/lib/money";
 import { keccak256, type Hex } from "viem";
 import { CopyableField } from "./CopyableField";
 import PrivatePayButton from "./PrivatePayButton";
+import {
+  paymentMethodEnabled,
+  type DisplayOverrides,
+} from "@/lib/invoices/displayResolver";
 
 const USDC_DECIMALS = 6;
 
@@ -26,7 +30,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
   const invoice = await getInvoiceBySlug(slug);
   if (!invoice) notFound();
 
-  const [client] = invoice.clientNameSnapshot
+  const [baseClient] = invoice.clientNameSnapshot
     ? [
         {
           name: invoice.clientNameSnapshot,
@@ -37,7 +41,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
         },
       ]
     : await db.select().from(clients).where(eq(clients.id, invoice.clientId));
-  const [business] = invoice.businessNameSnapshot
+  const [baseBusiness] = invoice.businessNameSnapshot
     ? [
         {
           name: invoice.businessNameSnapshot,
@@ -51,7 +55,14 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
         },
       ]
     : await db.select().from(businesses).where(eq(businesses.id, invoice.businessId));
-  const bankDetails = resolveBankDetails(business);
+  // Apply per-invoice atomic overrides on top of snapshot-or-live base.
+  // Key presence in displayOverrides means override (null = explicit hide).
+  const overrides = (invoice.displayOverrides ?? {}) as DisplayOverrides;
+  const client = applyClientOverrides(baseClient, overrides.client);
+  const business = applyBusinessOverrides(baseBusiness, overrides.business);
+  const bankDetails = paymentMethodEnabled(invoice, "bank")
+    ? resolveBankDetails(business)
+    : null;
   const outstandingDecimal = addAmounts(invoice.total, `-${invoice.amountPaid}`);
   const outstandingUsdcUnits = decimalToUsdcUnits(outstandingDecimal);
 
@@ -69,12 +80,14 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
     invoice.currency.toUpperCase() === "USD" &&
     outstandingUsdcUnits > 0n &&
     /^0x[a-fA-F0-9]{40}$/.test(privateUsdcAddress) &&
-    /^0x[a-fA-F0-9]{40}$/.test(privateEnwisePayAddress);
+    /^0x[a-fA-F0-9]{40}$/.test(privateEnwisePayAddress) &&
+    paymentMethodEnabled(invoice, "private_pay");
   const privateCtCommit = invoice.privateRecipientCt
     ? keccak256(invoice.privateRecipientCt as Hex)
     : null;
-  const businessWallet =
-    (business && "walletAddress" in business ? business.walletAddress : null) ?? null;
+  const businessWallet = paymentMethodEnabled(invoice, "crypto_wallet")
+    ? ((business && "walletAddress" in business ? business.walletAddress : null) ?? null)
+    : null;
   const clientWallet =
     (client && "walletAddress" in client ? client.walletAddress : null) ?? null;
   const businessContact =
@@ -157,7 +170,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={business.logoUrl}
-                  alt={business.name}
+                  alt={business.name ?? ""}
                   className="mb-4 h-14 w-auto object-contain"
                 />
               ) : null}
@@ -471,6 +484,110 @@ interface ResolvedBankDetails {
   ifsc: string | null;
   swift: string | null;
   iban: string | null;
+}
+
+type BaseBusiness = {
+  name?: string | null;
+  legalName?: string | null;
+  logoUrl?: string | null;
+  taxId?: string | null;
+  contactName?: string | null;
+  walletAddress?: string | null;
+  snapshot?: unknown;
+  bankSnapshot?: unknown;
+  // bank fields appear directly on the live businesses row (not on snapshot one)
+  bankAccountHolder?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankIfsc?: string | null;
+  bankSwift?: string | null;
+  bankIban?: string | null;
+  // address fields appear directly on the live row
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+};
+
+type BaseClient = {
+  name?: string | null;
+  contactName?: string | null;
+  email?: string | null;
+  walletAddress?: string | null;
+  snapshot?: unknown;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+};
+
+/**
+ * Apply per-invoice overrides on top of snapshot-or-live business. Address
+ * and bank_details overrides replace the corresponding snapshot JSON entirely
+ * (no per-key merging). To override a single bank field, send the whole
+ * bank_details object.
+ */
+function applyBusinessOverrides(
+  base: BaseBusiness | undefined,
+  ov: DisplayOverrides["business"] | undefined,
+): BaseBusiness | undefined {
+  if (!base) return base;
+  if (!ov) return base;
+  const out: BaseBusiness = { ...base };
+  if ("name" in ov) out.name = ov.name;
+  if ("legal_name" in ov) out.legalName = ov.legal_name;
+  if ("tax_id" in ov) out.taxId = ov.tax_id;
+  if ("contact_name" in ov) out.contactName = ov.contact_name;
+  if ("wallet_address" in ov) out.walletAddress = ov.wallet_address;
+  if ("logo_url" in ov) out.logoUrl = ov.logo_url;
+  if ("address" in ov) {
+    // Replace the snapshot so buildAddressLines reads the override; also
+    // clear the live fields so they don't show through if override is null.
+    out.snapshot = ov.address ?? null;
+    out.addressLine1 = null;
+    out.addressLine2 = null;
+    out.city = null;
+    out.region = null;
+    out.postalCode = null;
+    out.country = null;
+  }
+  if ("bank_details" in ov) {
+    out.bankSnapshot = ov.bank_details ?? null;
+    out.bankAccountHolder = null;
+    out.bankName = null;
+    out.bankAccountNumber = null;
+    out.bankIfsc = null;
+    out.bankSwift = null;
+    out.bankIban = null;
+  }
+  return out;
+}
+
+function applyClientOverrides(
+  base: BaseClient | undefined,
+  ov: DisplayOverrides["client"] | undefined,
+): BaseClient | undefined {
+  if (!base) return base;
+  if (!ov) return base;
+  const out: BaseClient = { ...base };
+  if ("name" in ov) out.name = ov.name;
+  if ("contact_name" in ov) out.contactName = ov.contact_name;
+  if ("email" in ov) out.email = ov.email;
+  if ("wallet_address" in ov) out.walletAddress = ov.wallet_address;
+  if ("address" in ov) {
+    out.snapshot = ov.address ?? null;
+    out.addressLine1 = null;
+    out.addressLine2 = null;
+    out.city = null;
+    out.region = null;
+    out.postalCode = null;
+    out.country = null;
+  }
+  return out;
 }
 
 function resolveBankDetails(

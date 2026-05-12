@@ -380,6 +380,15 @@ export const invoices = pgTable(
     businessAddressSnapshot: jsonb("business_address_snapshot"),
     businessLogoUrlSnapshot: text("business_logo_url_snapshot"),
     businessBankDetailsSnapshot: jsonb("business_bank_details_snapshot"),
+    // Per-invoice atomic overrides for displayed business / client fields.
+    // Partial JSON; key presence = override (including null = explicit hide),
+    // missing key = fall through to snapshot / live value. See
+    // lib/invoices/displayResolver.ts for shape + resolution order.
+    displayOverrides: jsonb("display_overrides"),
+    // Per-invoice payment method gate. NULL = show everything configured
+    // (current behavior). Non-null = only show methods listed here. Values:
+    // 'bank', 'crypto_wallet', 'private_pay'.
+    acceptedPaymentMethods: text("accepted_payment_methods").array(),
     // private payment fields. ct is bound to the relayer EOA at
     // encryption time; only the relayer can submit payInvoice with it.
     // noteId is set by the indexer once Shielded fires on-chain.
