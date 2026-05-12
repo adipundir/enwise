@@ -868,7 +868,8 @@ export async function finalizeInvoice(
   const bizRows = await db.execute(sql`
     select name, legal_name, tax_id, contact_name, wallet_address, logo_url,
            address_line1, address_line2, city, region, postal_code, country,
-           bank_account_holder, bank_name, bank_account_number, bank_ifsc, bank_swift, bank_iban
+           bank_account_holder, bank_name, bank_account_number, bank_ifsc, bank_swift, bank_iban,
+           bank_branch_address
     from businesses where id = ${inv.businessId}
   `);
   const biz = bizRows.rows[0] as
@@ -891,6 +892,7 @@ export async function finalizeInvoice(
         bank_ifsc: string | null;
         bank_swift: string | null;
         bank_iban: string | null;
+        bank_branch_address: string | null;
       }
     | undefined;
   if (!biz) {
@@ -942,6 +944,7 @@ export async function finalizeInvoice(
             ifsc: biz.bank_ifsc,
             swift: biz.bank_swift,
             iban: biz.bank_iban,
+            branch_address: biz.bank_branch_address,
           }
         : null,
     })
@@ -957,6 +960,7 @@ function hasAnyBankField(b: {
   bank_ifsc: string | null;
   bank_swift: string | null;
   bank_iban: string | null;
+  bank_branch_address: string | null;
 }): boolean {
   return Boolean(
     b.bank_account_holder ||
@@ -964,7 +968,8 @@ function hasAnyBankField(b: {
       b.bank_account_number ||
       b.bank_ifsc ||
       b.bank_swift ||
-      b.bank_iban,
+      b.bank_iban ||
+      b.bank_branch_address,
   );
 }
 

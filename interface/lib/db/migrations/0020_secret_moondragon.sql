@@ -1,0 +1,1 @@
+ALTER TABLE "businesses" ADD COLUMN "bank_branch_address" text;

@@ -403,6 +403,9 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                   {bankDetails.iban ? (
                     <BankRow label="IBAN" value={bankDetails.iban} mono />
                   ) : null}
+                  {bankDetails.branchAddress ? (
+                    <BankRow label="Branch address" value={bankDetails.branchAddress} />
+                  ) : null}
                 </dl>
               ) : null}
             </section>
@@ -474,6 +477,7 @@ interface BankSource {
   bankIfsc?: string | null;
   bankSwift?: string | null;
   bankIban?: string | null;
+  bankBranchAddress?: string | null;
   bankSnapshot?: unknown;
 }
 
@@ -484,6 +488,7 @@ interface ResolvedBankDetails {
   ifsc: string | null;
   swift: string | null;
   iban: string | null;
+  branchAddress: string | null;
 }
 
 type BaseBusiness = {
@@ -502,6 +507,7 @@ type BaseBusiness = {
   bankIfsc?: string | null;
   bankSwift?: string | null;
   bankIban?: string | null;
+  bankBranchAddress?: string | null;
   // address fields appear directly on the live row
   addressLine1?: string | null;
   addressLine2?: string | null;
@@ -563,6 +569,7 @@ function applyBusinessOverrides(
     out.bankIfsc = null;
     out.bankSwift = null;
     out.bankIban = null;
+    out.bankBranchAddress = null;
   }
   return out;
 }
@@ -602,6 +609,7 @@ function resolveBankDetails(
         ifsc?: string | null;
         swift?: string | null;
         iban?: string | null;
+        branch_address?: string | null;
       }
     | null
     | undefined;
@@ -612,6 +620,7 @@ function resolveBankDetails(
     ifsc: snap?.ifsc ?? src.bankIfsc ?? null,
     swift: snap?.swift ?? src.bankSwift ?? null,
     iban: snap?.iban ?? src.bankIban ?? null,
+    branchAddress: snap?.branch_address ?? src.bankBranchAddress ?? null,
   };
   const hasAny = Object.values(out).some((v) => v && v.trim().length > 0);
   return hasAny ? out : null;

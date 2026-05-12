@@ -32,6 +32,7 @@ type BankFields = {
   ifsc?: string | null;
   swift?: string | null;
   iban?: string | null;
+  branch_address?: string | null;
 };
 
 export type DisplayOverrides = {

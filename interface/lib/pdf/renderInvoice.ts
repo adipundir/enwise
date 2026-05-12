@@ -165,6 +165,7 @@ function resolveBankForPdf(
       ifsc: ov.ifsc ?? null,
       swift: ov.swift ?? null,
       iban: ov.iban ?? null,
+      branchAddress: ov.branch_address ?? null,
     };
     const hasAny = Object.values(out).some((v) => v && v.trim().length > 0);
     return hasAny ? out : null;
@@ -176,6 +177,7 @@ function resolveBankForPdf(
     ifsc: snap?.ifsc ?? live?.bankIfsc ?? null,
     swift: snap?.swift ?? live?.bankSwift ?? null,
     iban: snap?.iban ?? live?.bankIban ?? null,
+    branchAddress: snap?.branch_address ?? live?.bankBranchAddress ?? null,
   };
   const hasAny = Object.values(out).some((v) => v && v.trim().length > 0);
   return hasAny ? out : null;
@@ -188,6 +190,7 @@ interface BankDetailsSnapshot {
   ifsc: string | null;
   swift: string | null;
   iban: string | null;
+  branch_address: string | null;
 }
 
 interface ClientAddressSnapshot {

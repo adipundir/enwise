@@ -147,6 +147,11 @@ export const businesses = pgTable(
     bankIfsc: text("bank_ifsc"),
     bankSwift: text("bank_swift"),
     bankIban: text("bank_iban"),
+    // Beneficiary bank branch address. Free-form text (typically one line:
+    // street / city / postal / country) — US/EU sending banks require this
+    // on the wire form when remitting to Indian accounts, and it eliminates
+    // the most common re-instruction back-and-forth.
+    bankBranchAddress: text("bank_branch_address"),
     // private payments. The settlement wallet is where unshielded
     // USDC ultimately lands; recipient ct on each invoice is encrypted to
     // this address. Free-form text: a 0x address is the typical value but

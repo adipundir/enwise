@@ -37,6 +37,7 @@ export type BusinessPatch = Partial<{
   bankIfsc: string | null;
   bankSwift: string | null;
   bankIban: string | null;
+  bankBranchAddress: string | null;
   privateSettlementWallet: string | null;
   privateEnabledAt: Date | null;
 }>;
@@ -100,6 +101,7 @@ export function formatBusinessForMcp(row: Business) {
     bank_ifsc: row.bankIfsc,
     bank_swift: row.bankSwift,
     bank_iban: row.bankIban,
+    bank_branch_address: row.bankBranchAddress,
     private_settlement_wallet: row.privateSettlementWallet,
     private_enabled_at: row.privateEnabledAt?.toISOString() ?? null,
   };

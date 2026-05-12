@@ -58,6 +58,7 @@ const updateInput = {
   bank_ifsc: z.string().max(32).nullish(),
   bank_swift: z.string().max(32).nullish(),
   bank_iban: z.string().max(64).nullish(),
+  bank_branch_address: z.string().max(300).nullish(),
   // private payments. Pass a 0x address to enable; pass null to disable
   // (leaves existing invoices' encrypted recipients intact). Setting an
   // address auto-fills private_enabled_at server-side.
@@ -123,7 +124,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Get business profile",
       description:
-        "Return the full profile for a business: name, legal_name, tax_id, contact_name, default_currency, invoice_number_prefix, logo_url, brand_color, email_reply_to, default_payment_terms_days, default_notes, full address, wallet_address, all bank payout fields (account_holder/name/number, IFSC/SWIFT/IBAN), private-payments setup state (settlement wallet + enabled timestamp), and timestamps. If the user owns only one business, `business_id` can be omitted; if they own multiple, pass `business_id`. Call this before update_business_profile to show the user what's currently on file.",
+        "Return the full profile for a business: name, legal_name, tax_id, contact_name, default_currency, invoice_number_prefix, logo_url, brand_color, email_reply_to, default_payment_terms_days, default_notes, full address, wallet_address, all bank payout fields (account_holder/name/number, IFSC/SWIFT/IBAN, branch_address), private-payments setup state (settlement wallet + enabled timestamp), and timestamps. If the user owns only one business, `business_id` can be omitted; if they own multiple, pass `business_id`. Call this before update_business_profile to show the user what's currently on file.",
       inputSchema: getProfileInput,
     },
     async (args, extra) => {
@@ -148,7 +149,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Update business profile",
       description:
-        "Update any subset of a business profile (name, tax ID, address, default currency, invoice number prefix, logo, bank payout details, contact person, wallet address, etc.). Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. Bank fields (`bank_account_holder`, `bank_name`, `bank_account_number`, `bank_ifsc`, `bank_swift`, `bank_iban`) are shown to the client on the invoice; fill the ones that apply for the receiving country (IFSC for India, SWIFT for international wire, IBAN for Europe). `contact_name` is the person at the business who handles invoicing — used in PDF letterhead / email footer. `wallet_address` is the onchain payout address (raw 0x… or ENS name like `acme.eth`); shown alongside bank details on the invoice. Pass `business_id` if the user owns multiple businesses.",
+        "Update any subset of a business profile (name, tax ID, address, default currency, invoice number prefix, logo, bank payout details, contact person, wallet address, etc.). Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. Bank fields (`bank_account_holder`, `bank_name`, `bank_account_number`, `bank_ifsc`, `bank_swift`, `bank_iban`, `bank_branch_address`) are shown to the client on the invoice; fill the ones that apply for the receiving country (IFSC for India, SWIFT for international wire, IBAN for Europe). `bank_branch_address` is the beneficiary bank's branch address — required by most US/EU sending banks on the wire form when the beneficiary is outside their country. `contact_name` is the person at the business who handles invoicing — used in PDF letterhead / email footer. `wallet_address` is the onchain payout address (raw 0x… or ENS name like `acme.eth`); shown alongside bank details on the invoice. Pass `business_id` if the user owns multiple businesses.",
       inputSchema: updateInput,
     },
     async (args, extra) => {
@@ -201,6 +202,7 @@ export function registerBusinessTools(server: McpServer) {
       if (input.bank_ifsc !== undefined) patch.bankIfsc = input.bank_ifsc ?? null;
       if (input.bank_swift !== undefined) patch.bankSwift = input.bank_swift ?? null;
       if (input.bank_iban !== undefined) patch.bankIban = input.bank_iban ?? null;
+      if (input.bank_branch_address !== undefined) patch.bankBranchAddress = input.bank_branch_address ?? null;
       if (input.private_settlement_wallet !== undefined) {
         patch.privateSettlementWallet = input.private_settlement_wallet
           ? input.private_settlement_wallet.toLowerCase()

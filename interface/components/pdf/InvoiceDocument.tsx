@@ -224,6 +224,7 @@ export interface InvoicePdfData {
       ifsc: string | null;
       swift: string | null;
       iban: string | null;
+      branchAddress: string | null;
     } | null;
   };
 }
@@ -410,6 +411,9 @@ export function InvoiceDocument({
                 ) : null}
                 {business.bank.iban ? (
                   <BankCell label="IBAN" value={business.bank.iban} mono />
+                ) : null}
+                {business.bank.branchAddress ? (
+                  <BankCell label="Branch address" value={business.bank.branchAddress} />
                 ) : null}
               </View>
             ) : null}
