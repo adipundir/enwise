@@ -45,11 +45,11 @@ Same faucet as relayer (~0.01 ETH is plenty). Customer needs gas for the one-tim
 ```bash
 cd contract
 make deploy-testnet                 # if not already done
-# Copy the deployed address from Ignition output → interface/.env as ENWISE_PAY_ADDRESS
+# Copy the deployed address from Ignition output → interface/.env as NEXT_PUBLIC_ENWISE_PAY_ADDRESS
 ```
 ```bash
 cd interface
-grep ENWISE_PAY_ADDRESS .env        # confirm it's set
+grep NEXT_PUBLIC_ENWISE_PAY_ADDRESS .env  # confirm it's set
 ```
 
 ### 6. DB migrated
@@ -180,7 +180,7 @@ Use a separate Brave profile or guest window for the demo so your real browsing 
 ```bash
 # show the chain footprint
 echo "All private payments events on EnwisePay:"
-# basescan: https://sepolia.basescan.org/address/<ENWISE_PAY_ADDRESS>#events
+# basescan: https://sepolia.basescan.org/address/<NEXT_PUBLIC_ENWISE_PAY_ADDRESS>#events
 ```
 
 Show two events: `Shielded(noteId, slug, USDC, 50_000_000)` and `Unshielded(noteId, merchant_address)`. Make the point: privacy boundary is "chain observers" — enwise sees everything off-chain, observers see only the encrypted handle until sweep.

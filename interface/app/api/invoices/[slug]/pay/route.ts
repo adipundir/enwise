@@ -70,10 +70,11 @@ export async function POST(
     return await handle(req, await params);
   } catch (e) {
     // Catch-all so the client sees a JSON body instead of an empty 500 from
-    // Next.js's default error boundary.
-    const message = e instanceof Error ? e.message : String(e);
+    // Next.js's default error boundary. Full detail goes to server logs only —
+    // viem exceptions can include encoded calldata / addresses we don't want
+    // to surface to arbitrary payers.
     console.error("[private-payments] /pay unhandled:", e);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "internal error" }, { status: 500 });
   }
 }
 

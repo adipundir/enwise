@@ -51,8 +51,8 @@ export async function getZap() {
 
 /** Reads the contract address from env. Throws if unset. */
 export function getEnwisePayAddress(): `0x${string}` {
-  const a = process.env.ENWISE_PAY_ADDRESS;
-  if (!a) throw new Error("ENWISE_PAY_ADDRESS is not set; deploy EnwisePay first");
+  const a = process.env.NEXT_PUBLIC_ENWISE_PAY_ADDRESS;
+  if (!a) throw new Error("NEXT_PUBLIC_ENWISE_PAY_ADDRESS is not set; deploy EnwisePay first");
   return a as `0x${string}`;
 }
 

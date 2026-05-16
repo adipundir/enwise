@@ -17,14 +17,14 @@ async function main() {
   console.log("PRIVATE_PAYMENTS_NETWORK    :", process.env.PRIVATE_PAYMENTS_NETWORK);
   console.log("PRIVATE_PAYMENTS_CHAIN_ID   :", process.env.PRIVATE_PAYMENTS_CHAIN_ID);
   console.log("RELAYER_EOA     :", process.env.RELAYER_EOA_ADDRESS || "(unset)");
-  console.log("ENWISE_PAY      :", process.env.ENWISE_PAY_ADDRESS || "(unset, deploy first)");
+  console.log("ENWISE_PAY      :", process.env.NEXT_PUBLIC_ENWISE_PAY_ADDRESS || "(unset, deploy first)");
 
   const zap = await getZap();
   console.log("\n✅ Lightning.latest initialised");
   console.log("   executor addr:", zap.executorAddress);
 
-  if (!process.env.RELAYER_EOA_ADDRESS || !process.env.ENWISE_PAY_ADDRESS) {
-    console.log("\n⚠ Set RELAYER_EOA_ADDRESS and ENWISE_PAY_ADDRESS to test encryption");
+  if (!process.env.RELAYER_EOA_ADDRESS || !process.env.NEXT_PUBLIC_ENWISE_PAY_ADDRESS) {
+    console.log("\n⚠ Set RELAYER_EOA_ADDRESS and NEXT_PUBLIC_ENWISE_PAY_ADDRESS to test encryption");
     return;
   }
 

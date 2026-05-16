@@ -68,11 +68,9 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
 
   // private pay path. The recipient ct was bound at invoice-creation time and
   // lives on the invoice row, so this share page just reads it through.
-  // Server component → non-prefixed envs are fine; values flow into the
-  // PrivatePayButton via props.
   const privateChainId = Number(process.env.PRIVATE_PAYMENTS_CHAIN_ID ?? 84532);
   const privateUsdcAddress = (process.env.NEXT_PUBLIC_USDC_ADDRESS ?? "") as `0x${string}`;
-  const privateEnwisePayAddress = (process.env.ENWISE_PAY_ADDRESS ?? "") as `0x${string}`;
+  const privateEnwisePayAddress = (process.env.NEXT_PUBLIC_ENWISE_PAY_ADDRESS ?? "") as `0x${string}`;
   const canPayPrivate =
     invoice.privateEnabled &&
     Boolean(invoice.privateRecipientCt) &&

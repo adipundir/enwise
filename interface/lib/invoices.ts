@@ -34,12 +34,12 @@ type PrivateFields = {
 /**
  * Build private payments fields for an invoice insert. Returns `privateEnabled: false` if:
  *  - the business hasn't enabled private payments (no settlementWallet)
- *  - required env (RELAYER_EOA_ADDRESS, ENWISE_PAY_ADDRESS) is missing
+ *  - required env (RELAYER_EOA_ADDRESS, NEXT_PUBLIC_ENWISE_PAY_ADDRESS) is missing
  *  - encryption itself throws (logged, swallowed — invoice still works)
  */
 async function maybeBuildPrivateFields(settlementWallet: string | null): Promise<PrivateFields> {
   if (!settlementWallet) return { privateEnabled: false };
-  if (!process.env.RELAYER_EOA_ADDRESS || !process.env.ENWISE_PAY_ADDRESS) {
+  if (!process.env.RELAYER_EOA_ADDRESS || !process.env.NEXT_PUBLIC_ENWISE_PAY_ADDRESS) {
     return { privateEnabled: false };
   }
   if (!/^0x[a-fA-F0-9]{40}$/.test(settlementWallet)) {
