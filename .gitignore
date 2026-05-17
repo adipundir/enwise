@@ -54,6 +54,10 @@ contract/ignition/deployments/
 # ───── Test / scratch payloads ──────────────────────────────────────────────
 scripts/.test-payer.json
 
+# ───── interface/scripts/ — never commit ────────────────────────────────────
+# Local-only ops/dev scripts. Nothing under interface/scripts/ ships to origin.
+interface/scripts/
+
 # ───── Local Claude / memory ────────────────────────────────────────────────
 .claude/
 memory/
