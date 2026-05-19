@@ -174,7 +174,7 @@ function PayInner({ slug, merchantWallet, amountUsdcUnits, amountLabel, chainId 
       const res = await fetch(`/api/invoices/${slug}/confirm-payment`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ txHash, payer: address }),
+        body: JSON.stringify({ txHash }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: "verification failed" }));

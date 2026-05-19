@@ -3,6 +3,15 @@
 -- business_bank_accounts table (one row per existing business that had any
 -- bank data). Adds invoice columns for per-invoice account selection +
 -- the array snapshot that replaces the old single-object snapshot.
+--
+-- Safety notes:
+--   - DROP COLUMN statements use IF EXISTS so a partial-success re-run is
+--     a no-op instead of an error.
+--   - The snapshot conversion guards on jsonb_typeof so a non-object value
+--     (or already-converted row) is silently skipped instead of failing.
+--   - We don't wrap this in BEGIN/COMMIT because Neon's HTTP driver runs
+--     each statement-breakpoint chunk as its own request — the drizzle
+--     migrator halts on the first failed statement, which is what we want.
 
 -- 1. Create the new table.
 CREATE TABLE "business_bank_accounts" (
@@ -68,6 +77,8 @@ ALTER TABLE "invoices" ADD COLUMN "accepted_bank_account_ids" uuid[];
 --> statement-breakpoint
 
 -- 4. Migrate existing per-invoice snapshots from single object → single-element array.
+-- jsonb_typeof guard: skip rows where the column was already an array, null,
+-- or any non-object value — prevents jsonb_set from throwing on malformed JSON.
 UPDATE "invoices"
   SET "business_bank_accounts_snapshot" =
     jsonb_build_array(
@@ -78,24 +89,25 @@ UPDATE "invoices"
         true
       )
     )
-WHERE "business_bank_details_snapshot" IS NOT NULL;
+WHERE "business_bank_details_snapshot" IS NOT NULL
+  AND jsonb_typeof("business_bank_details_snapshot") = 'object';
 --> statement-breakpoint
 
 -- 5. Drop the now-redundant single-object snapshot column.
-ALTER TABLE "invoices" DROP COLUMN "business_bank_details_snapshot";
+ALTER TABLE "invoices" DROP COLUMN IF EXISTS "business_bank_details_snapshot";
 --> statement-breakpoint
 
 -- 6. Drop the seven bank_* columns from businesses (data preserved above).
-ALTER TABLE "businesses" DROP COLUMN "bank_account_holder";
+ALTER TABLE "businesses" DROP COLUMN IF EXISTS "bank_account_holder";
 --> statement-breakpoint
-ALTER TABLE "businesses" DROP COLUMN "bank_name";
+ALTER TABLE "businesses" DROP COLUMN IF EXISTS "bank_name";
 --> statement-breakpoint
-ALTER TABLE "businesses" DROP COLUMN "bank_account_number";
+ALTER TABLE "businesses" DROP COLUMN IF EXISTS "bank_account_number";
 --> statement-breakpoint
-ALTER TABLE "businesses" DROP COLUMN "bank_ifsc";
+ALTER TABLE "businesses" DROP COLUMN IF EXISTS "bank_ifsc";
 --> statement-breakpoint
-ALTER TABLE "businesses" DROP COLUMN "bank_swift";
+ALTER TABLE "businesses" DROP COLUMN IF EXISTS "bank_swift";
 --> statement-breakpoint
-ALTER TABLE "businesses" DROP COLUMN "bank_iban";
+ALTER TABLE "businesses" DROP COLUMN IF EXISTS "bank_iban";
 --> statement-breakpoint
-ALTER TABLE "businesses" DROP COLUMN "bank_branch_address";
+ALTER TABLE "businesses" DROP COLUMN IF EXISTS "bank_branch_address";

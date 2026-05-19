@@ -1102,27 +1102,9 @@ export type RecordOnchainPaymentResult = {
 export async function recordOnchainPayment(
   input: RecordOnchainPaymentInput,
 ): Promise<RecordOnchainPaymentResult> {
-  const [existing] = await db
-    .select()
-    .from(invoicePayments)
-    .where(
-      and(
-        eq(invoicePayments.chainId, input.chainId),
-        eq(invoicePayments.txHash, input.txHash),
-      ),
-    );
-  if (existing) {
-    const [inv] = await db
-      .select({ status: invoices.status })
-      .from(invoices)
-      .where(eq(invoices.id, existing.invoiceId));
-    return {
-      alreadyRecorded: true,
-      payment: existing,
-      invoiceStatus: (inv?.status === "paid" ? "paid" : "sent"),
-    };
-  }
-
+  // Single-roundtrip idempotent insert. The unique index on (chain_id, tx_hash)
+  // means a concurrent second call hits the conflict path; we then re-SELECT
+  // the row inserted by the winning call and report alreadyRecorded.
   const [inserted] = await db
     .insert(invoicePayments)
     .values({
@@ -1135,8 +1117,38 @@ export async function recordOnchainPayment(
       currency: input.currency,
       paidAt: input.paidAt,
     })
+    .onConflictDoNothing({
+      target: [invoicePayments.chainId, invoicePayments.txHash],
+    })
     .returning();
-  if (!inserted) throw new Error("Failed to insert invoice_payment row.");
+
+  if (!inserted) {
+    // Another caller won the race. Look up the row they inserted and
+    // return the same shape as the steady-state idempotent retry path.
+    const [existing] = await db
+      .select()
+      .from(invoicePayments)
+      .where(
+        and(
+          eq(invoicePayments.chainId, input.chainId),
+          eq(invoicePayments.txHash, input.txHash),
+        ),
+      );
+    if (!existing) {
+      throw new Error(
+        "Concurrent invoice_payment insert vanished after ON CONFLICT.",
+      );
+    }
+    const [inv] = await db
+      .select({ status: invoices.status })
+      .from(invoices)
+      .where(eq(invoices.id, existing.invoiceId));
+    return {
+      alreadyRecorded: true,
+      payment: existing,
+      invoiceStatus: inv?.status === "paid" ? "paid" : "sent",
+    };
+  }
 
   const [inv] = await db
     .select()

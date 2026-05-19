@@ -19,20 +19,19 @@ import {
   createPublicClient,
   decodeEventLog,
   erc20Abi,
-  http,
 } from "viem";
 import { db } from "@/lib/db";
 import { businesses, invoices } from "@/lib/db/schema";
 import { recordOnchainPayment } from "@/lib/invoices";
 import { addAmounts } from "@/lib/money";
 import { sendPaymentReceivedEmails } from "@/lib/email/sendPaymentReceived";
-import { resolveChain } from "@/lib/web3/chain";
+import { resolveChain, transportFor } from "@/lib/web3/chain";
 
 const REQUIRED_CONFIRMATIONS = 1n;
 
 export const runtime = "nodejs";
 
-type Body = { txHash?: unknown; payer?: unknown };
+type Body = { txHash?: unknown };
 
 function isHexAddress(s: unknown): s is `0x${string}` {
   return typeof s === "string" && /^0x[a-fA-F0-9]{40}$/.test(s);
@@ -63,7 +62,6 @@ async function handle(
     return NextResponse.json({ error: "invalid txHash" }, { status: 400 });
   }
   const txHash = body.txHash;
-  const payer = isHexAddress(body.payer) ? body.payer : null;
 
   const [invoice] = await db
     .select()
@@ -109,7 +107,7 @@ async function handle(
   const resolved = resolveChain(biz?.paymentChainId ?? null);
   const publicClient = createPublicClient({
     chain: resolved.chain,
-    transport: http(resolved.rpcUrl),
+    transport: transportFor(resolved),
   });
 
   let receipt;
@@ -179,14 +177,23 @@ async function handle(
     );
   }
 
-  const amountDecimal = usdcUnitsToDecimal(transferredAmount, resolved.usdcDecimals);
+  // Cap at outstanding so a tx with multiple Transfer logs (e.g. a DEX
+  // route that happens to land in the merchant wallet) or an honest
+  // over-payment can't inflate amount_paid past invoice.total. The merchant
+  // still receives any excess on-chain; the books just reflect the invoice.
+  const creditedUnits =
+    transferredAmount > outstandingUnits ? outstandingUnits : transferredAmount;
+  const amountDecimal = usdcUnitsToDecimal(creditedUnits, resolved.usdcDecimals);
 
   const result = await recordOnchainPayment({
     invoiceId: invoice.id,
     chainId: resolved.chainId,
     txHash,
     paymentMethod: "direct_transfer",
-    payerAddress: payer ?? fromAddress,
+    // On-chain Transfer.from is the canonical payer. Don't accept a payer
+    // field from the request body — that was advisory and would let a
+    // client put a fake address into emails / receipts.
+    payerAddress: fromAddress,
     amount: amountDecimal,
     currency: "USD",
     paidAt: new Date(),

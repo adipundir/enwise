@@ -14,6 +14,7 @@
  * automatically via SUPPORTED_CHAIN_IDS.
  */
 
+import { fallback, http, type Transport } from "viem";
 import { base, baseSepolia, type Chain } from "viem/chains";
 
 type ChainEntry = {
@@ -55,7 +56,13 @@ export type ResolvedChain = {
   chain: Chain;
   usdcAddress: `0x${string}`;
   usdcDecimals: number;
+  /** Primary RPC URL. First entry in rpcUrls. */
   rpcUrl: string;
+  /** All RPC URLs in priority order: env override(s) first, then the
+   *  chain's public default as a fallback. Wrap in viem's `fallback()`
+   *  transport for automatic retry on the next URL when the primary
+   *  returns 429 / 5xx / times out. */
+  rpcUrls: string[];
   explorerUrl: string;
   txExplorerUrl: (txHash: string) => string;
 };
@@ -77,10 +84,16 @@ export function resolveChain(chainId?: number | null): ResolvedChain {
   const usdcAddress =
     (process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}` | undefined) ??
     entry.usdcAddress;
-  const rpcUrl =
-    process.env.NEXT_PUBLIC_RPC_URL ??
-    process.env.BASE_RPC_URL ??
-    chain.rpcUrls.default.http[0];
+  // Priority: NEXT_PUBLIC_RPC_URL (client-readable override) →
+  // BASE_RPC_URL (server-only override, typically the paid Alchemy URL) →
+  // chain's public default. Dedup so we don't double-call the same URL on
+  // failure.
+  const envClient = process.env.NEXT_PUBLIC_RPC_URL;
+  const envServer = process.env.BASE_RPC_URL;
+  const publicDefault = chain.rpcUrls.default.http[0];
+  const rpcUrls = [envClient, envServer, publicDefault].filter(
+    (u, i, arr): u is string => !!u && arr.indexOf(u) === i,
+  );
   const explorerUrl =
     chain.blockExplorers?.default.url ?? "https://basescan.org";
   return {
@@ -88,10 +101,20 @@ export function resolveChain(chainId?: number | null): ResolvedChain {
     chain,
     usdcAddress,
     usdcDecimals: 6,
-    rpcUrl,
+    rpcUrl: rpcUrls[0]!,
+    rpcUrls,
     explorerUrl,
     txExplorerUrl: (txHash: string) => `${explorerUrl}/tx/${txHash}`,
   };
+}
+
+/** Build a viem transport that tries each rpcUrl in order, falling back
+ *  on failure. Single URL → plain http; multiple → fallback wrapper. */
+export function transportFor(resolved: ResolvedChain): Transport {
+  if (resolved.rpcUrls.length <= 1) {
+    return http(resolved.rpcUrls[0]);
+  }
+  return fallback(resolved.rpcUrls.map((url) => http(url)));
 }
 
 /**

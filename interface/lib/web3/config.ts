@@ -1,7 +1,7 @@
-import { http, createConfig } from "wagmi";
+import { createConfig } from "wagmi";
 import { base, baseSepolia } from "wagmi/chains";
 import { walletConnect } from "wagmi/connectors";
-import { resolveChain } from "./chain";
+import { resolveChain, transportFor } from "./chain";
 
 export {
   DEFAULT_CHAIN_ID,
@@ -41,8 +41,8 @@ export const wagmiConfig = createConfig({
     }),
   ],
   transports: {
-    [base.id]: http(resolveChain(base.id).rpcUrl),
-    [baseSepolia.id]: http(resolveChain(baseSepolia.id).rpcUrl),
+    [base.id]: transportFor(resolveChain(base.id)),
+    [baseSepolia.id]: transportFor(resolveChain(baseSepolia.id)),
   },
   ssr: true,
 });
