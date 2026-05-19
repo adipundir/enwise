@@ -13,6 +13,13 @@ import {
   type InvoicePayment,
 } from "@/lib/db/schema";
 import type { EnwiseCtx, ScopedCtx } from "@/lib/mcp/context";
+import {
+  getDefaultBankAccount,
+  listBankAccounts,
+  resolveInvoiceBankAccounts,
+  setDefaultBankAccount,
+  toSnapshotShape,
+} from "@/lib/bankAccounts";
 import { addAmounts, computeLine, isValidCurrency } from "@/lib/money";
 import { allocateInvoiceNumber } from "@/lib/numbering";
 import {
@@ -22,42 +29,6 @@ import {
 } from "@/lib/storage/blob";
 
 const ATTACHMENTS_PER_LINE_ITEM = 10;
-
-// ---------- private payments helpers ----------
-
-type PrivateFields = {
-  privateEnabled: boolean;
-  privateRecipientCt?: string;
-  privateChainId?: number;
-};
-
-/**
- * Build private payments fields for an invoice insert. Returns `privateEnabled: false` if:
- *  - the business hasn't enabled private payments (no settlementWallet)
- *  - required env (RELAYER_EOA_ADDRESS, NEXT_PUBLIC_ENWISE_PAY_ADDRESS) is missing
- *  - encryption itself throws (logged, swallowed — invoice still works)
- */
-async function maybeBuildPrivateFields(settlementWallet: string | null): Promise<PrivateFields> {
-  if (!settlementWallet) return { privateEnabled: false };
-  if (!process.env.RELAYER_EOA_ADDRESS || !process.env.NEXT_PUBLIC_ENWISE_PAY_ADDRESS) {
-    return { privateEnabled: false };
-  }
-  if (!/^0x[a-fA-F0-9]{40}$/.test(settlementWallet)) {
-    return { privateEnabled: false };
-  }
-  try {
-    const { encryptRecipient } = await import("@/lib/private/encrypt");
-    const ct = await encryptRecipient(settlementWallet as `0x${string}`);
-    return {
-      privateEnabled: true,
-      privateRecipientCt: ct,
-      privateChainId: Number(process.env.PRIVATE_PAYMENTS_CHAIN_ID ?? 84532),
-    };
-  } catch (err) {
-    console.error("[private-payments] encryption failed at create_invoice; falling back to non-shielded:", err);
-    return { privateEnabled: false };
-  }
-}
 
 // ---------- Shared shapes ----------
 
@@ -90,6 +61,13 @@ export type CreateInvoiceInput = {
   notes?: string | null;
   terms?: string | null;
   clientRequestId?: string | null;
+  /** Per-invoice bank-account picker:
+   *  - undefined → use the business's default account (or prompt if none set)
+   *  - []        → no bank panel on this invoice
+   *  - [id, …]   → exactly those accounts, in this order
+   *  When exactly one id is passed and the business has no current default,
+   *  that id is promoted to default for future invoices. */
+  acceptedBankAccountIds?: string[];
 };
 
 export type InvoiceWithLineItems = Invoice & {
@@ -210,11 +188,23 @@ export type CreateInvoiceResult =
         | "no_line_items"
         | "invalid_amount"
         | "onboarding_required"
+        | "bank_account_required"
+        | "invalid_bank_account"
         | "attachment_too_large"
         | "attachment_invalid_mime"
         | "attachment_storage_unavailable";
       message: string;
       hint?: string;
+      /** Populated on bank_account_required so Claude can present the list
+       *  to the user. Each entry is the same shape as list_bank_accounts. */
+      bank_accounts?: Array<{
+        id: string;
+        label: string;
+        bank_name: string | null;
+        account_number: string | null;
+        currency: string | null;
+        is_default: boolean;
+      }>;
     };
 
 export async function createInvoice(
@@ -239,7 +229,6 @@ export async function createInvoice(
       addressLine1: businesses.addressLine1,
       country: businesses.country,
       taxId: businesses.taxId,
-      privateSettlementWallet: businesses.privateSettlementWallet,
     })
     .from(businesses)
     .where(eq(businesses.id, ctx.businessId));
@@ -282,6 +271,61 @@ export async function createInvoice(
         .where(eq(invoiceLineItems.invoiceId, existing.id));
       return { ok: true, invoice: { ...existing, lineItems: items } };
     }
+  }
+
+  // Bank-account resolution. The user might want to receive payments via
+  // bank, crypto wallet, or both. We gate on bank here only when the user
+  // explicitly hasn't supplied a picker AND the business has no default —
+  // in that case we return a structured prompt asking Claude to ask the
+  // user which account to use.
+  const allAccounts = await listBankAccounts(ctx.businessId);
+  let resolvedBankAccountIds: string[] | null = null;
+  if (input.acceptedBankAccountIds !== undefined) {
+    // Validate the caller-supplied ids belong to this business + are active.
+    const ownedIds = new Set(allAccounts.map((a) => a.id));
+    const unknown = input.acceptedBankAccountIds.filter((id) => !ownedIds.has(id));
+    if (unknown.length > 0) {
+      return {
+        ok: false,
+        code: "invalid_bank_account",
+        message: `Bank account id(s) not found on this business: ${unknown.join(", ")}`,
+        hint: "Call list_bank_accounts to see valid ids. Removed/soft-deleted accounts also fail this check.",
+      };
+    }
+    resolvedBankAccountIds = input.acceptedBankAccountIds;
+
+    // Auto-set default when the merchant explicitly picks exactly one
+    // account AND no default is set yet. Avoids re-prompting next time.
+    if (resolvedBankAccountIds.length === 1) {
+      const currentDefault = await getDefaultBankAccount(ctx.businessId);
+      if (!currentDefault) {
+        await setDefaultBankAccount(ctx.businessId, resolvedBankAccountIds[0]!);
+      }
+    }
+  } else {
+    // No picker supplied — fall back to the default. If there's no default
+    // AND the business has multiple accounts, ask the user.
+    const def = await getDefaultBankAccount(ctx.businessId);
+    if (!def && allAccounts.length > 1) {
+      return {
+        ok: false,
+        code: "bank_account_required",
+        message: "This business has multiple bank accounts and no default is set. Ask the user which account(s) to put on this invoice, then retry with `accepted_bank_account_ids`.",
+        hint: "Pass a list of bank_account ids — usually one — on the next create_invoice call. The first single-id pick is auto-promoted to default so this only happens once.",
+        bank_accounts: allAccounts.map((a) => ({
+          id: a.id,
+          label: a.label,
+          bank_name: a.bankName,
+          account_number: a.accountNumber,
+          currency: a.currency,
+          is_default: a.isDefault,
+        })),
+      };
+    }
+    // Implicit pick: default account (if any). Stored as null on the row
+    // (which means "use default at render time") rather than [def.id] so
+    // changing the default later updates outstanding drafts in place.
+    resolvedBankAccountIds = null;
   }
 
   // Allocate invoice number + snapshot business (atomic).
@@ -367,11 +411,6 @@ export async function createInvoice(
 
   const totals = recomputeTotals(computedLines);
 
-  // private: pre-encrypt the merchant's settlement wallet at invoice creation.
-  // Bound to the relayer EOA so only the relayer can submit the on-chain shield
-  // call later. Failure here is non-fatal — invoice still works via legacy rails.
-  const privateFields = await maybeBuildPrivateFields(biz?.privateSettlementWallet ?? null);
-
   const [invoice] = await db
     .insert(invoices)
     .values({
@@ -390,7 +429,7 @@ export async function createInvoice(
       terms: input.terms ?? null,
       shareSlug,
       clientRequestId: input.clientRequestId ?? null,
-      ...privateFields,
+      acceptedBankAccountIds: resolvedBankAccountIds,
       // Snapshots land on finalize (send), not at draft time.
     })
     .returning();
@@ -552,6 +591,10 @@ export type UpdateInvoiceInput = {
   displayOverrides?: unknown;
   /** Payment-rail gate. NULL = show everything configured (default). */
   acceptedPaymentMethods?: string[] | null;
+  /** Per-invoice bank-account picker (only valid on drafts, like the rest
+   *  of this patch). See CreateInvoiceInput.acceptedBankAccountIds for the
+   *  semantics of null vs [] vs [id, ...]. */
+  acceptedBankAccountIds?: string[] | null;
 };
 
 export type MutateResult<T> =
@@ -652,6 +695,31 @@ export async function updateInvoice(
   }
   if (patch.acceptedPaymentMethods !== undefined) {
     values.acceptedPaymentMethods = patch.acceptedPaymentMethods;
+  }
+  if (patch.acceptedBankAccountIds !== undefined) {
+    // Validate against the destination business's accounts (handles the
+    // case where the invoice is being moved AND the picker is being set
+    // in the same call).
+    const targetBusinessId = (patch.businessId ?? inv.businessId);
+    if (patch.acceptedBankAccountIds !== null && patch.acceptedBankAccountIds.length > 0) {
+      const owned = await listBankAccounts(targetBusinessId);
+      const ownedIds = new Set(owned.map((a) => a.id));
+      const unknown = patch.acceptedBankAccountIds.filter((id) => !ownedIds.has(id));
+      if (unknown.length > 0) {
+        return {
+          ok: false,
+          code: "client_not_found",
+          message: `Bank account id(s) not on this business: ${unknown.join(", ")}`,
+        };
+      }
+      if (patch.acceptedBankAccountIds.length === 1) {
+        const current = await getDefaultBankAccount(targetBusinessId);
+        if (!current) {
+          await setDefaultBankAccount(targetBusinessId, patch.acceptedBankAccountIds[0]!);
+        }
+      }
+    }
+    values.acceptedBankAccountIds = patch.acceptedBankAccountIds;
   }
 
   await db.update(invoices).set(values).where(eq(invoices.id, inv.id));
@@ -867,9 +935,7 @@ export async function finalizeInvoice(
   // send time.
   const bizRows = await db.execute(sql`
     select name, legal_name, tax_id, contact_name, wallet_address, logo_url,
-           address_line1, address_line2, city, region, postal_code, country,
-           bank_account_holder, bank_name, bank_account_number, bank_ifsc, bank_swift, bank_iban,
-           bank_branch_address
+           address_line1, address_line2, city, region, postal_code, country
     from businesses where id = ${inv.businessId}
   `);
   const biz = bizRows.rows[0] as
@@ -886,13 +952,6 @@ export async function finalizeInvoice(
         region: string | null;
         postal_code: string | null;
         country: string | null;
-        bank_account_holder: string | null;
-        bank_name: string | null;
-        bank_account_number: string | null;
-        bank_ifsc: string | null;
-        bank_swift: string | null;
-        bank_iban: string | null;
-        bank_branch_address: string | null;
       }
     | undefined;
   if (!biz) {
@@ -936,41 +995,30 @@ export async function finalizeInvoice(
         postal_code: biz.postal_code,
         country: biz.country,
       },
-      businessBankDetailsSnapshot: hasAnyBankField(biz)
-        ? {
-            account_holder: biz.bank_account_holder,
-            bank_name: biz.bank_name,
-            account_number: biz.bank_account_number,
-            ifsc: biz.bank_ifsc,
-            swift: biz.bank_swift,
-            iban: biz.bank_iban,
-            branch_address: biz.bank_branch_address,
-          }
-        : null,
+      businessBankAccountsSnapshot: await buildBankAccountsSnapshot(
+        inv.businessId,
+        inv.acceptedBankAccountIds ?? null,
+      ),
     })
     .where(eq(invoices.id, inv.id));
   await writeEvent(inv.id, "sent", ctx.tokenId);
   return { ok: true, value: (await getInvoice(ctx, inv.id))! };
 }
 
-function hasAnyBankField(b: {
-  bank_account_holder: string | null;
-  bank_name: string | null;
-  bank_account_number: string | null;
-  bank_ifsc: string | null;
-  bank_swift: string | null;
-  bank_iban: string | null;
-  bank_branch_address: string | null;
-}): boolean {
-  return Boolean(
-    b.bank_account_holder ||
-      b.bank_name ||
-      b.bank_account_number ||
-      b.bank_ifsc ||
-      b.bank_swift ||
-      b.bank_iban ||
-      b.bank_branch_address,
+/** Resolve which accounts to freeze on the invoice snapshot at finalize.
+ *  Reads from business_bank_accounts using the same rules the share page
+ *  uses to render live drafts. Returns null when no accounts apply (so the
+ *  jsonb column stays null and renderers skip the bank panel). */
+async function buildBankAccountsSnapshot(
+  businessId: string,
+  acceptedBankAccountIds: string[] | null,
+): Promise<ReturnType<typeof toSnapshotShape>[] | null> {
+  const resolved = await resolveInvoiceBankAccounts(
+    businessId,
+    acceptedBankAccountIds,
   );
+  if (resolved.length === 0) return null;
+  return resolved.map(toSnapshotShape);
 }
 
 // ---------- Status transitions ----------
@@ -1029,16 +1077,16 @@ export async function markInvoicePaid(
 // ---------- Onchain payments (no ScopedCtx) ----------
 //
 // recordOnchainPayment is the entry point for chain-verified payments
-// (private payments unShield, plain ERC-20 transfers, etc.). The chain itself is the
-// authority — anyone who can submit a (chainId, txHash) pair we've already
-// verified gets the invoice marked paid. Idempotent on (chainId, txHash):
-// re-submitting the same tx returns the existing record.
+// (direct ERC-20 transfers from a payer's wallet to the merchant's wallet).
+// The chain itself is the authority — anyone who can submit a (chainId, txHash)
+// pair we've already verified gets the invoice marked paid. Idempotent on
+// (chainId, txHash): re-submitting the same tx returns the existing record.
 
 export type RecordOnchainPaymentInput = {
   invoiceId: string;
   chainId: number;
   txHash: string;
-  paymentMethod: "private_unshield" | "direct_transfer" | "manual";
+  paymentMethod: "direct_transfer" | "manual";
   payerAddress: string | null;
   amount: string;
   currency: string;
@@ -1156,7 +1204,7 @@ export async function revertFinalizeInvoice(
       businessWalletAddressSnapshot: null,
       businessAddressSnapshot: null,
       businessLogoUrlSnapshot: null,
-      businessBankDetailsSnapshot: null,
+      businessBankAccountsSnapshot: null,
       updatedAt: new Date(),
     })
     .where(

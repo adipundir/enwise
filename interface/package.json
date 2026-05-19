@@ -15,13 +15,15 @@
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",
-    "@inco/js": "^0.7.10",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@neondatabase/serverless": "^1.1.0",
     "@react-email/components": "^1.0.12",
     "@react-pdf/renderer": "^4.5.1",
+    "@tanstack/react-query": "^5.100.10",
     "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.3.3",
+    "@walletconnect/ethereum-provider": "^2.23.9",
+    "@walletconnect/modal": "^2.7.0",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.2",
     "file-type": "^22.0.1",
@@ -32,6 +34,7 @@
     "react-dom": "19.2.4",
     "resend": "^6.12.2",
     "viem": "^2.48.7",
+    "wagmi": "^3.6.15",
     "zod": "^4.3.6"
   },
   "devDependencies": {

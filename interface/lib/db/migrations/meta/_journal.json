@@ -148,6 +148,27 @@
       "when": 1778589579395,
       "tag": "0020_secret_moondragon",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1779049026324,
+      "tag": "0021_drop_private_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1779061433022,
+      "tag": "0022_add_business_payment_chain_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1779150000000,
+      "tag": "0023_multi_bank_accounts",
+      "breakpoints": true
     }
   ]
 }

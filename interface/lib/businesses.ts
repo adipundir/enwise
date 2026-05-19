@@ -31,15 +31,7 @@ export type BusinessPatch = Partial<{
   emailReplyTo: string | null;
   defaultPaymentTermsDays: number;
   defaultNotes: string | null;
-  bankAccountHolder: string | null;
-  bankName: string | null;
-  bankAccountNumber: string | null;
-  bankIfsc: string | null;
-  bankSwift: string | null;
-  bankIban: string | null;
-  bankBranchAddress: string | null;
-  privateSettlementWallet: string | null;
-  privateEnabledAt: Date | null;
+  paymentChainId: number | null;
 }>;
 
 export async function getBusinessProfile(
@@ -95,15 +87,7 @@ export function formatBusinessForMcp(row: Business) {
     email_reply_to: row.emailReplyTo,
     default_payment_terms_days: row.defaultPaymentTermsDays,
     default_notes: row.defaultNotes,
-    bank_account_holder: row.bankAccountHolder,
-    bank_name: row.bankName,
-    bank_account_number: row.bankAccountNumber,
-    bank_ifsc: row.bankIfsc,
-    bank_swift: row.bankSwift,
-    bank_iban: row.bankIban,
-    bank_branch_address: row.bankBranchAddress,
-    private_settlement_wallet: row.privateSettlementWallet,
-    private_enabled_at: row.privateEnabledAt?.toISOString() ?? null,
+    payment_chain_id: row.paymentChainId,
   };
 }
 
@@ -116,13 +100,7 @@ export async function createBusiness(params: {
   name: string;
   defaultCurrency?: string;
   setAsDefault?: boolean;
-  /** Optional: enable private payments at creation time. The address is
-   *  the merchant's settlement wallet (where unshielded USDC eventually
-   *  lands). Free-form 0x-validated text — no key generation involved. */
-  privateSettlementWallet?: string;
 }): Promise<Business> {
-  const now = new Date();
-  const wallet = params.privateSettlementWallet?.toLowerCase() ?? null;
   const [created] = await db
     .insert(businesses)
     .values({
@@ -130,8 +108,6 @@ export async function createBusiness(params: {
       name: params.name,
       slug: uniqueSlug(params.name),
       defaultCurrency: params.defaultCurrency ?? "USD",
-      privateSettlementWallet: wallet,
-      privateEnabledAt: wallet ? now : null,
     })
     .returning();
   if (!created) {

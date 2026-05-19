@@ -217,7 +217,8 @@ export interface InvoicePdfData {
     postalCode: string | null;
     country: string | null;
     taxId: string | null;
-    bank: {
+    bankAccounts: Array<{
+      label: string;
       accountHolder: string | null;
       bankName: string | null;
       accountNumber: string | null;
@@ -225,7 +226,8 @@ export interface InvoicePdfData {
       swift: string | null;
       iban: string | null;
       branchAddress: string | null;
-    } | null;
+      currency: string | null;
+    }>;
   };
 }
 
@@ -381,7 +383,7 @@ export function InvoiceDocument({
           </View>
         )}
 
-        {business.bank || business.walletAddress ? (
+        {business.bankAccounts.length > 0 || business.walletAddress ? (
           <View style={{ marginTop: 24 }} wrap={false}>
             <Text style={styles.blockLabel}>Payment details</Text>
             {business.walletAddress ? (
@@ -392,31 +394,39 @@ export function InvoiceDocument({
                 </Text>
               </View>
             ) : null}
-            {business.bank ? (
-              <View style={styles.bankGrid}>
-                {business.bank.accountHolder ? (
-                  <BankCell label="Account holder" value={business.bank.accountHolder} fullWidth />
+            {business.bankAccounts.map((account, idx) => (
+              <View key={idx} style={{ marginTop: idx === 0 ? 4 : 14 }}>
+                {business.bankAccounts.length > 1 ? (
+                  <Text style={{ ...styles.bankCellLabel, marginBottom: 4 }}>
+                    {account.label}
+                    {account.currency ? ` · ${account.currency}` : ""}
+                  </Text>
                 ) : null}
-                {business.bank.bankName ? (
-                  <BankCell label="Bank" value={business.bank.bankName} />
-                ) : null}
-                {business.bank.accountNumber ? (
-                  <BankCell label="Account number" value={business.bank.accountNumber} mono />
-                ) : null}
-                {business.bank.ifsc ? (
-                  <BankCell label="IFSC" value={business.bank.ifsc} mono />
-                ) : null}
-                {business.bank.swift ? (
-                  <BankCell label="SWIFT / BIC" value={business.bank.swift} mono />
-                ) : null}
-                {business.bank.iban ? (
-                  <BankCell label="IBAN" value={business.bank.iban} mono fullWidth />
-                ) : null}
-                {business.bank.branchAddress ? (
-                  <BankCell label="Branch address" value={business.bank.branchAddress} fullWidth />
-                ) : null}
+                <View style={styles.bankGrid}>
+                  {account.accountHolder ? (
+                    <BankCell label="Account holder" value={account.accountHolder} fullWidth />
+                  ) : null}
+                  {account.bankName ? (
+                    <BankCell label="Bank" value={account.bankName} />
+                  ) : null}
+                  {account.accountNumber ? (
+                    <BankCell label="Account number" value={account.accountNumber} mono />
+                  ) : null}
+                  {account.ifsc ? (
+                    <BankCell label="IFSC" value={account.ifsc} mono />
+                  ) : null}
+                  {account.swift ? (
+                    <BankCell label="SWIFT / BIC" value={account.swift} mono />
+                  ) : null}
+                  {account.iban ? (
+                    <BankCell label="IBAN" value={account.iban} mono fullWidth />
+                  ) : null}
+                  {account.branchAddress ? (
+                    <BankCell label="Branch address" value={account.branchAddress} fullWidth />
+                  ) : null}
+                </View>
               </View>
-            ) : null}
+            ))}
           </View>
         ) : null}
 

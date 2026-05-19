@@ -45,15 +45,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# ───── Hardhat / contracts ──────────────────────────────────────────────────
-artifacts/
-cache/
-typechain-types/
-contract/ignition/deployments/
-
-# ───── Test / scratch payloads ──────────────────────────────────────────────
-scripts/.test-payer.json
-
 # ───── interface/scripts/ — never commit ────────────────────────────────────
 # Local-only ops/dev scripts. Nothing under interface/scripts/ ships to origin.
 interface/scripts/

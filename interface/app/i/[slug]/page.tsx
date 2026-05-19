@@ -3,16 +3,19 @@ import { notFound } from "next/navigation";
 import { after } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { businesses, clients } from "@/lib/db/schema";
+import { desc } from "drizzle-orm";
+import { businesses, clients, invoicePayments } from "@/lib/db/schema";
 import { getInvoiceBySlug, markInvoiceViewed } from "@/lib/invoices";
 import { addAmounts, formatMoney } from "@/lib/money";
-import { keccak256, type Hex } from "viem";
 import { CopyableField } from "./CopyableField";
-import PrivatePayButton from "./PrivatePayButton";
+import { PaidBadge } from "./PaidBadge";
+import { PayWithWalletButton } from "./PayWithWalletButton";
 import {
   paymentMethodEnabled,
   type DisplayOverrides,
 } from "@/lib/invoices/displayResolver";
+import { DEFAULT_CHAIN_ID, isSupportedChainId } from "@/lib/web3/chain";
+import { resolveInvoiceBankAccounts, toSnapshotShape } from "@/lib/bankAccounts";
 
 const USDC_DECIMALS = 6;
 
@@ -51,7 +54,6 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
           contactName: invoice.businessContactNameSnapshot,
           walletAddress: invoice.businessWalletAddressSnapshot,
           snapshot: invoice.businessAddressSnapshot,
-          bankSnapshot: invoice.businessBankDetailsSnapshot,
         },
       ]
     : await db.select().from(businesses).where(eq(businesses.id, invoice.businessId));
@@ -60,29 +62,10 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
   const overrides = (invoice.displayOverrides ?? {}) as DisplayOverrides;
   const client = applyClientOverrides(baseClient, overrides.client);
   const business = applyBusinessOverrides(baseBusiness, overrides.business);
-  const bankDetails = paymentMethodEnabled(invoice, "bank")
-    ? resolveBankDetails(business)
-    : null;
-  const outstandingDecimal = addAmounts(invoice.total, `-${invoice.amountPaid}`);
-  const outstandingUsdcUnits = decimalToUsdcUnits(outstandingDecimal);
-
-  // private pay path. The recipient ct was bound at invoice-creation time and
-  // lives on the invoice row, so this share page just reads it through.
-  const privateChainId = Number(process.env.PRIVATE_PAYMENTS_CHAIN_ID ?? 84532);
-  const privateUsdcAddress = (process.env.NEXT_PUBLIC_USDC_ADDRESS ?? "") as `0x${string}`;
-  const privateEnwisePayAddress = (process.env.NEXT_PUBLIC_ENWISE_PAY_ADDRESS ?? "") as `0x${string}`;
-  const canPayPrivate =
-    invoice.privateEnabled &&
-    Boolean(invoice.privateRecipientCt) &&
-    invoice.status === "sent" &&
-    invoice.currency.toUpperCase() === "USD" &&
-    outstandingUsdcUnits > 0n &&
-    /^0x[a-fA-F0-9]{40}$/.test(privateUsdcAddress) &&
-    /^0x[a-fA-F0-9]{40}$/.test(privateEnwisePayAddress) &&
-    paymentMethodEnabled(invoice, "private_pay");
-  const privateCtCommit = invoice.privateRecipientCt
-    ? keccak256(invoice.privateRecipientCt as Hex)
-    : null;
+  // Bank accounts: snapshot (frozen array on finalize) wins, else resolve live.
+  const bankAccounts = paymentMethodEnabled(invoice, "bank")
+    ? await resolveBankAccountsForShare(invoice)
+    : [];
   const businessWallet = paymentMethodEnabled(invoice, "crypto_wallet")
     ? ((business && "walletAddress" in business ? business.walletAddress : null) ?? null)
     : null;
@@ -90,6 +73,41 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
     (client && "walletAddress" in client ? client.walletAddress : null) ?? null;
   const businessContact =
     (business && "contactName" in business ? business.contactName : null) ?? null;
+
+  // Wallet-pay button gate: invoice must be USD, unpaid, and the merchant must
+  // have a 0x wallet on file. Chain is whatever the merchant has set as their
+  // preferred receiving chain (businesses.payment_chain_id); falls back to
+  // the platform default. We always read this LIVE — changing chain affects
+  // all outstanding invoices, which matches merchant expectations.
+  const [bizChainRow] = await db
+    .select({ paymentChainId: businesses.paymentChainId })
+    .from(businesses)
+    .where(eq(businesses.id, invoice.businessId));
+  const merchantChainId =
+    bizChainRow?.paymentChainId && isSupportedChainId(bizChainRow.paymentChainId)
+      ? bizChainRow.paymentChainId
+      : DEFAULT_CHAIN_ID;
+
+  // Latest on-chain payment for this invoice — used by the Paid badge to
+  // show a clickable explorer link. Null when the invoice was marked paid
+  // manually (no chain tx) or hasn't been paid at all.
+  const [latestPayment] = invoice.status === "paid"
+    ? await db
+        .select({ txHash: invoicePayments.txHash, chainId: invoicePayments.chainId })
+        .from(invoicePayments)
+        .where(eq(invoicePayments.invoiceId, invoice.id))
+        .orderBy(desc(invoicePayments.paidAt))
+        .limit(1)
+    : [];
+  const outstandingDecimal = addAmounts(invoice.total, `-${invoice.amountPaid}`);
+  const outstandingUsdcUnits = decimalToUsdcUnits(outstandingDecimal);
+  const isEvmAddress = (s: string | null | undefined): s is `0x${string}` =>
+    !!s && /^0x[a-fA-F0-9]{40}$/.test(s);
+  const canPayWithWallet =
+    invoice.status === "sent" &&
+    invoice.currency.toUpperCase() === "USD" &&
+    outstandingUsdcUnits > 0n &&
+    isEvmAddress(businessWallet);
 
   after(async () => {
     try {
@@ -113,28 +131,20 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
             <span className="font-mono text-zinc-900">{invoice.invoiceNumber}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <a
-              href={`/i/${slug}/pdf`}
-              download={`${invoice.invoiceNumber}.pdf`}
-              className="rounded-md bg-zinc-900 px-3.5 py-1.5 text-zinc-50 hover:bg-zinc-800"
-            >
-              Download PDF
-            </a>
-            {canPayPrivate && privateCtCommit ? (
-              <PrivatePayButton
+            {invoice.status === "paid" ? (
+              <PaidBadge
                 slug={slug}
-                amountLabel={`${outstandingDecimal} USDC`}
-                amountUnits={outstandingUsdcUnits.toString()}
-                asset={privateUsdcAddress}
-                ctCommit={privateCtCommit}
-                enwisePayAddress={privateEnwisePayAddress}
-                chainId={privateChainId}
-                blockExplorerTxBase="https://sepolia.basescan.org/tx/"
+                txHash={latestPayment?.txHash}
+                chainId={latestPayment?.chainId}
               />
-            ) : invoice.status === "paid" ? (
-              <span className="rounded-md bg-emerald-50 px-3.5 py-1.5 text-sm font-medium text-emerald-900 ring-1 ring-emerald-200">
-                Paid ✓
-              </span>
+            ) : canPayWithWallet && isEvmAddress(businessWallet) ? (
+              <PayWithWalletButton
+                slug={slug}
+                merchantWallet={businessWallet}
+                amountUsdcUnits={outstandingUsdcUnits.toString()}
+                amountLabel={`${outstandingDecimal} USDC`}
+                chainId={merchantChainId}
+              />
             ) : null}
           </div>
         </header>
@@ -366,13 +376,13 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
             </section>
           )}
 
-          {bankDetails || businessWallet ? (
-            <section className="mt-10">
+          {bankAccounts.length > 0 || businessWallet ? (
+            <section className="mt-10 space-y-6">
               <div className="text-[10px] uppercase tracking-widest text-zinc-500">
                 Payment details
               </div>
               {businessWallet ? (
-                <div className="mt-3 flex flex-col gap-0.5">
+                <div className="flex flex-col gap-0.5">
                   <dt className="text-[10px] uppercase tracking-widest text-zinc-500">
                     Wallet address
                   </dt>
@@ -381,31 +391,41 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                   </dd>
                 </div>
               ) : null}
-              {bankDetails ? (
-                <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
-                  {bankDetails.accountHolder ? (
-                    <BankRow label="Account holder" value={bankDetails.accountHolder} fullWidth />
+              {bankAccounts.map((account, idx) => (
+                <div key={idx}>
+                  {bankAccounts.length > 1 ? (
+                    <div className="mb-2 text-[11px] uppercase tracking-widest text-zinc-700">
+                      {account.label}
+                      {account.currency ? (
+                        <span className="ml-2 text-zinc-400">· {account.currency}</span>
+                      ) : null}
+                    </div>
                   ) : null}
-                  {bankDetails.bankName ? (
-                    <BankRow label="Bank" value={bankDetails.bankName} />
-                  ) : null}
-                  {bankDetails.accountNumber ? (
-                    <BankRow label="Account number" value={bankDetails.accountNumber} mono />
-                  ) : null}
-                  {bankDetails.ifsc ? (
-                    <BankRow label="IFSC" value={bankDetails.ifsc} mono />
-                  ) : null}
-                  {bankDetails.swift ? (
-                    <BankRow label="SWIFT / BIC" value={bankDetails.swift} mono />
-                  ) : null}
-                  {bankDetails.iban ? (
-                    <BankRow label="IBAN" value={bankDetails.iban} mono fullWidth />
-                  ) : null}
-                  {bankDetails.branchAddress ? (
-                    <BankRow label="Branch address" value={bankDetails.branchAddress} fullWidth />
-                  ) : null}
-                </dl>
-              ) : null}
+                  <dl className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+                    {account.accountHolder ? (
+                      <BankRow label="Account holder" value={account.accountHolder} fullWidth />
+                    ) : null}
+                    {account.bankName ? (
+                      <BankRow label="Bank" value={account.bankName} />
+                    ) : null}
+                    {account.accountNumber ? (
+                      <BankRow label="Account number" value={account.accountNumber} mono />
+                    ) : null}
+                    {account.ifsc ? (
+                      <BankRow label="IFSC" value={account.ifsc} mono />
+                    ) : null}
+                    {account.swift ? (
+                      <BankRow label="SWIFT / BIC" value={account.swift} mono />
+                    ) : null}
+                    {account.iban ? (
+                      <BankRow label="IBAN" value={account.iban} mono fullWidth />
+                    ) : null}
+                    {account.branchAddress ? (
+                      <BankRow label="Branch address" value={account.branchAddress} fullWidth />
+                    ) : null}
+                  </dl>
+                </div>
+              ))}
             </section>
           ) : null}
 
@@ -468,18 +488,8 @@ interface AddressSource {
   snapshot?: unknown;
 }
 
-interface BankSource {
-  bankAccountHolder?: string | null;
-  bankName?: string | null;
-  bankAccountNumber?: string | null;
-  bankIfsc?: string | null;
-  bankSwift?: string | null;
-  bankIban?: string | null;
-  bankBranchAddress?: string | null;
-  bankSnapshot?: unknown;
-}
-
-interface ResolvedBankDetails {
+type BankAccountForRender = {
+  label: string;
   accountHolder: string | null;
   bankName: string | null;
   accountNumber: string | null;
@@ -487,7 +497,21 @@ interface ResolvedBankDetails {
   swift: string | null;
   iban: string | null;
   branchAddress: string | null;
-}
+  currency: string | null;
+};
+
+type BankAccountSnapshotEntry = {
+  id?: string;
+  label?: string;
+  account_holder?: string | null;
+  bank_name?: string | null;
+  account_number?: string | null;
+  ifsc?: string | null;
+  swift?: string | null;
+  iban?: string | null;
+  branch_address?: string | null;
+  currency?: string | null;
+};
 
 type BaseBusiness = {
   name?: string | null;
@@ -497,15 +521,6 @@ type BaseBusiness = {
   contactName?: string | null;
   walletAddress?: string | null;
   snapshot?: unknown;
-  bankSnapshot?: unknown;
-  // bank fields appear directly on the live businesses row (not on snapshot one)
-  bankAccountHolder?: string | null;
-  bankName?: string | null;
-  bankAccountNumber?: string | null;
-  bankIfsc?: string | null;
-  bankSwift?: string | null;
-  bankIban?: string | null;
-  bankBranchAddress?: string | null;
   // address fields appear directly on the live row
   addressLine1?: string | null;
   addressLine2?: string | null;
@@ -559,16 +574,9 @@ function applyBusinessOverrides(
     out.postalCode = null;
     out.country = null;
   }
-  if ("bank_details" in ov) {
-    out.bankSnapshot = ov.bank_details ?? null;
-    out.bankAccountHolder = null;
-    out.bankName = null;
-    out.bankAccountNumber = null;
-    out.bankIfsc = null;
-    out.bankSwift = null;
-    out.bankIban = null;
-    out.bankBranchAddress = null;
-  }
+  // `bank_details` display override is no longer supported — use the
+  // accepted_bank_account_ids picker on update_invoice (or edit the bank
+  // account itself via update_bank_account) instead.
   return out;
 }
 
@@ -595,33 +603,36 @@ function applyClientOverrides(
   return out;
 }
 
-function resolveBankDetails(
-  src: BankSource | undefined,
-): ResolvedBankDetails | null {
-  if (!src) return null;
-  const snap = src.bankSnapshot as
-    | {
-        account_holder?: string | null;
-        bank_name?: string | null;
-        account_number?: string | null;
-        ifsc?: string | null;
-        swift?: string | null;
-        iban?: string | null;
-        branch_address?: string | null;
-      }
-    | null
-    | undefined;
-  const out: ResolvedBankDetails = {
-    accountHolder: snap?.account_holder ?? src.bankAccountHolder ?? null,
-    bankName: snap?.bank_name ?? src.bankName ?? null,
-    accountNumber: snap?.account_number ?? src.bankAccountNumber ?? null,
-    ifsc: snap?.ifsc ?? src.bankIfsc ?? null,
-    swift: snap?.swift ?? src.bankSwift ?? null,
-    iban: snap?.iban ?? src.bankIban ?? null,
-    branchAddress: snap?.branch_address ?? src.bankBranchAddress ?? null,
+async function resolveBankAccountsForShare(invoice: {
+  businessId: string;
+  businessBankAccountsSnapshot: unknown;
+  acceptedBankAccountIds: string[] | null;
+}): Promise<BankAccountForRender[]> {
+  const snap = invoice.businessBankAccountsSnapshot as
+    | BankAccountSnapshotEntry[]
+    | null;
+  if (snap && Array.isArray(snap) && snap.length > 0) {
+    return snap.map(snapshotEntryToBankAccount);
+  }
+  const live = await resolveInvoiceBankAccounts(
+    invoice.businessId,
+    invoice.acceptedBankAccountIds,
+  );
+  return live.map(toSnapshotShape).map(snapshotEntryToBankAccount);
+}
+
+function snapshotEntryToBankAccount(snap: BankAccountSnapshotEntry): BankAccountForRender {
+  return {
+    label: snap.label ?? "Bank account",
+    accountHolder: snap.account_holder ?? null,
+    bankName: snap.bank_name ?? null,
+    accountNumber: snap.account_number ?? null,
+    ifsc: snap.ifsc ?? null,
+    swift: snap.swift ?? null,
+    iban: snap.iban ?? null,
+    branchAddress: snap.branch_address ?? null,
+    currency: snap.currency ?? null,
   };
-  const hasAny = Object.values(out).some((v) => v && v.trim().length > 0);
-  return hasAny ? out : null;
 }
 
 function BankRow({

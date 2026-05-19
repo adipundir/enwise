@@ -110,6 +110,11 @@ const createSchema = {
   notes: z.string().max(4000).nullish(),
   terms: z.string().max(4000).nullish(),
   client_request_id: z.string().max(64).optional(),
+  /** Which bank account(s) to show on this invoice. Omit to use the
+   *  business's default (the server will return bank_account_required if
+   *  the business has multiple accounts and no default is set yet — in
+   *  that case ASK the user which account, then retry with their pick). */
+  accepted_bank_account_ids: z.array(uuid).optional(),
 };
 
 async function businessBelongsToUser(
@@ -141,6 +146,9 @@ function mapMutateError(code: string): ErrorCode {
     case "attachment_invalid_mime":
     case "attachment_storage_unavailable":
       return code;
+    case "bank_account_required":
+    case "invalid_bank_account":
+      return "invalid_input";
     default:
       return "internal_error";
   }
@@ -171,6 +179,7 @@ export function registerInvoiceTools(server: McpServer) {
         notes: d.notes ?? null,
         terms: d.terms ?? null,
         clientRequestId: d.client_request_id ?? null,
+        acceptedBankAccountIds: d.accepted_bank_account_ids,
         lineItems: d.line_items.map((l) => ({
           description: l.description,
           quantity: l.quantity,
@@ -184,6 +193,9 @@ export function registerInvoiceTools(server: McpServer) {
       if (!result.ok) {
         return toolError(mapMutateError(result.code), result.message, {
           hint: result.hint,
+          ...(result.code === "bank_account_required" && result.bank_accounts
+            ? { bank_accounts: result.bank_accounts }
+            : {}),
         });
       }
       return toolOk({
@@ -247,15 +259,16 @@ export function registerInvoiceTools(server: McpServer) {
     })
     .nullable();
   const paymentMethodsSchema = z
-    .array(z.enum(["bank", "crypto_wallet", "private_pay"]))
+    .array(z.enum(["bank", "crypto_wallet"]))
     .nullable();
+  const bankAccountIdsSchema = z.array(uuid).nullable();
 
   server.registerTool(
     "update_invoice",
     {
       title: "Update invoice (draft only)",
       description:
-        "Update draft invoice headers. Only drafts are editable. Pass `business_id` to MOVE the invoice to render under a different business — a new invoice number is allocated under that business automatically. To change line items use add_line_item / update_line_item / remove_line_item. For finalized invoices use void_invoice + duplicate_invoice.\n\n`display_overrides` lets you override any business/client field shown on this specific invoice WITHOUT mutating the underlying business/client record. Resolution order: override > snapshot > live. Key presence = override; null value = explicitly hide. Pass `display_overrides: null` to clear all overrides.\n  Example — hide just the business wallet on this invoice:\n    `{ display_overrides: { business: { wallet_address: null } } }`\n  Example — override the legal name without touching the business record:\n    `{ display_overrides: { business: { legal_name: 'ZK Labs Pte. Ltd.' } } }`\n\n`accepted_payment_methods` gates which payment rails are displayed. Values: 'bank' (bank details block), 'crypto_wallet' (business wallet address), 'private_pay' (Inco private-pay button). NULL = show everything configured (default). Pass `[]` to hide all payment methods. Pass `['bank']` to show only bank details, etc.\n\nReturns the updated invoice including `share_url`. **Always show the share_url** so the user can re-view the updated invoice.",
+        "Update draft invoice headers. Only drafts are editable. Pass `business_id` to MOVE the invoice to render under a different business — a new invoice number is allocated under that business automatically. To change line items use add_line_item / update_line_item / remove_line_item. For finalized invoices use void_invoice + duplicate_invoice.\n\n`display_overrides` lets you override any business/client field shown on this specific invoice WITHOUT mutating the underlying business/client record. Resolution order: override > snapshot > live. Key presence = override; null value = explicitly hide. Pass `display_overrides: null` to clear all overrides.\n  Example — hide just the business wallet on this invoice:\n    `{ display_overrides: { business: { wallet_address: null } } }`\n  Example — override the legal name without touching the business record:\n    `{ display_overrides: { business: { legal_name: 'ZK Labs Pte. Ltd.' } } }`\n\n`accepted_payment_methods` gates which payment rails are displayed. Values: 'bank' (bank details block), 'crypto_wallet' (business wallet address + Pay button on Base). NULL = show everything configured (default). Pass `[]` to hide all payment methods. Pass `['bank']` to show only bank details, etc.\n\n`accepted_bank_account_ids` picks WHICH bank accounts to surface (when 'bank' is among the accepted methods). Values: NULL = use the business's default account (the standard behavior). `[]` = hide the bank panel even if 'bank' is in accepted_payment_methods. `[id, ...]` = show exactly these accounts in this order. Call list_bank_accounts first to get the ids. If the merchant explicitly picks one account here AND no default is set yet, it gets promoted to default for future invoices.\n\nReturns the updated invoice including `share_url`. **Always show the share_url** so the user can re-view the updated invoice.",
       inputSchema: {
         invoice_id: uuid,
         business_id: uuid.optional(),
@@ -266,6 +279,7 @@ export function registerInvoiceTools(server: McpServer) {
         terms: z.string().max(4000).nullish(),
         display_overrides: displayOverridesSchema.optional(),
         accepted_payment_methods: paymentMethodsSchema.optional(),
+        accepted_bank_account_ids: bankAccountIdsSchema.optional(),
       },
     },
     async (args, extra) => {
@@ -280,6 +294,7 @@ export function registerInvoiceTools(server: McpServer) {
           terms: z.string().max(4000).nullish(),
           display_overrides: displayOverridesSchema.optional(),
           accepted_payment_methods: paymentMethodsSchema.optional(),
+          accepted_bank_account_ids: bankAccountIdsSchema.optional(),
         })
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
@@ -303,6 +318,9 @@ export function registerInvoiceTools(server: McpServer) {
         }),
         ...(d.accepted_payment_methods !== undefined && {
           acceptedPaymentMethods: d.accepted_payment_methods,
+        }),
+        ...(d.accepted_bank_account_ids !== undefined && {
+          acceptedBankAccountIds: d.accepted_bank_account_ids,
         }),
       });
       if (!r.ok)
@@ -451,7 +469,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Get invoice",
       description:
-        "Fetch a single invoice by id. Returns the full header (status, dates, totals, currency, notes, terms, snapshot fields, display_overrides, accepted_payment_methods, private-pay fields) plus the ordered line items (description, qty, unit_price, tax, attachments) and `share_url`. Use this when you have an id and need the full payload; for searching by invoice number use find_invoice; for lists use list_invoices.",
+        "Fetch a single invoice by id. Returns the full header (status, dates, totals, currency, notes, terms, snapshot fields, display_overrides, accepted_payment_methods) plus the ordered line items (description, qty, unit_price, tax, attachments) and `share_url`. Use this when you have an id and need the full payload; for searching by invoice number use find_invoice; for lists use list_invoices.",
       inputSchema: {
     business_id: uuid.optional(), invoice_id: uuid },
     },

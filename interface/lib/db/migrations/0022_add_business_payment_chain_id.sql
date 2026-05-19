@@ -1,0 +1,1 @@
+ALTER TABLE "businesses" ADD COLUMN "payment_chain_id" integer;

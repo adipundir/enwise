@@ -1,14 +1,28 @@
-import { renderToStream, type DocumentProps } from "@react-pdf/renderer";
+import { renderToBuffer, renderToStream, type DocumentProps } from "@react-pdf/renderer";
 import { createElement, type ReactElement } from "react";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { businesses, clients, type Business, type Client } from "@/lib/db/schema";
 import type { InvoiceWithLineItems } from "@/lib/invoices";
+import { resolveInvoiceBankAccounts, toSnapshotShape } from "@/lib/bankAccounts";
 import { InvoiceDocument, type InvoicePdfData } from "@/components/pdf/InvoiceDocument";
 import {
   paymentMethodEnabled,
   type DisplayOverrides,
 } from "@/lib/invoices/displayResolver";
+
+type BankAccountSnapshot = {
+  id?: string;
+  label: string;
+  account_holder: string | null;
+  bank_name: string | null;
+  account_number: string | null;
+  ifsc: string | null;
+  swift: string | null;
+  iban: string | null;
+  branch_address: string | null;
+  currency?: string | null;
+};
 
 /**
  * Pick a scalar override > snapshot > live. `hasKey` distinguishes "key
@@ -42,6 +56,19 @@ export async function renderInvoicePdf(
   return renderToStream(element);
 }
 
+/** Buffer variant — used by sendInvoiceByEmail so we can attach the PDF
+ *  to the outbound Resend email without piping a stream. */
+export async function renderInvoiceBuffer(
+  invoice: InvoiceWithLineItems,
+): Promise<Buffer> {
+  const data = await buildInvoicePdfData(invoice);
+  const element = createElement(
+    InvoiceDocument,
+    data,
+  ) as unknown as ReactElement<DocumentProps>;
+  return renderToBuffer(element);
+}
+
 export async function buildInvoicePdfData(
   invoice: InvoiceWithLineItems,
 ): Promise<InvoicePdfData> {
@@ -59,7 +86,7 @@ export async function buildInvoicePdfData(
 
   const clientSnapshot = (invoice.clientAddressSnapshot as ClientAddressSnapshot | null) ?? null;
   const businessSnapshot = (invoice.businessAddressSnapshot as ClientAddressSnapshot | null) ?? null;
-  const bankSnapshot = (invoice.businessBankDetailsSnapshot as BankDetailsSnapshot | null) ?? null;
+  const bankAccountsSnapshot = (invoice.businessBankAccountsSnapshot as BankAccountSnapshot[] | null) ?? null;
 
   const overrides = (invoice.displayOverrides ?? {}) as DisplayOverrides;
   const bizOv = overrides.business as Record<string, unknown> | undefined;
@@ -142,55 +169,51 @@ export async function buildInvoicePdfData(
       postalCode: businessAddrSrc?.postal_code ?? businessAddrLive?.postalCode ?? null,
       country: businessAddrSrc?.country ?? businessAddrLive?.country ?? null,
       taxId: pickScalar(bizOv, "tax_id", invoice.businessTaxIdSnapshot, business?.taxId),
-      bank: paymentMethodEnabled(invoice, "bank")
-        ? resolveBankForPdf(bizOv, bankSnapshot, business)
-        : null,
+      bankAccounts: paymentMethodEnabled(invoice, "bank")
+        ? await resolveBankAccountsForInvoice(invoice, bankAccountsSnapshot)
+        : [],
     },
   };
 }
 
-function resolveBankForPdf(
-  bizOv: Record<string, unknown> | undefined,
-  snap: BankDetailsSnapshot | null,
-  live: Business | null,
-): InvoicePdfData["business"]["bank"] {
-  // If the invoice overrides bank_details as a unit, that wins (null = hide).
-  if (bizOv && "bank_details" in bizOv) {
-    const ov = bizOv.bank_details as BankDetailsSnapshot | null;
-    if (!ov) return null;
-    const out = {
-      accountHolder: ov.account_holder ?? null,
-      bankName: ov.bank_name ?? null,
-      accountNumber: ov.account_number ?? null,
-      ifsc: ov.ifsc ?? null,
-      swift: ov.swift ?? null,
-      iban: ov.iban ?? null,
-      branchAddress: ov.branch_address ?? null,
-    };
-    const hasAny = Object.values(out).some((v) => v && v.trim().length > 0);
-    return hasAny ? out : null;
+async function resolveBankAccountsForInvoice(
+  invoice: InvoiceWithLineItems,
+  snapshot: BankAccountSnapshot[] | null,
+): Promise<InvoicePdfData["business"]["bankAccounts"]> {
+  // Snapshot wins when present (frozen at finalize).
+  if (snapshot && snapshot.length > 0) {
+    return snapshot.map(snapshotToBankAccount);
   }
-  const out = {
-    accountHolder: snap?.account_holder ?? live?.bankAccountHolder ?? null,
-    bankName: snap?.bank_name ?? live?.bankName ?? null,
-    accountNumber: snap?.account_number ?? live?.bankAccountNumber ?? null,
-    ifsc: snap?.ifsc ?? live?.bankIfsc ?? null,
-    swift: snap?.swift ?? live?.bankSwift ?? null,
-    iban: snap?.iban ?? live?.bankIban ?? null,
-    branchAddress: snap?.branch_address ?? live?.bankBranchAddress ?? null,
-  };
-  const hasAny = Object.values(out).some((v) => v && v.trim().length > 0);
-  return hasAny ? out : null;
+  // Live fallback — for drafts.
+  const live = await resolveInvoiceBankAccounts(
+    invoice.businessId,
+    invoice.acceptedBankAccountIds ?? null,
+  );
+  return live.map(toSnapshotShape).map(snapshotToBankAccount);
 }
 
-interface BankDetailsSnapshot {
-  account_holder: string | null;
-  bank_name: string | null;
-  account_number: string | null;
+function snapshotToBankAccount(snap: BankAccountSnapshot): {
+  label: string;
+  accountHolder: string | null;
+  bankName: string | null;
+  accountNumber: string | null;
   ifsc: string | null;
   swift: string | null;
   iban: string | null;
-  branch_address: string | null;
+  branchAddress: string | null;
+  currency: string | null;
+} {
+  return {
+    label: snap.label,
+    accountHolder: snap.account_holder ?? null,
+    bankName: snap.bank_name ?? null,
+    accountNumber: snap.account_number ?? null,
+    ifsc: snap.ifsc ?? null,
+    swift: snap.swift ?? null,
+    iban: snap.iban ?? null,
+    branchAddress: snap.branch_address ?? null,
+    currency: snap.currency ?? null,
+  };
 }
 
 interface ClientAddressSnapshot {

@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import {
-  bigint,
   boolean,
   char,
   date,
@@ -138,26 +137,13 @@ export const businesses = pgTable(
     emailReplyTo: text("email_reply_to"),
     defaultPaymentTermsDays: integer("default_payment_terms_days").default(30),
     defaultNotes: text("default_notes"),
-    // Bank payout details. All optional; the share page renders only the
-    // non-empty fields. IFSC = India, SWIFT/BIC = international wire,
-    // IBAN = Europe. Mix as appropriate for the receiving country.
-    bankAccountHolder: text("bank_account_holder"),
-    bankName: text("bank_name"),
-    bankAccountNumber: text("bank_account_number"),
-    bankIfsc: text("bank_ifsc"),
-    bankSwift: text("bank_swift"),
-    bankIban: text("bank_iban"),
-    // Beneficiary bank branch address. Free-form text (typically one line:
-    // street / city / postal / country) — US/EU sending banks require this
-    // on the wire form when remitting to Indian accounts, and it eliminates
-    // the most common re-instruction back-and-forth.
-    bankBranchAddress: text("bank_branch_address"),
-    // private payments. The settlement wallet is where unshielded
-    // USDC ultimately lands; recipient ct on each invoice is encrypted to
-    // this address. Free-form text: a 0x address is the typical value but
-    // the column itself doesn't enforce a format.
-    privateSettlementWallet: text("private_settlement_wallet"),
-    privateEnabledAt: timestamp("private_enabled_at", { withTimezone: true }),
+    // Bank payout details now live in business_bank_accounts (one row per
+    // account, with an is_default flag). Use add_bank_account / set_default_bank_account
+    // MCP tools to manage them.
+    // Preferred EVM chain id for receiving USDC wallet payments. NULL = use
+    // platform default (NEXT_PUBLIC_DEFAULT_CHAIN_ID, currently Base mainnet).
+    // Supported values are enumerated in lib/web3/chain.ts.
+    paymentChainId: integer("payment_chain_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -195,6 +181,55 @@ export const apiTokens = pgTable(
       .defaultNow(),
   },
   (t) => [uniqueIndex("api_tokens_hash_idx").on(t.tokenHash)],
+);
+
+// Bank payout accounts. A business can have multiple — e.g. a USD account
+// for international wires, an INR account for domestic, a EUR IBAN for
+// Europe-based clients. The is_default flag (enforced unique-per-business
+// via a partial index) controls which one new invoices auto-select.
+//
+// Soft-delete via deleted_at so existing invoices that snapshot one of
+// these accounts still have a recoverable lineage.
+
+export const businessBankAccounts = pgTable(
+  "business_bank_accounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    /** Short human label the merchant uses to disambiguate accounts in MCP
+     *  prompts and on the rendered invoice. e.g. "USD primary", "INR HDFC". */
+    label: text("label").notNull(),
+    accountHolder: text("account_holder"),
+    bankName: text("bank_name"),
+    accountNumber: text("account_number"),
+    ifsc: text("ifsc"),
+    swift: text("swift"),
+    iban: text("iban"),
+    branchAddress: text("branch_address"),
+    /** Optional ISO 4217 hint — informational only, not enforced against
+     *  invoice currency. Helps the merchant remember which account is for
+     *  which rail. */
+    currency: char("currency", { length: 3 }),
+    isDefault: boolean("is_default").notNull().default(false),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("business_bank_accounts_business_idx").on(t.businessId),
+    // At most one default per business. Partial index excludes both the
+    // !default rows and the soft-deleted rows, so a deleted default doesn't
+    // block setting a new one.
+    uniqueIndex("business_bank_accounts_one_default_idx")
+      .on(t.businessId)
+      .where(sql`${t.isDefault} = true AND ${t.deletedAt} IS NULL`),
+  ],
 );
 
 // Clients. Owned by the user (account-level, shared across all the user's
@@ -384,7 +419,11 @@ export const invoices = pgTable(
     businessWalletAddressSnapshot: text("business_wallet_address_snapshot"),
     businessAddressSnapshot: jsonb("business_address_snapshot"),
     businessLogoUrlSnapshot: text("business_logo_url_snapshot"),
-    businessBankDetailsSnapshot: jsonb("business_bank_details_snapshot"),
+    /** Frozen at finalize: an array of {id?, label, account_holder, bank_name,
+     *  account_number, ifsc, swift, iban, branch_address, currency} objects
+     *  representing the bank accounts to surface on this specific invoice.
+     *  Renderers prefer this over live business_bank_accounts when present. */
+    businessBankAccountsSnapshot: jsonb("business_bank_accounts_snapshot"),
     // Per-invoice atomic overrides for displayed business / client fields.
     // Partial JSON; key presence = override (including null = explicit hide),
     // missing key = fall through to snapshot / live value. See
@@ -392,17 +431,13 @@ export const invoices = pgTable(
     displayOverrides: jsonb("display_overrides"),
     // Per-invoice payment method gate. NULL = show everything configured
     // (current behavior). Non-null = only show methods listed here. Values:
-    // 'bank', 'crypto_wallet', 'private_pay'.
+    // 'bank', 'crypto_wallet'.
     acceptedPaymentMethods: text("accepted_payment_methods").array(),
-    // private payment fields. ct is bound to the relayer EOA at
-    // encryption time; only the relayer can submit payInvoice with it.
-    // noteId is set by the indexer once Shielded fires on-chain.
-    privateEnabled: boolean("private_enabled").notNull().default(false),
-    privateRecipientCt: text("private_recipient_ct"),
-    privateNoteId: bigint("private_note_id", { mode: "number" }),
-    privateChainId: integer("private_chain_id"),
-    privateShieldTxHash: text("private_shield_tx_hash"),
-    privateUnshieldTxHash: text("private_unshield_tx_hash"),
+    /** Per-invoice picker for which bank accounts to surface. NULL = use
+     *  the merchant's default account (or all accounts if no default).
+     *  [] = explicitly hide the bank panel even if accepted_payment_methods
+     *  permits it. Otherwise: render exactly these accounts in order. */
+    acceptedBankAccountIds: uuid("accepted_bank_account_ids").array(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -485,13 +520,8 @@ export const invoiceEvents = pgTable(
 );
 
 // Onchain payments against an invoice. One row per confirmed payment; an
-// invoice can have multiple if partial payments come in. Used for private payments
-// unShield calls and (in future) direct ERC-20 transfers.
-//
-// For an private payment: tx_hash is the unShield tx, payer_address is the
-// settlement wallet receiving the funds, amount is the USDC amount.
-// The encrypted recipient handle lives on the invoices.private_recipient_ct
-// column; the EnwisePay contract holds the funds during the shielded window.
+// invoice can have multiple if partial payments come in. Records direct
+// ERC-20 transfers from a payer's wallet to the merchant's wallet address.
 
 export const invoicePayments = pgTable(
   "invoice_payments",
@@ -553,6 +583,8 @@ export type Business = typeof businesses.$inferSelect;
 export type NewBusiness = typeof businesses.$inferInsert;
 export type ApiToken = typeof apiTokens.$inferSelect;
 export type NewApiToken = typeof apiTokens.$inferInsert;
+export type BusinessBankAccount = typeof businessBankAccounts.$inferSelect;
+export type NewBusinessBankAccount = typeof businessBankAccounts.$inferInsert;
 export type Client = typeof clients.$inferSelect;
 export type NewClient = typeof clients.$inferInsert;
 export type Product = typeof products.$inferSelect;

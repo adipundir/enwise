@@ -9,7 +9,19 @@ import {
 import { ctxFromAuthInfo, scopeFromCtx } from "@/lib/mcp/context";
 import { toolError, toolOk, zodToToolError } from "@/lib/mcp/errors";
 import { uploadLogo } from "@/lib/storage/blob";
+import { SUPPORTED_CHAIN_IDS } from "@/lib/web3/chain";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+const supportedChainIdSchema = z
+  .number()
+  .int()
+  .refine(
+    (n): n is (typeof SUPPORTED_CHAIN_IDS)[number] =>
+      (SUPPORTED_CHAIN_IDS as readonly number[]).includes(n),
+    {
+      message: `must be one of: ${SUPPORTED_CHAIN_IDS.join(", ")}`,
+    },
+  );
 
 const uuid = z.string().uuid();
 
@@ -52,20 +64,14 @@ const updateInput = {
   email_reply_to: z.string().email().nullish(),
   default_payment_terms_days: z.number().int().min(0).max(365).optional(),
   default_notes: z.string().max(2000).nullish(),
-  bank_account_holder: z.string().max(200).nullish(),
-  bank_name: z.string().max(200).nullish(),
-  bank_account_number: z.string().max(64).nullish(),
-  bank_ifsc: z.string().max(32).nullish(),
-  bank_swift: z.string().max(32).nullish(),
-  bank_iban: z.string().max(64).nullish(),
-  bank_branch_address: z.string().max(300).nullish(),
-  // private payments. Pass a 0x address to enable; pass null to disable
-  // (leaves existing invoices' encrypted recipients intact). Setting an
-  // address auto-fills private_enabled_at server-side.
-  private_settlement_wallet: z
-    .string()
-    .regex(/^0x[a-fA-F0-9]{40}$/, "must be a 0x-prefixed 40-hex-char address")
-    .nullish(),
+  // Bank payout details now live in business_bank_accounts. Use the dedicated
+  // bank-account MCP tools (add_bank_account, update_bank_account,
+  // remove_bank_account, set_default_bank_account, list_bank_accounts).
+  // Preferred EVM chain id for receiving USDC wallet payments. Pass null to
+  // reset to the platform default. Validated against the SUPPORTED_CHAIN_IDS
+  // list from lib/web3/chain.ts so callers can discover allowed values
+  // from the schema error message.
+  payment_chain_id: supportedChainIdSchema.nullish(),
   logo: logoInput.optional(),
   client_request_id: z.string().max(64).optional(),
 };
@@ -78,14 +84,6 @@ const createBusinessInput = {
     .transform((s) => s.toUpperCase())
     .optional(),
   set_as_default: z.boolean().optional(),
-  // Optional one-shot private-payments enable. If supplied, the business is created with
-  // private payments already on — every subsequent invoice gets a pre-encrypted
-  // recipient handle automatically. Same effect as calling setup_private_payments
-  // immediately after, just one fewer round trip.
-  private_settlement_wallet: z
-    .string()
-    .regex(/^0x[a-fA-F0-9]{40}$/, "must be a 0x-prefixed 40-hex-char address")
-    .optional(),
 };
 
 const getProfileInput = {
@@ -98,9 +96,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Create a business",
       description:
-        "Create a new business profile under the authenticated user. Use when the user says they want to bill from a new entity (different company, side project, freelance pseudonym, etc.). Ask for the name first; everything else (address, tax ID, etc.) can be added later via update_business_profile. Pass `set_as_default: true` if the user says this should be their primary.\n\n" +
-        "## Optional: enable private payments at creation time\n\n" +
-        "If the user mentions they want private / shielded payments while creating the business, pass `private_settlement_wallet` (a 0x address they control on Base). This is exactly equivalent to calling `setup_private_payments` right after, just saves a round trip. The address is the wallet where unshielded USDC ultimately lands; we do NOT mint a wallet for them — they must supply one they already control (MetaMask, Safe, hardware, etc.). If they don't have a wallet yet, omit this field and ask them to set one up first; they can run `setup_private_payments` whenever they're ready.",
+        "Create a new business profile under the authenticated user. Use when the user says they want to bill from a new entity (different company, side project, freelance pseudonym, etc.). Ask for the name first; everything else (address, tax ID, etc.) can be added later via update_business_profile. Pass `set_as_default: true` if the user says this should be their primary.",
       inputSchema: createBusinessInput,
     },
     async (args, extra) => {
@@ -113,7 +109,6 @@ export function registerBusinessTools(server: McpServer) {
         name: input.name,
         defaultCurrency: input.default_currency,
         setAsDefault: input.set_as_default ?? false,
-        privateSettlementWallet: input.private_settlement_wallet,
       });
       return toolOk(formatBusinessForMcp(business));
     },
@@ -124,7 +119,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Get business profile",
       description:
-        "Return the full profile for a business: name, legal_name, tax_id, contact_name, default_currency, invoice_number_prefix, logo_url, brand_color, email_reply_to, default_payment_terms_days, default_notes, full address, wallet_address, all bank payout fields (account_holder/name/number, IFSC/SWIFT/IBAN, branch_address), private-payments setup state (settlement wallet + enabled timestamp), and timestamps. If the user owns only one business, `business_id` can be omitted; if they own multiple, pass `business_id`. Call this before update_business_profile to show the user what's currently on file.",
+        "Return the full profile for a business: name, legal_name, tax_id, contact_name, default_currency, invoice_number_prefix, logo_url, brand_color, email_reply_to, default_payment_terms_days, default_notes, full address, wallet_address, payment_chain_id (preferred EVM chain for receiving USDC), and timestamps. Bank payout details are managed separately via list_bank_accounts / add_bank_account / etc. If the user owns only one business, `business_id` can be omitted; if they own multiple, pass `business_id`. Call this before update_business_profile to show the user what's currently on file.",
       inputSchema: getProfileInput,
     },
     async (args, extra) => {
@@ -149,7 +144,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Update business profile",
       description:
-        "Update any subset of a business profile (name, tax ID, address, default currency, invoice number prefix, logo, bank payout details, contact person, wallet address, etc.). Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. Bank fields (`bank_account_holder`, `bank_name`, `bank_account_number`, `bank_ifsc`, `bank_swift`, `bank_iban`, `bank_branch_address`) are shown to the client on the invoice; fill the ones that apply for the receiving country (IFSC for India, SWIFT for international wire, IBAN for Europe). `bank_branch_address` is the beneficiary bank's branch address — required by most US/EU sending banks on the wire form when the beneficiary is outside their country. `contact_name` is the person at the business who handles invoicing — used in PDF letterhead / email footer. `wallet_address` is the onchain payout address (raw 0x… or ENS name like `acme.eth`); shown alongside bank details on the invoice. Pass `business_id` if the user owns multiple businesses.",
+        "Update any subset of a business profile (name, tax ID, address, default currency, invoice number prefix, logo, contact person, wallet address, preferred crypto chain, etc.). Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. To manage BANK ACCOUNTS, use the dedicated tools — add_bank_account / update_bank_account / remove_bank_account / set_default_bank_account / list_bank_accounts (a business can have multiple bank accounts; one is marked default for new invoices). `contact_name` is the person at the business who handles invoicing — used in PDF letterhead / email footer. `wallet_address` is the onchain payout address (raw 0x… or ENS name like `acme.eth`); shown alongside bank details on the invoice. `payment_chain_id` selects the EVM chain payers will send USDC on — 8453 for Base mainnet, 84532 for Base Sepolia; pass null to use the platform default. Pass `business_id` if the user owns multiple businesses.",
       inputSchema: updateInput,
     },
     async (args, extra) => {
@@ -196,19 +191,7 @@ export function registerBusinessTools(server: McpServer) {
       if (input.default_payment_terms_days !== undefined)
         patch.defaultPaymentTermsDays = input.default_payment_terms_days;
       if (input.default_notes !== undefined) patch.defaultNotes = input.default_notes ?? null;
-      if (input.bank_account_holder !== undefined) patch.bankAccountHolder = input.bank_account_holder ?? null;
-      if (input.bank_name !== undefined) patch.bankName = input.bank_name ?? null;
-      if (input.bank_account_number !== undefined) patch.bankAccountNumber = input.bank_account_number ?? null;
-      if (input.bank_ifsc !== undefined) patch.bankIfsc = input.bank_ifsc ?? null;
-      if (input.bank_swift !== undefined) patch.bankSwift = input.bank_swift ?? null;
-      if (input.bank_iban !== undefined) patch.bankIban = input.bank_iban ?? null;
-      if (input.bank_branch_address !== undefined) patch.bankBranchAddress = input.bank_branch_address ?? null;
-      if (input.private_settlement_wallet !== undefined) {
-        patch.privateSettlementWallet = input.private_settlement_wallet
-          ? input.private_settlement_wallet.toLowerCase()
-          : null;
-        patch.privateEnabledAt = input.private_settlement_wallet ? new Date() : null;
-      }
+      if (input.payment_chain_id !== undefined) patch.paymentChainId = input.payment_chain_id ?? null;
 
       if (input.logo !== undefined) {
         if (input.logo === null) {

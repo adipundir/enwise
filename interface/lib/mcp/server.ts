@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAnalyticsTools } from "@/lib/mcp/tools/analytics";
+import { registerBankAccountTools } from "@/lib/mcp/tools/bank_accounts";
 import { registerBusinessTools } from "@/lib/mcp/tools/business";
 import { registerClientTools } from "@/lib/mcp/tools/clients";
-import { registerPrivatePaymentTools } from "@/lib/mcp/tools/private_payments";
 import { registerInvoiceTools } from "@/lib/mcp/tools/invoices";
 import { registerProductTools } from "@/lib/mcp/tools/products";
 import { registerRecurringTools } from "@/lib/mcp/tools/recurring";
@@ -42,7 +42,7 @@ One user can own many businesses (e.g., "Acme LLC" and "Side Project Ltd"). Each
 
 1. \`find_client(query)\` to resolve the name to a \`client_id\`. If no match and the user clearly intends a new client, \`create_client\`.
 2. \`create_invoice\` with \`client_id\`, \`line_items\` (each: \`description\`, \`quantity\`, \`unit_price\`, optional \`tax_rate\`, optional per-item \`note\`, optional \`attachments\`), and any \`notes\` / \`terms\` / \`due_date\` the user mentioned.
-3. If the user said "send it" → \`send_invoice({invoice_id})\`. Emails the client a link to the hosted invoice page (with Download PDF button) and flips status draft → sent. No PDF attachment is sent (modern clients auto-preview, makes the email feel cluttered). Safe to omit \`to\`; the client's email is used automatically.
+3. If the user said "send it" → \`send_invoice({invoice_id})\`. Emails the client a link to the hosted invoice page AND attaches the invoice PDF (filename matches the invoice number, e.g. \`INV-0007.pdf\`), then flips status draft → sent. Safe to omit \`to\`; the client's email is used automatically.
 4. If the user delivered out-of-band and just wants to mark sent without emailing → \`finalize_invoice({invoice_id})\`.
 
 Amounts are strings like \`"5000"\` or \`"2499.99"\`. The tool accepts numeric literals and strings with commas / currency symbols and normalizes them.
@@ -128,12 +128,12 @@ Each error includes a \`hint\` string. Relay the hint to the user; don't rephras
 
   registerWhoami(server);
   registerBusinessTools(server);
+  registerBankAccountTools(server);
   registerClientTools(server);
   registerProductTools(server);
   registerInvoiceTools(server);
   registerAnalyticsTools(server);
   registerRecurringTools(server);
-  registerPrivatePaymentTools(server);
   registerUploadTools(server);
 
   return server;

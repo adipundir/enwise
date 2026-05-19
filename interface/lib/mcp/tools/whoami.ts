@@ -20,10 +20,6 @@ const businessSchema = z.object({
   country: z.string().nullable(),
   invoice_count: z.number(),
   profile_complete: z.boolean(),
-  // private payments state. Lets the model answer "is private
-  // payments set up for this business?" without re-calling setup_private_payments.
-  private_settlement_wallet: z.string().nullable(),
-  private_enabled_at: z.string().nullable(),
 });
 
 const outputSchema = {
@@ -100,10 +96,6 @@ export function registerWhoami(server: McpServer) {
             country: b.country,
             invoice_count: Number(invoiceCount ?? 0),
             profile_complete: profileComplete,
-            private_settlement_wallet: b.privateSettlementWallet ?? null,
-            private_enabled_at: b.privateEnabledAt
-              ? b.privateEnabledAt.toISOString()
-              : null,
           };
         }),
       );
@@ -149,7 +141,6 @@ type BusinessOut = {
   name: string;
   invoice_count: number;
   profile_complete: boolean;
-  private_settlement_wallet: string | null;
 };
 
 function buildHint(
@@ -158,15 +149,12 @@ function buildHint(
   _defaultBusinessId: string | null,
 ): string {
   if (bs.length === 0) {
-    return `NO BUSINESSES. Call \`create_business\` first. Ask the user for (a) business name, (b) default currency (USD if unspecified), (c) **whether they want private (payments) payments enabled now** — if yes, ask for a 0x settlement wallet address they control on Base and pass it as \`private_settlement_wallet\`. enwise does NOT mint a wallet; the user supplies any EVM address (MetaMask, Safe, hardware, etc.). If they don't have one, skip and they can run \`setup_private_payments\` later. Then walk through the profile: address + country, tax ID. Only after that, ask about clients and invoices. Do NOT invent data.`;
+    return `NO BUSINESSES. Call \`create_business\` first. Ask the user for (a) business name, (b) default currency (USD if unspecified). Then walk through the profile: address + country, tax ID. Only after that, ask about clients and invoices. Do NOT invent data.`;
   }
 
   if (bs.length === 1) {
     const b = bs[0]!;
     if (!b.profile_complete && b.invoice_count === 0 && totalClients === 0) {
-      const payState = b.private_settlement_wallet
-        ? `Private payments are ALREADY enabled (settlement wallet: ${b.private_settlement_wallet}). Skip step 4.`
-        : `Private payments are NOT enabled yet. Optional STEP 4 below.`;
       return `FRESH ACCOUNT with one business "${b.name}". Walk the user through setup, step by step:
 
 STEP 1. Business profile. Ask for: (a) business name (current: "${b.name}". confirm or change), (b) address + country, (c) default currency (USD if unspecified), (d) tax ID if applicable. Save with update_business_profile.
@@ -174,8 +162,6 @@ STEP 1. Business profile. Ask for: (a) business name (current: "${b.name}". conf
 STEP 2. First client. After profile saved, offer to add their first client. Ask for name, email, address. Save with create_client. Do NOT add a client before the profile is saved.
 
 STEP 3. Invoice. After both are done, ask what they'd like to bill the client for. Only then call create_invoice.
-
-STEP 4 (optional). Private payments. ${payState} Ask the user if they want clients to pay privately via private on Base. If yes, ask for a 0x address they control where unshielded USDC will land — call \`setup_private_payments\` (or pass it inline on the next \`update_business_profile\` as \`private_settlement_wallet\`). enwise never mints a wallet for them; they supply one they already control.
 
 Do NOT invent data at any step. Do NOT create a sample/demo invoice. If the user says "just demo it" or "make something up", refuse and ask for real details.`;
     }

@@ -108,8 +108,8 @@ export function InvoiceEmail({
           <Section>
             <Text style={styles.greeting}>Hi {contactName ?? clientName},</Text>
             <Text style={styles.body1}>
-              Please find the invoice above. Full details and the PDF are on
-              the hosted page linked below.
+              The PDF is attached, and full details — including payment
+              instructions — are on the hosted page linked below.
             </Text>
 
             {customMessage ? (
@@ -132,7 +132,7 @@ export function InvoiceEmail({
             <a href={shareUrl} style={styles.link}>
               {shareUrl}
             </a>
-            . Download the PDF from that page if you need a local copy.
+            .
           </Text>
 
           <Hr style={styles.rule} />

@@ -11,7 +11,7 @@ import {
 } from "@/lib/invoices";
 import type { ScopedCtx } from "@/lib/mcp/context";
 import { formatMoney } from "@/lib/money";
-import { buildInvoicePdfData } from "@/lib/pdf/renderInvoice";
+import { buildInvoicePdfData, renderInvoiceBuffer } from "@/lib/pdf/renderInvoice";
 
 export type SendInvoiceOutcome =
   | { ok: true; invoice: InvoiceWithLineItems; to: string[]; resendId: string | null }
@@ -104,12 +104,23 @@ export async function sendInvoiceByEmail(
   const sent = finalized.value;
 
   // 4. Build PDF-render data (used by the email template for business/client
-  //    info) but don't render the PDF into the email itself. we no longer
-  //    attach it. Email clients auto-preview PDF attachments inline, which
-  //    makes the email feel like a dumped invoice rather than a clean
-  //    transactional notice. Instead we link to /i/[slug] which has a
-  //    prominent Download PDF button.
+  //    info) AND render the PDF as a Buffer for attachment. Attaching the
+  //    PDF gives the recipient a portable, offline-readable copy that doesn't
+  //    depend on enwise being online, and matches what most recipients
+  //    expect when they hear "invoice email".
   const pdfData = await buildInvoicePdfData(sent);
+  let invoiceAttachment: { filename: string; content: Buffer } | null = null;
+  try {
+    const buf = await renderInvoiceBuffer(sent);
+    invoiceAttachment = {
+      filename: `${sent.invoiceNumber}.pdf`,
+      content: buf,
+    };
+  } catch (err) {
+    // Don't fail the send if the PDF render fails — the share link still
+    // gives the recipient a way to view + download the invoice.
+    console.warn("[send-invoice] PDF render failed, sending without attachment:", err);
+  }
 
   // 5. Render HTML email.
   const shareUrl = invoiceShareUrl(sent.shareSlug);
@@ -170,6 +181,7 @@ export async function sendInvoiceByEmail(
       subject: `Invoice ${sent.invoiceNumber} — ${formatMoney(sent.total, sent.currency)} due ${sent.dueDate}`,
       html,
       text: plainText,
+      attachments: invoiceAttachment ? [invoiceAttachment] : undefined,
       headers: {
         // Gmail/Outlook expect a mailto or https unsubscribe target. The
         // invoice share URL is a poor target; use the business reply-to
