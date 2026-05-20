@@ -20,6 +20,8 @@ type BankAccountSnapshot = {
   ifsc: string | null;
   swift: string | null;
   iban: string | null;
+  ach_routing?: string | null;
+  fedwire_routing?: string | null;
   branch_address: string | null;
   currency?: string | null;
 };
@@ -200,6 +202,8 @@ function snapshotToBankAccount(snap: BankAccountSnapshot): {
   ifsc: string | null;
   swift: string | null;
   iban: string | null;
+  achRouting: string | null;
+  fedwireRouting: string | null;
   branchAddress: string | null;
   currency: string | null;
 } {
@@ -211,6 +215,8 @@ function snapshotToBankAccount(snap: BankAccountSnapshot): {
     ifsc: snap.ifsc ?? null,
     swift: snap.swift ?? null,
     iban: snap.iban ?? null,
+    achRouting: snap.ach_routing ?? null,
+    fedwireRouting: snap.fedwire_routing ?? null,
     branchAddress: snap.branch_address ?? null,
     currency: snap.currency ?? null,
   };

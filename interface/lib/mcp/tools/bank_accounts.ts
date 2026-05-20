@@ -22,6 +22,8 @@ const fieldSchemas = {
   ifsc: z.string().max(32).nullish(),
   swift: z.string().max(32).nullish(),
   iban: z.string().max(64).nullish(),
+  ach_routing: z.string().max(32).nullish(),
+  fedwire_routing: z.string().max(32).nullish(),
   branch_address: z.string().max(300).nullish(),
   currency: z
     .string()
@@ -48,6 +50,8 @@ const updateInput = {
   ifsc: fieldSchemas.ifsc,
   swift: fieldSchemas.swift,
   iban: fieldSchemas.iban,
+  ach_routing: fieldSchemas.ach_routing,
+  fedwire_routing: fieldSchemas.fedwire_routing,
   branch_address: fieldSchemas.branch_address,
   currency: fieldSchemas.currency,
 } as const;
@@ -67,7 +71,7 @@ export function registerBankAccountTools(server: McpServer) {
     {
       title: "List bank accounts for a business",
       description:
-        "Return every active bank account configured on a business. Default account is first in the list, others by creation order. Each entry includes id, label, account_holder, bank_name, account_number, ifsc, swift, iban, branch_address, currency, is_default. Use this BEFORE add_bank_account to avoid creating duplicates, and BEFORE create_invoice when the user hasn't picked which account to use. Pass `business_id` if the user owns multiple businesses.",
+        "Return every active bank account configured on a business. Default account is first in the list, others by creation order. Each entry includes id, label, account_holder, bank_name, account_number, ifsc, swift, iban, ach_routing, fedwire_routing, branch_address, currency, is_default. Use this BEFORE add_bank_account to avoid creating duplicates, and BEFORE create_invoice when the user hasn't picked which account to use. Pass `business_id` if the user owns multiple businesses.",
       inputSchema: listInput,
     },
     async (args, extra) => {
@@ -86,7 +90,7 @@ export function registerBankAccountTools(server: McpServer) {
     {
       title: "Add a bank account",
       description:
-        "Create a new bank payout account for a business. A merchant can have multiple accounts (e.g. USD primary + INR HDFC + EUR Wise) and pick which one(s) to show on each invoice. `label` is a short human name the merchant uses to disambiguate ('USD primary', 'INR HDFC'). Fill the fields appropriate for the receiving rail: IFSC for India, SWIFT for international wires, IBAN for Europe. `branch_address` is required by most US/EU sending banks. Pass `set_default: true` to make this the merchant's default account for new invoices — if no accounts exist yet, the first one added becomes default automatically.",
+        "Create a new bank payout account for a business. A merchant can have multiple accounts (e.g. USD primary + INR HDFC + EUR Wise) and pick which one(s) to show on each invoice. `label` is a short human name the merchant uses to disambiguate ('USD primary', 'INR HDFC'). Fill the fields appropriate for the receiving rail: IFSC for India, SWIFT for international wires into the account, IBAN for Europe, ach_routing for US domestic ACH transfers, fedwire_routing for US domestic wires (often a different 9-digit number than ACH at the same bank — set both if the bank provides them). `branch_address` is required by most US/EU sending banks. Pass `set_default: true` to make this the merchant's default account for new invoices — if no accounts exist yet, the first one added becomes default automatically.",
       inputSchema: addInput,
     },
     async (args, extra) => {
@@ -104,6 +108,8 @@ export function registerBankAccountTools(server: McpServer) {
         ifsc: input.ifsc ?? null,
         swift: input.swift ?? null,
         iban: input.iban ?? null,
+        achRouting: input.ach_routing ?? null,
+        fedwireRouting: input.fedwire_routing ?? null,
         branchAddress: input.branch_address ?? null,
         currency: input.currency ?? null,
         setDefault: input.set_default,
@@ -117,7 +123,7 @@ export function registerBankAccountTools(server: McpServer) {
     {
       title: "Update a bank account",
       description:
-        "Modify any subset of fields on an existing bank account (label, holder, bank name, account number, IFSC, SWIFT, IBAN, branch address, currency). Omitted fields are unchanged; pass null to clear a nullable field. To change which account is the default, use `set_default_bank_account` instead. Soft-deleted accounts can't be updated — use add_bank_account to add a new one.",
+        "Modify any subset of fields on an existing bank account (label, holder, bank name, account number, IFSC, SWIFT, IBAN, ach_routing, fedwire_routing, branch address, currency). Omitted fields are unchanged; pass null to clear a nullable field. To change which account is the default, use `set_default_bank_account` instead. Soft-deleted accounts can't be updated — use add_bank_account to add a new one.",
       inputSchema: updateInput,
     },
     async (args, extra) => {
@@ -135,6 +141,8 @@ export function registerBankAccountTools(server: McpServer) {
       if (input.ifsc !== undefined) patch.ifsc = input.ifsc ?? null;
       if (input.swift !== undefined) patch.swift = input.swift ?? null;
       if (input.iban !== undefined) patch.iban = input.iban ?? null;
+      if (input.ach_routing !== undefined) patch.achRouting = input.ach_routing ?? null;
+      if (input.fedwire_routing !== undefined) patch.fedwireRouting = input.fedwire_routing ?? null;
       if (input.branch_address !== undefined) patch.branchAddress = input.branch_address ?? null;
       if (input.currency !== undefined) patch.currency = input.currency ?? null;
       const updated = await updateBankAccount(

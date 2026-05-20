@@ -14,6 +14,8 @@ export type BankAccountInput = {
   ifsc?: string | null;
   swift?: string | null;
   iban?: string | null;
+  achRouting?: string | null;
+  fedwireRouting?: string | null;
   branchAddress?: string | null;
   currency?: string | null;
   /** If true OR if no default exists yet, this account becomes the default. */
@@ -28,6 +30,8 @@ export type BankAccountPatch = Partial<{
   ifsc: string | null;
   swift: string | null;
   iban: string | null;
+  achRouting: string | null;
+  fedwireRouting: string | null;
   branchAddress: string | null;
   currency: string | null;
 }>;
@@ -105,6 +109,8 @@ export async function addBankAccount(
     ifsc: input.ifsc ?? null,
     swift: input.swift ?? null,
     iban: input.iban ?? null,
+    achRouting: input.achRouting ?? null,
+    fedwireRouting: input.fedwireRouting ?? null,
     branchAddress: input.branchAddress ?? null,
     currency: input.currency ?? null,
     isDefault: wantsDefault,
@@ -251,6 +257,8 @@ export function toSnapshotShape(row: BusinessBankAccount): {
   ifsc: string | null;
   swift: string | null;
   iban: string | null;
+  ach_routing: string | null;
+  fedwire_routing: string | null;
   branch_address: string | null;
   currency: string | null;
 } {
@@ -263,6 +271,8 @@ export function toSnapshotShape(row: BusinessBankAccount): {
     ifsc: row.ifsc,
     swift: row.swift,
     iban: row.iban,
+    ach_routing: row.achRouting,
+    fedwire_routing: row.fedwireRouting,
     branch_address: row.branchAddress,
     currency: row.currency,
   };
@@ -279,6 +289,8 @@ export function formatBankAccountForMcp(row: BusinessBankAccount) {
     ifsc: row.ifsc,
     swift: row.swift,
     iban: row.iban,
+    ach_routing: row.achRouting,
+    fedwire_routing: row.fedwireRouting,
     branch_address: row.branchAddress,
     currency: row.currency,
     is_default: row.isDefault,

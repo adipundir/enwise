@@ -32,6 +32,8 @@ type BankFields = {
   ifsc?: string | null;
   swift?: string | null;
   iban?: string | null;
+  ach_routing?: string | null;
+  fedwire_routing?: string | null;
   branch_address?: string | null;
 };
 

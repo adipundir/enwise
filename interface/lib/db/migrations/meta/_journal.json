@@ -169,6 +169,13 @@
       "when": 1779150000000,
       "tag": "0023_multi_bank_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1779235200000,
+      "tag": "0024_add_us_routing_fields",
+      "breakpoints": true
     }
   ]
 }

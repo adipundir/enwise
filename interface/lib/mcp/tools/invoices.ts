@@ -227,6 +227,8 @@ export function registerInvoiceTools(server: McpServer) {
       ifsc: z.string().max(40).nullish(),
       swift: z.string().max(40).nullish(),
       iban: z.string().max(60).nullish(),
+      ach_routing: z.string().max(40).nullish(),
+      fedwire_routing: z.string().max(40).nullish(),
       branch_address: z.string().max(300).nullish(),
     })
     .partial()

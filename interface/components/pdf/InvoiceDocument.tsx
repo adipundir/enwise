@@ -225,6 +225,8 @@ export interface InvoicePdfData {
       ifsc: string | null;
       swift: string | null;
       iban: string | null;
+      achRouting: string | null;
+      fedwireRouting: string | null;
       branchAddress: string | null;
       currency: string | null;
     }>;
@@ -417,6 +419,12 @@ export function InvoiceDocument({
                   ) : null}
                   {account.swift ? (
                     <BankCell label="SWIFT / BIC" value={account.swift} mono />
+                  ) : null}
+                  {account.achRouting ? (
+                    <BankCell label="ACH routing" value={account.achRouting} mono />
+                  ) : null}
+                  {account.fedwireRouting ? (
+                    <BankCell label="Fedwire routing" value={account.fedwireRouting} mono />
                   ) : null}
                   {account.iban ? (
                     <BankCell label="IBAN" value={account.iban} mono fullWidth />

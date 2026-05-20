@@ -207,6 +207,13 @@ export const businessBankAccounts = pgTable(
     ifsc: text("ifsc"),
     swift: text("swift"),
     iban: text("iban"),
+    /** US ACH routing number (9 digits). Used for domestic US transfers
+     *  initiated from another US bank account. */
+    achRouting: text("ach_routing"),
+    /** US Fedwire routing number (9 digits). Used for domestic US wire
+     *  transfers — often different from the ACH routing number even for
+     *  the same account at the same bank. */
+    fedwireRouting: text("fedwire_routing"),
     branchAddress: text("branch_address"),
     /** Optional ISO 4217 hint — informational only, not enforced against
      *  invoice currency. Helps the merchant remember which account is for
