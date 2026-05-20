@@ -211,6 +211,27 @@ export default async function DashboardHome({
   );
 }
 
+function StatusBadge({
+  status,
+}: {
+  status: "draft" | "sent" | "paid" | "void";
+}) {
+  const map = {
+    draft: "border-amber-700/60 text-amber-400",
+    sent: "border-sky-700/60 text-sky-400",
+    paid: "border-emerald-700/60 text-emerald-400",
+    void: "border-zinc-700 text-zinc-400",
+  } as const;
+  const label = { draft: "Draft", sent: "Sent", paid: "Paid", void: "Void" }[status];
+  return (
+    <span
+      className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${map[status]}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 function Pagination({ page, totalPages }: { page: number; totalPages: number }) {
   const prevHref =
     page <= 2 ? "/dashboard" : `/dashboard?page=${page - 1}`;
@@ -294,28 +315,27 @@ function InvoiceRow({
     total: string;
     currency: string;
     shareSlug: string;
+    clientNameSnapshot: string | null;
   };
 }) {
   return (
     <div
       className={`flex flex-col gap-3 border-b border-zinc-900 bg-[#0a0a0a] px-4 py-4 last:border-b-0 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4 sm:px-5 ${inv.status === "void" ? "opacity-40" : ""}`}
     >
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="font-mono text-sm text-zinc-100">{inv.invoiceNumber}</div>
-        {inv.status === "void" ? (
-          <span className="rounded-sm border border-zinc-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-            Void
-          </span>
-        ) : inv.status === "draft" ? (
-          <span className="rounded-sm border border-amber-700/60 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-400">
-            Draft
+      <div className="font-mono text-sm text-zinc-100">{inv.invoiceNumber}</div>
+      <div className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-300">
+        <span>{formatMoney(inv.total, inv.currency)}</span>
+        <StatusBadge status={inv.status} />
+      </div>
+      <div className="flex items-center gap-3">
+        {inv.clientNameSnapshot ? (
+          <span
+            title={inv.clientNameSnapshot}
+            className="max-w-[10rem] truncate text-xs text-zinc-500"
+          >
+            {inv.clientNameSnapshot}
           </span>
         ) : null}
-      </div>
-      <div className="flex flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-zinc-300">
-        <span>{formatMoney(inv.total, inv.currency)}</span>
-      </div>
-      <div className="flex items-center gap-2">
         <CopyLinkButton url={invoiceShareUrl(inv.shareSlug)} />
         <Link
           href={invoiceShareUrl(inv.shareSlug)}
