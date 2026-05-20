@@ -227,7 +227,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
               ) : null}
               <AddressLines lines={clientAddr} />
               {clientWallet ? (
-                <div className="mt-1 flex flex-col gap-0.5">
+                <div className="mt-1 flex flex-col gap-0.5 text-sm">
                   <span className="text-[10px] uppercase tracking-widest text-zinc-500">
                     Wallet
                   </span>
@@ -382,7 +382,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                 Payment details
               </div>
               {businessWallet ? (
-                <div className="flex flex-col gap-0.5">
+                <div className="flex flex-col gap-0.5 text-sm">
                   <dt className="text-[10px] uppercase tracking-widest text-zinc-500">
                     Wallet address
                   </dt>
