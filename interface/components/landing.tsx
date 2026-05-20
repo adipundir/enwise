@@ -22,7 +22,7 @@ export async function Landing() {
             </span>
             <br />
             <span className="font-normal text-zinc-500">
-              Bill clients, send invoices, and get paid, right inside{" "}
+              Bill clients, send invoices, and get paid, right{"\u00A0"}inside{" "}
               <RotatingWord
                 words={["Claude", "Cursor", "Codex", "Windsurf", "Antigravity"]}
                 className="text-zinc-200"
