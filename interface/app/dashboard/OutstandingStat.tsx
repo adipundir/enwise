@@ -1,48 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-const STORAGE_KEY = "enwise.outstanding.hidden";
+export const OUTSTANDING_HIDDEN_COOKIE = "enwise.outstanding.hidden";
 
 /**
  * The Outstanding stat shows real money figures, which the user might not
  * want visible during a screen share or in public. Toggle hides the
- * number behind asterisks; choice persists in localStorage so it stays
- * hidden across visits until the user reveals it again.
+ * number behind asterisks; choice persists in a cookie so the server
+ * renders the right state on first paint (no value-leak flicker on
+ * reload) and the preference survives across visits.
  */
 export function OutstandingStat({
   value,
   small,
+  initialHidden = false,
 }: {
   value: string;
   small?: boolean;
+  initialHidden?: boolean;
 }) {
-  const [hidden, setHidden] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    try {
-      setHidden(localStorage.getItem(STORAGE_KEY) === "1");
-    } catch {
-      // localStorage may be unavailable (private mode); default to visible
-    }
-    setHydrated(true);
-  }, []);
+  const [hidden, setHidden] = useState(initialHidden);
 
   function toggle() {
     setHidden((prev) => {
       const next = !prev;
-      try {
-        if (next) localStorage.setItem(STORAGE_KEY, "1");
-        else localStorage.removeItem(STORAGE_KEY);
-      } catch {
-        // ignore
+      // 1-year cookie. Path=/ so it applies to every dashboard subroute.
+      // SameSite=Lax so it's sent on top-level navigations but not on
+      // cross-site subrequests.
+      if (next) {
+        document.cookie = `${OUTSTANDING_HIDDEN_COOKIE}=1; Path=/; Max-Age=31536000; SameSite=Lax`;
+      } else {
+        document.cookie = `${OUTSTANDING_HIDDEN_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
       }
       return next;
     });
   }
 
-  const isHidden = hydrated && hidden;
+  const isHidden = hidden;
 
   return (
     <div className="group relative bg-[#0a0a0a] px-5 py-6">

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { businesses, clients, invoices } from "@/lib/db/schema";
@@ -7,15 +8,28 @@ import { invoiceShareUrl } from "@/lib/invoices";
 import { formatMoney, addAmounts } from "@/lib/money";
 import { createToken, getActiveToken } from "@/lib/tokens";
 import { SetupSection } from "./SetupSection";
-import { OutstandingStat } from "./OutstandingStat";
+import { OutstandingStat, OUTSTANDING_HIDDEN_COOKIE } from "./OutstandingStat";
+import { CopyLinkButton } from "./CopyLinkButton";
 
 // Stats depend on fresh DB state that changes via MCP tool calls outside
 // of this route's request context. Force dynamic so every page hit
 // re-queries rather than serving a cached render.
 export const dynamic = "force-dynamic";
 
-export default async function DashboardHome() {
+const RECENT_PAGE_SIZE = 10;
+
+export default async function DashboardHome({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await auth();
+  const cookieStore = await cookies();
+  const outstandingHidden =
+    cookieStore.get(OUTSTANDING_HIDDEN_COOKIE)?.value === "1";
+
+  const sp = await searchParams;
+  const requestedPage = Math.max(1, Number(sp.page) || 1);
   const user = session?.user as
     | { id?: string; defaultBusinessId?: string | null }
     | undefined;
@@ -67,9 +81,16 @@ export default async function DashboardHome() {
           .from(invoices)
           .where(and(eq(invoices.ownerUserId, userId), isNull(invoices.deletedAt)))
           .orderBy(desc(invoices.createdAt))
-          .limit(5),
+          .limit(RECENT_PAGE_SIZE)
+          .offset((requestedPage - 1) * RECENT_PAGE_SIZE),
       ])
     : [[], [], []];
+
+  const totalActive = allInvoices.length;
+  const totalPages = Math.max(1, Math.ceil(totalActive / RECENT_PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages);
+  const rangeStart = totalActive === 0 ? 0 : (page - 1) * RECENT_PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * RECENT_PAGE_SIZE, totalActive);
 
   const outstandingByCurrency = aggregateOutstanding(allInvoices);
   const businessNameById = new Map(allBusinesses.map((b) => [b.id, b.name]));
@@ -135,6 +156,7 @@ export default async function DashboardHome() {
                   .join(" · ")
           }
           small={outstandingByCurrency.length > 1}
+          initialHidden={outstandingHidden}
         />
         <Stat
           label="Businesses"
@@ -155,7 +177,7 @@ export default async function DashboardHome() {
               Recent invoices
             </h2>
             <span className="text-xs text-zinc-600">
-              {recentInvoices.length} of {allInvoices.length}
+              {rangeStart}–{rangeEnd} of {totalActive}
             </span>
           </div>
           {showBusinessLabel ? (
@@ -180,8 +202,40 @@ export default async function DashboardHome() {
               ))}
             </div>
           )}
+          {totalPages > 1 ? (
+            <Pagination page={page} totalPages={totalPages} />
+          ) : null}
         </section>
       ) : null}
+    </div>
+  );
+}
+
+function Pagination({ page, totalPages }: { page: number; totalPages: number }) {
+  const prevHref =
+    page <= 2 ? "/dashboard" : `/dashboard?page=${page - 1}`;
+  const nextHref = `/dashboard?page=${page + 1}`;
+  const atFirst = page <= 1;
+  const atLast = page >= totalPages;
+  const linkClass =
+    "rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100";
+  const disabledClass =
+    "rounded-md border border-zinc-900 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-700 cursor-not-allowed";
+  return (
+    <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
+      {atFirst ? (
+        <span className={disabledClass}>← Previous</span>
+      ) : (
+        <Link href={prevHref} className={linkClass}>← Previous</Link>
+      )}
+      <span>
+        Page {page} of {totalPages}
+      </span>
+      {atLast ? (
+        <span className={disabledClass}>Next →</span>
+      ) : (
+        <Link href={nextHref} className={linkClass}>Next →</Link>
+      )}
     </div>
   );
 }
@@ -252,18 +306,26 @@ function InvoiceRow({
           <span className="rounded-sm border border-zinc-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
             Void
           </span>
+        ) : inv.status === "draft" ? (
+          <span className="rounded-sm border border-amber-700/60 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-400">
+            Draft
+          </span>
         ) : null}
       </div>
       <div className="flex flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-zinc-300">
         <span>{formatMoney(inv.total, inv.currency)}</span>
       </div>
-      <Link
-        href={invoiceShareUrl(inv.shareSlug)}
-        target="_blank"
-        className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-center text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
-      >
-        Share link →
-      </Link>
+      <div className="flex items-center gap-2">
+        <CopyLinkButton url={invoiceShareUrl(inv.shareSlug)} />
+        <Link
+          href={invoiceShareUrl(inv.shareSlug)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-center text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
+        >
+          View invoice ↗
+        </Link>
+      </div>
     </div>
   );
 }
