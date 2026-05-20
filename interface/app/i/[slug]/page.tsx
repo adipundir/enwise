@@ -417,6 +417,12 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                     {account.swift ? (
                       <BankRow label="SWIFT / BIC" value={account.swift} mono />
                     ) : null}
+                    {account.achRouting ? (
+                      <BankRow label="ACH routing" value={account.achRouting} mono />
+                    ) : null}
+                    {account.fedwireRouting ? (
+                      <BankRow label="Fedwire routing" value={account.fedwireRouting} mono />
+                    ) : null}
                     {account.iban ? (
                       <BankRow label="IBAN" value={account.iban} mono fullWidth />
                     ) : null}
@@ -496,6 +502,8 @@ type BankAccountForRender = {
   ifsc: string | null;
   swift: string | null;
   iban: string | null;
+  achRouting: string | null;
+  fedwireRouting: string | null;
   branchAddress: string | null;
   currency: string | null;
 };
@@ -509,6 +517,8 @@ type BankAccountSnapshotEntry = {
   ifsc?: string | null;
   swift?: string | null;
   iban?: string | null;
+  ach_routing?: string | null;
+  fedwire_routing?: string | null;
   branch_address?: string | null;
   currency?: string | null;
 };
@@ -630,6 +640,8 @@ function snapshotEntryToBankAccount(snap: BankAccountSnapshotEntry): BankAccount
     ifsc: snap.ifsc ?? null,
     swift: snap.swift ?? null,
     iban: snap.iban ?? null,
+    achRouting: snap.ach_routing ?? null,
+    fedwireRouting: snap.fedwire_routing ?? null,
     branchAddress: snap.branch_address ?? null,
     currency: snap.currency ?? null,
   };
