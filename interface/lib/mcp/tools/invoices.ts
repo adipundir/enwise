@@ -254,7 +254,6 @@ export function registerInvoiceTools(server: McpServer) {
           name: z.string().max(200).nullish(),
           contact_name: z.string().max(120).nullish(),
           email: z.string().email().nullish(),
-          wallet_address: z.string().max(200).nullish(),
           address: overrideAddress.optional(),
         })
         .partial()

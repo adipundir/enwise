@@ -196,7 +196,6 @@ export interface InvoicePdfData {
     name: string;
     contactName: string | null;
     email: string | null;
-    walletAddress: string | null;
     addressLine1: string | null;
     addressLine2: string | null;
     city: string | null;
@@ -296,9 +295,6 @@ export function InvoiceDocument({
                 {l}
               </Text>
             ))}
-            {client.walletAddress ? (
-              <Text style={styles.brandMeta}>Wallet: {client.walletAddress}</Text>
-            ) : null}
           </View>
         </View>
 

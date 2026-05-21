@@ -183,6 +183,13 @@
       "when": 1779321600000,
       "tag": "0025_drop_business_default_currency",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1779408000000,
+      "tag": "0026_drop_client_wallet_fields",
+      "breakpoints": true
     }
   ]
 }

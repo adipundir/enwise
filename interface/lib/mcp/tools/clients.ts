@@ -21,7 +21,6 @@ const createSchema = {
   business_id: uuid.optional(),
   name: z.string().min(1).max(200),
   contact_name: z.string().max(200).nullish(),
-  wallet_address: z.string().max(200).nullish(),
   email: z.string().email().nullish(),
   phone: z.string().max(32).nullish(),
   address_line1: z.string().max(200).nullish(),
@@ -49,7 +48,6 @@ const updateSchema = {
   client_id: clientIdSchema,
   name: z.string().min(1).max(200).optional(),
   contact_name: z.string().max(200).nullish(),
-  wallet_address: z.string().max(200).nullish(),
   email: z.string().email().nullish(),
   phone: z.string().max(32).nullish(),
   address_line1: z.string().max(200).nullish(),
@@ -75,7 +73,6 @@ function toClientCreate(input: z.infer<z.ZodObject<typeof createSchema>>): Clien
   return {
     name: input.name,
     contactName: input.contact_name ?? null,
-    walletAddress: input.wallet_address ?? null,
     email: input.email ?? null,
     phone: input.phone ?? null,
     addressLine1: input.address_line1 ?? null,
@@ -94,7 +91,6 @@ function toClientPatch(input: z.infer<z.ZodObject<typeof updateSchema>>): Client
   const patch: ClientPatch = {};
   if (input.name !== undefined) patch.name = input.name;
   if (input.contact_name !== undefined) patch.contactName = input.contact_name ?? null;
-  if (input.wallet_address !== undefined) patch.walletAddress = input.wallet_address ?? null;
   if (input.email !== undefined) patch.email = input.email ?? null;
   if (input.phone !== undefined) patch.phone = input.phone ?? null;
   if (input.address_line1 !== undefined) patch.addressLine1 = input.address_line1 ?? null;
@@ -116,7 +112,7 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Create client",
       description:
-        "Add a new client using details the user has explicitly given you. NEVER invent a client name, email, address, tax ID, or wallet address. If the user hasn't told you these, ASK in ONE batched message (name + email + full address as a single freeform paste + currency + tax ID if applicable) — do not drip-feed questions and do not ask the user to type address parts separately. YOU split their pasted address into `address_line1` / `city` / `region` / `postal_code` / `country` (ISO-3166 alpha-2) before calling this tool. Save what the user gave you, move on with what they didn't — re-ask only if `name` (the one required field) is missing. For optional fields (email, address, currency, tax_id, phone), do NOT re-ask; if one turns out to be necessary later (e.g. no email but the user wants to email the invoice), ask THEN. Currency lives on the client only — there is no business-level fallback. If the user didn't name a currency at create time, leave it null; create_invoice will return `currency_required` later if needed, and you can ask + update_client then. `name` is the legal entity (the company billed); `contact_name` is the optional human at that company who'll receive the email — used as the email greeting (\"Hi Aditya,\"). For sole proprietors / freelancers, `contact_name` can equal `name`. `wallet_address` is the client's onchain identity (raw 0x… or ENS name like `acme.eth`) — surfaced on the invoice when present. Pass `business_id` when the user owns multiple businesses. Returns the created client including its id. If the response includes `payment_rails_note` (set when default_currency isn't USD), relay it to the user — USDC / wallet payments only work on USD invoices, so a non-USD client default means every invoice for them will be bank-rails-only. The user should hear this once at client creation. Remember the id for follow-up tool calls in this session.",
+        "Add a new client using details the user has explicitly given you. NEVER invent a client name, email, or address. If the user hasn't told you these, ASK in ONE batched message (name + email + full address as a single freeform paste + currency) — do not drip-feed questions and do not ask the user to type address parts separately. YOU split their pasted address into `address_line1` / `city` / `region` / `postal_code` / `country` (ISO-3166 alpha-2) before calling this tool. Save what the user gave you, move on with what they didn't — re-ask only if `name` (the one required field) is missing. For optional fields (email, address, currency, phone), do NOT re-ask; if one turns out to be necessary later (e.g. no email but the user wants to email the invoice), ask THEN. Do NOT ask about `tax_id` during onboarding — buyer tax IDs only matter on EU VAT and India GST invoices; ask only when drafting an invoice and the client country is in the EU or IN. Currency lives on the client only — there is no business-level fallback. If the user didn't name a currency at create time, leave it null; create_invoice will return `currency_required` later if needed, and you can ask + update_client then. `name` is the legal entity (the company billed); `contact_name` is the optional human at that company who'll receive the email — used as the email greeting (\"Hi Aditya,\"). For sole proprietors / freelancers, `contact_name` can equal `name`. Pass `business_id` when the user owns multiple businesses. Returns the created client including its id. If the response includes `payment_rails_note` (set when default_currency isn't USD), relay it to the user — USDC / wallet payments only work on USD invoices, so a non-USD client default means every invoice for them will be bank-rails-only. The user should hear this once at client creation. Remember the id for follow-up tool calls in this session.",
       inputSchema: createSchema,
     },
     async (args, extra) => {

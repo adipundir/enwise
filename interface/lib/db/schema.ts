@@ -250,9 +250,6 @@ export const clients = pgTable(
     // Optional human contact at the client. If set, used as the email
     // greeting ("Hi Aditya,") instead of the entity name.
     contactName: text("contact_name"),
-    // Onchain identity / payout address for the client. Free-form string
-    // (raw 0x… address or ENS name); no format enforcement.
-    walletAddress: text("wallet_address"),
     // Normalized for fuzzy search. immutable_unaccent is defined by lib/db/migrate.ts
     // because the stock unaccent() is STABLE and can't be used in a generated column.
     nameNormalized: text("name_normalized").generatedAlwaysAs(
@@ -414,7 +411,6 @@ export const invoices = pgTable(
     clientNameSnapshot: text("client_name_snapshot"),
     clientContactNameSnapshot: text("client_contact_name_snapshot"),
     clientEmailSnapshot: text("client_email_snapshot"),
-    clientWalletAddressSnapshot: text("client_wallet_address_snapshot"),
     clientAddressSnapshot: jsonb("client_address_snapshot"),
     businessNameSnapshot: text("business_name_snapshot"),
     businessLegalNameSnapshot: text("business_legal_name_snapshot"),

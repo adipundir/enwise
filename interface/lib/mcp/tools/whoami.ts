@@ -173,7 +173,7 @@ ASK 1 — Business profile. Single message asking for, plainly:
   - Tax ID if they have one (EIN / VAT / GSTIN / etc. — otherwise leave blank)
 Then call update_business_profile once with whatever they gave you.
 
-ASK 2 — First client. Single message asking for: client name (required), email, full address (one paste), currency they should be billed in (e.g. USD / INR — skip if unsure, it can be set at invoice time), and tax ID if applicable. Then create_client with whatever you got.
+ASK 2 — First client. Single message asking for: client name (required), email, full address (one paste), currency they should be billed in (e.g. USD / INR — skip if unsure, it can be set at invoice time). Do NOT ask about the client's tax ID here — only matters for EU VAT or India GST invoices, ask later at invoice time if the client country is EU or IN. Then create_client with whatever you got.
 
 After both, ask what they'd like to bill the client for and call create_invoice. Ask for any still-missing fields (email, currency, etc.) only if they actually block the next action.
 
@@ -183,7 +183,7 @@ Do NOT invent data at any step. Do NOT create a sample/demo invoice. If the user
       return `Business "${b.name}" has no address / tax ID yet. Before sending invoices, send ONE message asking for: full address (one freeform paste — you split it into line1 / city / region / postal_code / country yourself), and tax ID if they have one. Don't ask for address fields separately, don't drip-feed, don't show numbered pickers, and don't ask about advanced knobs (default currency, payment terms, prefix, brand color, logo, wallet, reply-to). Save with a single update_business_profile call — whatever they gave you, move on with what they didn't.`;
     }
     if (totalClients === 0) {
-      return `Business "${b.name}" is configured but has no clients. Offer to add the first client in ONE message: name (required), email, full address (one freeform paste — you split it yourself), currency they should be billed in (skip if unsure, can be set at invoice time), tax ID if applicable. Then create_client with whatever you got — don't re-ask for optional fields. Don't ask for address parts separately, don't invent data.\n\n${WRITING_STYLE}`;
+      return `Business "${b.name}" is configured but has no clients. Offer to add the first client in ONE message: name (required), email, full address (one freeform paste — you split it yourself), currency they should be billed in (skip if unsure, can be set at invoice time). Do NOT ask about the client's tax ID here — buyer tax IDs only matter on EU VAT or India GST invoices; ask later at invoice time if the client country is EU or IN. Then create_client with whatever you got — don't re-ask for optional fields. Don't ask for address parts separately, don't invent data.\n\n${WRITING_STYLE}`;
     }
     return `Business "${b.name}" has ${totalClients} client${totalClients === 1 ? "" : "s"}. Use find_client to resolve names the user mentions.\n\n${WRITING_STYLE}`;
   }

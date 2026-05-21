@@ -982,7 +982,6 @@ export async function finalizeInvoice(
       clientNameSnapshot: client.name,
       clientContactNameSnapshot: client.contactName,
       clientEmailSnapshot: client.email,
-      clientWalletAddressSnapshot: client.walletAddress,
       clientAddressSnapshot: {
         line1: client.addressLine1,
         line2: client.addressLine2,
@@ -1217,7 +1216,6 @@ export async function revertFinalizeInvoice(
       clientNameSnapshot: null,
       clientContactNameSnapshot: null,
       clientEmailSnapshot: null,
-      clientWalletAddressSnapshot: null,
       clientAddressSnapshot: null,
       businessNameSnapshot: null,
       businessLegalNameSnapshot: null,

@@ -39,7 +39,6 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
           name: invoice.clientNameSnapshot,
           contactName: invoice.clientContactNameSnapshot,
           email: invoice.clientEmailSnapshot,
-          walletAddress: invoice.clientWalletAddressSnapshot,
           snapshot: invoice.clientAddressSnapshot,
         },
       ]
@@ -69,8 +68,6 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
   const businessWallet = paymentMethodEnabled(invoice, "crypto_wallet")
     ? ((business && "walletAddress" in business ? business.walletAddress : null) ?? null)
     : null;
-  const clientWallet =
-    (client && "walletAddress" in client ? client.walletAddress : null) ?? null;
   const businessContact =
     (business && "contactName" in business ? business.contactName : null) ?? null;
 
@@ -226,14 +223,6 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                 <div className="text-sm text-zinc-600">{client.email}</div>
               ) : null}
               <AddressLines lines={clientAddr} />
-              {clientWallet ? (
-                <div className="mt-1 flex flex-col gap-0.5 text-sm">
-                  <span className="text-[10px] uppercase tracking-widest text-zinc-500">
-                    Wallet
-                  </span>
-                  <CopyableField value={clientWallet} mono />
-                </div>
-              ) : null}
             </div>
           </section>
 

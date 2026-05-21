@@ -122,12 +122,6 @@ export async function buildInvoicePdfData(
         client?.contactName,
       ),
       email: pickScalar(cliOv, "email", invoice.clientEmailSnapshot, client?.email),
-      walletAddress: pickScalar(
-        cliOv,
-        "wallet_address",
-        invoice.clientWalletAddressSnapshot,
-        client?.walletAddress,
-      ),
       addressLine1: clientAddrSrc?.line1 ?? clientAddrLive?.addressLine1 ?? null,
       addressLine2: clientAddrSrc?.line2 ?? clientAddrLive?.addressLine2 ?? null,
       city: clientAddrSrc?.city ?? clientAddrLive?.city ?? null,
