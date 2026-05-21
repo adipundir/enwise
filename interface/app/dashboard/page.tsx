@@ -16,7 +16,7 @@ import { CopyLinkButton } from "./CopyLinkButton";
 // re-queries rather than serving a cached render.
 export const dynamic = "force-dynamic";
 
-const RECENT_PAGE_SIZE = 10;
+const RECENT_PAGE_SIZE = 20;
 
 export default async function DashboardHome({
   searchParams,
@@ -53,10 +53,12 @@ export default async function DashboardHome({
     }
   }
 
-  // All businesses this user owns.
+  // All businesses this user owns. The dashboard only renders the name
+  // and uses the row count for the Businesses stat; avoid pulling the
+  // whole row (address columns, logo URL, wallet address, etc.).
   const allBusinesses = userId
     ? await db
-        .select()
+        .select({ id: businesses.id, name: businesses.name })
         .from(businesses)
         .where(eq(businesses.ownerUserId, userId))
         .orderBy(asc(businesses.createdAt))
@@ -76,8 +78,21 @@ export default async function DashboardHome({
           })
           .from(invoices)
           .where(and(eq(invoices.ownerUserId, userId), isNull(invoices.deletedAt))),
+        // Recent invoices: explicit projection — the dashboard row only
+        // renders these eight fields. `select()` would pull every column
+        // including the bank-account snapshot jsonb (potentially several
+        // KB per row) on every dashboard load.
         db
-          .select()
+          .select({
+            id: invoices.id,
+            invoiceNumber: invoices.invoiceNumber,
+            status: invoices.status,
+            total: invoices.total,
+            currency: invoices.currency,
+            shareSlug: invoices.shareSlug,
+            clientNameSnapshot: invoices.clientNameSnapshot,
+            businessId: invoices.businessId,
+          })
           .from(invoices)
           .where(and(eq(invoices.ownerUserId, userId), isNull(invoices.deletedAt)))
           .orderBy(desc(invoices.createdAt))
