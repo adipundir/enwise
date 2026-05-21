@@ -82,6 +82,9 @@ const createBusinessInput = {
     .string()
     .regex(/^[A-Za-z]{3}$/, "3-letter ISO 4217 code like 'USD' or 'EUR'")
     .transform((s) => s.toUpperCase())
+    .describe(
+      "Fallback currency used only when an invoice doesn't specify one. NOT a lock-in: every invoice can override it at creation time, and the business default itself is editable any time via update_business_profile. When asking the user, make this clear so they don't agonize over the choice.",
+    )
     .optional(),
   set_as_default: z.boolean().optional(),
 };
@@ -96,7 +99,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Create a business",
       description:
-        "Create a new business profile under the authenticated user. Use when the user says they want to bill from a new entity (different company, side project, freelance pseudonym, etc.). Ask for the name first; everything else (address, tax ID, etc.) can be added later via update_business_profile. Pass `set_as_default: true` if the user says this should be their primary.",
+        "Create a new business profile under the authenticated user. Use when the user says they want to bill from a new entity (different company, side project, freelance pseudonym, etc.). Ask for the name first; everything else (address, tax ID, default currency, etc.) can be added later via update_business_profile. `default_currency` is just a fallback when an invoice doesn't specify one — every invoice can override it, and the default itself is editable later. Tell the user that when you ask, so they don't treat it as a permanent commitment. Pass `set_as_default: true` if the user says this should be their primary.",
       inputSchema: createBusinessInput,
     },
     async (args, extra) => {

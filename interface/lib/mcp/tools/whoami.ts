@@ -149,27 +149,43 @@ function buildHint(
   _defaultBusinessId: string | null,
 ): string {
   if (bs.length === 0) {
-    return `NO BUSINESSES. Call \`create_business\` first. Ask the user for (a) business name, (b) default currency (USD if unspecified). Then walk through the profile: address + country, tax ID. Only after that, ask about clients and invoices. Do NOT invent data.`;
+    return `NO BUSINESSES. Send ONE message asking the user for everything you need to spin up the business, plainly:
+  - Business name
+  - Full address (tell them to paste it however they have it — you'll split it into line1 / city / region / postal_code / country yourself)
+  - Default currency (e.g. USD / INR / EUR — just a fallback when an invoice doesn't specify one; per-invoice override is always available; editable later)
+  - Tax ID if they have one (EIN / VAT / GSTIN / etc.; otherwise leave blank)
+Then call create_business with the name + currency, immediately followed by update_business_profile with the address + tax ID. Do NOT ask for address fields separately, do NOT show numbered multiple-choice pickers, and do NOT ask about payment terms, invoice prefix, brand color, logo, wallet address, reply-to email, or contact name during onboarding — those are editable later via update_business_profile. After the profile is in, move on to clients. Do NOT invent data.`;
   }
 
   if (bs.length === 1) {
     const b = bs[0]!;
     if (!b.profile_complete && b.invoice_count === 0 && totalClients === 0) {
-      return `FRESH ACCOUNT with one business "${b.name}". Walk the user through setup, step by step:
+      return `FRESH ACCOUNT with one business "${b.name}". Onboarding is two short asks, NOT a multi-step interview. Friction is the enemy — every extra question costs goodwill.
 
-STEP 1. Business profile. Ask for: (a) business name (current: "${b.name}". confirm or change), (b) address + country, (c) default currency (USD if unspecified), (d) tax ID if applicable. Save with update_business_profile.
+HARD RULES for both asks:
+- ONE message per ask. The user pastes everything in one reply, then you call ONE tool.
+- Treat address as a single freeform blob. Do NOT ask for street / city / state / postal / country as separate fields. Tell the user "paste the full address however you have it" and YOU split it into address_line1 / city / region / postal_code / country (ISO-2) before calling the tool. Same for the client's address.
+- Do NOT ask about any of these during onboarding: default payment terms, invoice number prefix, brand color, logo, wallet address, reply-to email, contact name. They are editable later and not worth a question.
+- Do NOT show numbered multiple-choice pickers ("1. USD  2. INR  3. EUR"). Just write the field label and a tiny clarification.
 
-STEP 2. First client. After profile saved, offer to add their first client. Ask for name, email, address. Save with create_client. Do NOT add a client before the profile is saved.
+ASK 1 — Business profile. Single message asking for, plainly:
+  - Business name (currently "${b.name}" — confirm or change)
+  - Full address (one freeform paste; you'll split it)
+  - Default currency (e.g. USD / INR / EUR — just a fallback when an invoice doesn't specify one; per-invoice override is always available; editable later, so don't agonize)
+  - Tax ID if they have one (EIN / VAT / GSTIN / etc. — otherwise leave blank)
+Then call update_business_profile once.
 
-STEP 3. Invoice. After both are done, ask what they'd like to bill the client for. Only then call create_invoice.
+ASK 2 — First client. Single message asking for: client name, email, full address (one paste). Then create_client.
+
+After both, ask what they'd like to bill the client for and call create_invoice.
 
 Do NOT invent data at any step. Do NOT create a sample/demo invoice. If the user says "just demo it" or "make something up", refuse and ask for real details.`;
     }
     if (!b.profile_complete) {
-      return `Business "${b.name}" has no address / tax ID yet. Before sending invoices, ask the user to fill that in via update_business_profile.`;
+      return `Business "${b.name}" has no address / tax ID yet. Before sending invoices, send ONE message asking for: full address (one freeform paste — you split it into line1 / city / region / postal_code / country yourself), and tax ID if they have one. Don't ask for address fields separately, don't drip-feed, don't show numbered pickers, and don't ask about advanced knobs (payment terms, prefix, brand color, logo, wallet, reply-to). Save with a single update_business_profile call.`;
     }
     if (totalClients === 0) {
-      return `Business "${b.name}" is configured but has no clients. Offer to add the first client (name, email, address) via create_client. Don't invent one.\n\n${WRITING_STYLE}`;
+      return `Business "${b.name}" is configured but has no clients. Offer to add the first client in ONE message: name, email, full address (one freeform paste — you split it into the structured fields yourself). Then create_client. Don't ask for address parts separately, don't invent data.\n\n${WRITING_STYLE}`;
     }
     return `Business "${b.name}" has ${totalClients} client${totalClients === 1 ? "" : "s"}. Use find_client to resolve names the user mentions.\n\n${WRITING_STYLE}`;
   }
