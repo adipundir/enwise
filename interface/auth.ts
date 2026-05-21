@@ -1,17 +1,14 @@
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { eq } from "drizzle-orm";
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 import { db } from "@/lib/db";
 import {
   accounts,
-  businesses,
   sessions,
   users,
   verificationTokens,
 } from "@/lib/db/schema";
-import { uniqueSlug } from "@/lib/slug";
 import { createToken } from "@/lib/tokens";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -36,27 +33,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   events: {
     async createUser({ user }) {
       if (!user.id) return;
-      const businessName = user.name
-        ? `${user.name.split(" ")[0]}'s Business`
-        : "My Business";
-      const [created] = await db
-        .insert(businesses)
-        .values({
-          ownerUserId: user.id,
-          name: businessName,
-          slug: uniqueSlug(businessName),
-        })
-        .returning({ id: businesses.id });
-      if (created) {
-        await db
-          .update(users)
-          .set({ defaultBusinessId: created.id })
-          .where(eq(users.id, user.id));
-      }
       // Mint the user's API token at signup time so it's encrypted from
-      // creation. The dashboard's lazy fallback stays for safety, but with
-      // this hook in place, new accounts always have a retrievable token
-      // on first dashboard load.
+      // creation. New accounts always have a retrievable token on first
+      // dashboard load.
+      //
+      // We deliberately do NOT auto-create a business here — the MCP
+      // layer handles the "no businesses" case with a structured
+      // `no_businesses` error that points Claude at `create_business`,
+      // and auto-seeding a placeholder like "Aditya's Business" tends to
+      // leak onto a real invoice when the user forgets to rename it.
       await createToken({ createdByUserId: user.id, name: "Default" });
     },
   },

@@ -152,7 +152,7 @@ export default async function DashboardHome({
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">
           {allBusinesses.length === 0
-            ? "(setting up…)"
+            ? <>No business yet. Plug your key into Claude and ask it to <span className="text-zinc-200">create a business</span> — then you can start billing.</>
             : allBusinesses.length === 1
               ? <>Business: <span className="text-zinc-200">{allBusinesses[0]!.name}</span>. Everything else happens in Claude once your key is plugged in.</>
               : <>Billing from <span className="text-zinc-200">{allBusinesses.length} businesses</span>. Claude asks which one to use per invoice. Everything happens inside Claude once your key is plugged in.</>}
