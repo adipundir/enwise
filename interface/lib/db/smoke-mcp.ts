@@ -81,7 +81,6 @@ async function main() {
   await callTool(raw, "update_business_profile", {
     name: "Smoke Test Co (renamed)",
     tax_id: "TEST-123",
-    default_currency: "eur",
     country: "gb",
   });
 

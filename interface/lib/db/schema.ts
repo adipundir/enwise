@@ -125,9 +125,6 @@ export const businesses = pgTable(
     region: text("region"),
     postalCode: text("postal_code"),
     country: char("country", { length: 2 }),
-    defaultCurrency: char("default_currency", { length: 3 })
-      .notNull()
-      .default("USD"),
     invoiceNumberPrefix: text("invoice_number_prefix")
       .notNull()
       .default("INV-"),

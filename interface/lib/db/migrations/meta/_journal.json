@@ -176,6 +176,13 @@
       "when": 1779235200000,
       "tag": "0024_add_us_routing_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1779321600000,
+      "tag": "0025_drop_business_default_currency",
+      "breakpoints": true
     }
   ]
 }

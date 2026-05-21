@@ -138,6 +138,7 @@ function mapMutateError(code: string): ErrorCode {
     case "invoice_not_draft":
       return "invoice_not_draft";
     case "invalid_currency":
+    case "currency_required":
     case "invalid_amount":
     case "no_line_items":
       return "invalid_input";

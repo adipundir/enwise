@@ -9,7 +9,6 @@ const businessSchema = z.object({
   id: z.string(),
   name: z.string(),
   slug: z.string(),
-  default_currency: z.string(),
   invoice_number_prefix: z.string(),
   invoice_number_next: z.number(),
   logo_url: z.string().nullable(),
@@ -85,7 +84,6 @@ export function registerWhoami(server: McpServer) {
             id: b.id,
             name: b.name,
             slug: b.slug,
-            default_currency: b.defaultCurrency,
             invoice_number_prefix: b.invoiceNumberPrefix,
             invoice_number_next: b.invoiceNumberNext,
             logo_url: b.logoUrl,
@@ -153,7 +151,7 @@ function buildHint(
   - Business name (required)
   - Full address (tell them to paste it however they have it — you'll split it into line1 / city / region / postal_code / country yourself)
   - Tax ID if they have one (EIN / VAT / GSTIN / etc.; otherwise leave blank)
-Then call create_business with just the name, immediately followed by update_business_profile with whatever address + tax ID they gave you. Do NOT ask for \`default_currency\` here — the business has the column, but it's auto-learned later (the first time the user names a currency on a client or invoice, persist it via update_business_profile). Do NOT ask for address fields separately, do NOT show numbered multiple-choice pickers, and do NOT ask about payment terms, invoice prefix, brand color, logo, wallet address, reply-to email, or contact name during onboarding — those are editable later. Save what they give, move on with what they don't; re-ask only if a required field (name) is missing. After the profile is in, move on to clients. Do NOT invent data.`;
+Then call create_business with just the name, immediately followed by update_business_profile with whatever address + tax ID they gave you. Currency is NOT a business-level field — it lives on the client (default_currency) or per invoice, so don't ask about it here. Do NOT ask for address fields separately, do NOT show numbered multiple-choice pickers, and do NOT ask about payment terms, invoice prefix, brand color, logo, wallet address, reply-to email, or contact name during onboarding — those are editable later. Save what they give, move on with what they don't; re-ask only if a required field (name) is missing. After the profile is in, move on to clients. Do NOT invent data.`;
   }
 
   if (bs.length === 1) {
@@ -165,7 +163,7 @@ HARD RULES for both asks:
 - ONE message per ask. The user pastes everything in one reply, then you call ONE tool. Save what they give, move on with what they don't.
 - Treat address as a single freeform blob. Do NOT ask for street / city / state / postal / country as separate fields. Tell the user "paste the full address however you have it" and YOU split it into address_line1 / city / region / postal_code / country (ISO-2) before calling the tool. Same for the client's address.
 - Do NOT show numbered multiple-choice pickers ("1. USD  2. INR  3. EUR"). Plain prose only.
-- Do NOT ask about \`default_currency\` for the business. It is auto-learned — the first time the user mentions a currency anywhere (client default, invoice), silently set it as the business default via update_business_profile. Per-invoice override is always available.
+- Currency is NOT a business-level concept. The only place currency is stored is the CLIENT (default_currency) or the INVOICE itself. So don't ask "what currency should this business invoice in?" — ask currency when creating the client (or skip and ask at invoice time). If create_invoice returns currency_required, ask the user then and persist on the client via update_client.
 - Do NOT ask about other advanced knobs during onboarding: default payment terms, invoice number prefix, brand color, logo, wallet address, reply-to email, contact name. They are editable later and not worth a question.
 - Required vs optional: only re-ask if a REQUIRED field is missing (business name, client name). For everything else, save what was given and move on — if it turns out to matter at invoice creation time (e.g. no client email but they want to email the invoice), ask THEN.
 
@@ -175,7 +173,7 @@ ASK 1 — Business profile. Single message asking for, plainly:
   - Tax ID if they have one (EIN / VAT / GSTIN / etc. — otherwise leave blank)
 Then call update_business_profile once with whatever they gave you.
 
-ASK 2 — First client. Single message asking for: client name (required), email, full address (one paste), currency they should be billed in (e.g. USD / INR — skip if unsure), and tax ID if applicable. Then create_client with whatever you got. If currency is set here and the business has no default_currency yet, also call update_business_profile to persist it as the business default.
+ASK 2 — First client. Single message asking for: client name (required), email, full address (one paste), currency they should be billed in (e.g. USD / INR — skip if unsure, it can be set at invoice time), and tax ID if applicable. Then create_client with whatever you got.
 
 After both, ask what they'd like to bill the client for and call create_invoice. Ask for any still-missing fields (email, currency, etc.) only if they actually block the next action.
 
@@ -185,7 +183,7 @@ Do NOT invent data at any step. Do NOT create a sample/demo invoice. If the user
       return `Business "${b.name}" has no address / tax ID yet. Before sending invoices, send ONE message asking for: full address (one freeform paste — you split it into line1 / city / region / postal_code / country yourself), and tax ID if they have one. Don't ask for address fields separately, don't drip-feed, don't show numbered pickers, and don't ask about advanced knobs (default currency, payment terms, prefix, brand color, logo, wallet, reply-to). Save with a single update_business_profile call — whatever they gave you, move on with what they didn't.`;
     }
     if (totalClients === 0) {
-      return `Business "${b.name}" is configured but has no clients. Offer to add the first client in ONE message: name (required), email, full address (one freeform paste — you split it yourself), currency they should be billed in (skip if unsure), tax ID if applicable. Then create_client with whatever you got — don't re-ask for optional fields. If the user named a currency and the business has no default_currency yet, also call update_business_profile to persist it as the business default. Don't ask for address parts separately, don't invent data.\n\n${WRITING_STYLE}`;
+      return `Business "${b.name}" is configured but has no clients. Offer to add the first client in ONE message: name (required), email, full address (one freeform paste — you split it yourself), currency they should be billed in (skip if unsure, can be set at invoice time), tax ID if applicable. Then create_client with whatever you got — don't re-ask for optional fields. Don't ask for address parts separately, don't invent data.\n\n${WRITING_STYLE}`;
     }
     return `Business "${b.name}" has ${totalClients} client${totalClients === 1 ? "" : "s"}. Use find_client to resolve names the user mentions.\n\n${WRITING_STYLE}`;
   }

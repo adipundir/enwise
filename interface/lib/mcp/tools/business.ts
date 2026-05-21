@@ -53,11 +53,6 @@ const updateInput = {
     .regex(/^[A-Za-z]{2}$/, "2-letter ISO-3166 code like 'US' or 'GB'")
     .transform((s) => s.toUpperCase())
     .optional(),
-  default_currency: z
-    .string()
-    .regex(/^[A-Za-z]{3}$/, "3-letter ISO 4217 code like 'USD' or 'EUR'")
-    .transform((s) => s.toUpperCase())
-    .optional(),
   invoice_number_prefix: z.string().min(1).max(12).optional(),
   invoice_number_next: z.number().int().min(1).max(9_999_999).optional(),
   brand_color: z.string().max(32).nullish(),
@@ -78,14 +73,6 @@ const updateInput = {
 
 const createBusinessInput = {
   name: z.string().min(1).max(200),
-  default_currency: z
-    .string()
-    .regex(/^[A-Za-z]{3}$/, "3-letter ISO 4217 code like 'USD' or 'EUR'")
-    .transform((s) => s.toUpperCase())
-    .describe(
-      "Fallback currency used only when an invoice doesn't specify one. NOT a lock-in: every invoice can override it at creation time, and the business default itself is editable any time via update_business_profile. When asking the user, make this clear so they don't agonize over the choice.",
-    )
-    .optional(),
   set_as_default: z.boolean().optional(),
 };
 
@@ -99,7 +86,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Create a business",
       description:
-        "Create a new business profile under the authenticated user. Use when the user says they want to bill from a new entity (different company, side project, freelance pseudonym, etc.). Ask for the name first; everything else (address, tax ID, etc.) can be added later via update_business_profile. Do NOT ask the user for `default_currency` here — it's auto-learned. The first time the user names a currency anywhere (a client default or an invoice), silently call update_business_profile to persist it as the business default if not already set. Per-invoice currency is always overridable, so this is never a lock-in. Pass `set_as_default: true` if the user says this should be their primary.",
+        "Create a new business profile under the authenticated user. Use when the user says they want to bill from a new entity (different company, side project, freelance pseudonym, etc.). Ask for the name first; everything else (address, tax ID, etc.) can be added later via update_business_profile. Currency is NOT a business-level concept — it lives on the client (or per invoice). Don't ask the user for currency here. Pass `set_as_default: true` if the user says this should be their primary.",
       inputSchema: createBusinessInput,
     },
     async (args, extra) => {
@@ -110,7 +97,6 @@ export function registerBusinessTools(server: McpServer) {
       const business = await createBusiness({
         userId: ctx.userId,
         name: input.name,
-        defaultCurrency: input.default_currency,
         setAsDefault: input.set_as_default ?? false,
       });
       return toolOk(formatBusinessForMcp(business));
@@ -122,7 +108,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Get business profile",
       description:
-        "Return the full profile for a business: name, legal_name, tax_id, contact_name, default_currency, invoice_number_prefix, logo_url, brand_color, email_reply_to, default_payment_terms_days, default_notes, full address, wallet_address, payment_chain_id (preferred EVM chain for receiving USDC), and timestamps. Bank payout details are managed separately via list_bank_accounts / add_bank_account / etc. If the user owns only one business, `business_id` can be omitted; if they own multiple, pass `business_id`. Call this before update_business_profile to show the user what's currently on file.",
+        "Return the full profile for a business: name, legal_name, tax_id, contact_name, invoice_number_prefix, logo_url, brand_color, email_reply_to, default_payment_terms_days, default_notes, full address, wallet_address, payment_chain_id (preferred EVM chain for receiving USDC), and timestamps. Currency is not stored on the business — it lives on the client (default_currency) or per invoice. Bank payout details are managed separately via list_bank_accounts / add_bank_account / etc. If the user owns only one business, `business_id` can be omitted; if they own multiple, pass `business_id`. Call this before update_business_profile to show the user what's currently on file.",
       inputSchema: getProfileInput,
     },
     async (args, extra) => {
@@ -147,7 +133,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Update business profile",
       description:
-        "Update any subset of a business profile (name, tax ID, address, default currency, invoice number prefix, logo, contact person, wallet address, preferred crypto chain, etc.). Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. To manage BANK ACCOUNTS, use the dedicated tools — add_bank_account / update_bank_account / remove_bank_account / set_default_bank_account / list_bank_accounts (a business can have multiple bank accounts; one is marked default for new invoices). `contact_name` is the person at the business who handles invoicing — used in PDF letterhead / email footer. `wallet_address` is the onchain payout address (raw 0x… or ENS name like `acme.eth`); shown alongside bank details on the invoice. `payment_chain_id` selects the EVM chain payers will send USDC on — 8453 for Base mainnet, 84532 for Base Sepolia; pass null to use the platform default. Pass `business_id` if the user owns multiple businesses.",
+        "Update any subset of a business profile (name, tax ID, address, invoice number prefix, logo, contact person, wallet address, preferred crypto chain, etc.). Currency lives on the client (default_currency) or per invoice, not on the business. Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. To manage BANK ACCOUNTS, use the dedicated tools — add_bank_account / update_bank_account / remove_bank_account / set_default_bank_account / list_bank_accounts (a business can have multiple bank accounts; one is marked default for new invoices). `contact_name` is the person at the business who handles invoicing — used in PDF letterhead / email footer. `wallet_address` is the onchain payout address (raw 0x… or ENS name like `acme.eth`); shown alongside bank details on the invoice. `payment_chain_id` selects the EVM chain payers will send USDC on — 8453 for Base mainnet, 84532 for Base Sepolia; pass null to use the platform default. Pass `business_id` if the user owns multiple businesses.",
       inputSchema: updateInput,
     },
     async (args, extra) => {
@@ -170,7 +156,6 @@ export function registerBusinessTools(server: McpServer) {
       if (input.region !== undefined) patch.region = input.region ?? null;
       if (input.postal_code !== undefined) patch.postalCode = input.postal_code ?? null;
       if (input.country !== undefined) patch.country = input.country;
-      if (input.default_currency !== undefined) patch.defaultCurrency = input.default_currency;
       if (input.invoice_number_prefix !== undefined) patch.invoiceNumberPrefix = input.invoice_number_prefix;
       if (input.invoice_number_next !== undefined) {
         // Refuse to lower the invoice number sequence below what's already

@@ -14,7 +14,6 @@ export interface AllocatedNumber {
     postalCode: string | null;
     country: string | null;
     logoUrl: string | null;
-    defaultCurrency: string;
     taxId: string | null;
     legalName: string | null;
   };
@@ -48,7 +47,6 @@ export async function allocateInvoiceNumber(
       postal_code                     as postal_code,
       country                         as country,
       logo_url                        as logo_url,
-      default_currency                as default_currency,
       tax_id                          as tax_id,
       legal_name                      as legal_name
   `);
@@ -65,7 +63,6 @@ export async function allocateInvoiceNumber(
         postal_code: string | null;
         country: string | null;
         logo_url: string | null;
-        default_currency: string;
         tax_id: string | null;
         legal_name: string | null;
       }
@@ -85,7 +82,6 @@ export async function allocateInvoiceNumber(
       postalCode: row.postal_code,
       country: row.country,
       logoUrl: row.logo_url,
-      defaultCurrency: row.default_currency,
       taxId: row.tax_id,
       legalName: row.legal_name,
     },

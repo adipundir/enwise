@@ -23,7 +23,6 @@ export type BusinessPatch = Partial<{
   region: string | null;
   postalCode: string | null;
   country: string | null;
-  defaultCurrency: string;
   invoiceNumberPrefix: string;
   invoiceNumberNext: number;
   logoUrl: string | null;
@@ -79,7 +78,6 @@ export function formatBusinessForMcp(row: Business) {
     region: row.region,
     postal_code: row.postalCode,
     country: row.country,
-    default_currency: row.defaultCurrency,
     invoice_number_prefix: row.invoiceNumberPrefix,
     invoice_number_next: row.invoiceNumberNext,
     logo_url: row.logoUrl,
@@ -98,7 +96,6 @@ export function formatBusinessForMcp(row: Business) {
 export async function createBusiness(params: {
   userId: string;
   name: string;
-  defaultCurrency?: string;
   setAsDefault?: boolean;
 }): Promise<Business> {
   const [created] = await db
@@ -107,7 +104,6 @@ export async function createBusiness(params: {
       ownerUserId: params.userId,
       name: params.name,
       slug: uniqueSlug(params.name),
-      defaultCurrency: params.defaultCurrency ?? "USD",
     })
     .returning();
   if (!created) {

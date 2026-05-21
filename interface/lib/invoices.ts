@@ -57,7 +57,7 @@ export type CreateInvoiceInput = {
   lineItems: LineItemInput[];
   issueDate?: string; // YYYY-MM-DD
   dueDate?: string;   // YYYY-MM-DD
-  currency?: string;  // ISO 4217, defaults to client.default_currency or business.default_currency
+  currency?: string;  // ISO 4217. Falls back to client.default_currency; otherwise create_invoice returns currency_required.
   notes?: string | null;
   terms?: string | null;
   clientRequestId?: string | null;
@@ -185,6 +185,7 @@ export type CreateInvoiceResult =
       code:
         | "client_not_found"
         | "invalid_currency"
+        | "currency_required"
         | "no_line_items"
         | "invalid_amount"
         | "onboarding_required"
@@ -338,7 +339,16 @@ export async function createInvoice(
     };
   }
 
-  const currency = (input.currency ?? client.defaultCurrency ?? allocation.businessSnapshot.defaultCurrency).toUpperCase();
+  const currencyRaw = input.currency ?? client.defaultCurrency;
+  if (!currencyRaw) {
+    return {
+      ok: false,
+      code: "currency_required",
+      message: "No currency was provided on the invoice and the client has no default_currency set.",
+      hint: "Ask the user which currency this invoice should be billed in (e.g. USD, INR, EUR). Persist it on the client via update_client (default_currency) so future invoices for this client inherit it, then retry create_invoice with currency. Remind the user that USDC / wallet payments only work on USD invoices.",
+    };
+  }
+  const currency = currencyRaw.toUpperCase();
   if (!isValidCurrency(currency)) {
     return {
       ok: false,
