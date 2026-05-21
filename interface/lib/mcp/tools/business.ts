@@ -99,7 +99,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Create a business",
       description:
-        "Create a new business profile under the authenticated user. Use when the user says they want to bill from a new entity (different company, side project, freelance pseudonym, etc.). Ask for the name first; everything else (address, tax ID, default currency, etc.) can be added later via update_business_profile. `default_currency` is just a fallback when an invoice doesn't specify one — every invoice can override it, and the default itself is editable later. Tell the user that when you ask, so they don't treat it as a permanent commitment. Pass `set_as_default: true` if the user says this should be their primary.",
+        "Create a new business profile under the authenticated user. Use when the user says they want to bill from a new entity (different company, side project, freelance pseudonym, etc.). Ask for the name first; everything else (address, tax ID, etc.) can be added later via update_business_profile. Do NOT ask the user for `default_currency` here — it's auto-learned. The first time the user names a currency anywhere (a client default or an invoice), silently call update_business_profile to persist it as the business default if not already set. Per-invoice currency is always overridable, so this is never a lock-in. Pass `set_as_default: true` if the user says this should be their primary.",
       inputSchema: createBusinessInput,
     },
     async (args, extra) => {

@@ -1322,6 +1322,7 @@ export async function markInvoiceViewed(slug: string) {
 // ---------- MCP formatting ----------
 
 export function formatInvoiceForMcp(inv: InvoiceWithLineItems) {
+  const nonUsd = inv.currency.toUpperCase() !== "USD";
   return {
     id: inv.id,
     invoice_number: inv.invoiceNumber,
@@ -1330,6 +1331,9 @@ export function formatInvoiceForMcp(inv: InvoiceWithLineItems) {
     issue_date: inv.issueDate,
     due_date: inv.dueDate,
     currency: inv.currency,
+    ...(nonUsd && {
+      payment_rails_note: `Invoice is in ${inv.currency.toUpperCase()}, not USD. USDC / wallet payments are only enabled on USD invoices. The share page will show bank transfer details only. Surface this to the user so they can decide whether to re-issue in USD if they want crypto payment.`,
+    }),
     subtotal: inv.subtotal,
     tax_total: inv.taxTotal,
     total: inv.total,

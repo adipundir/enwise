@@ -172,6 +172,8 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export function formatClientForMcp(row: Client) {
+  const cur = row.defaultCurrency?.toUpperCase();
+  const nonUsd = !!cur && cur !== "USD";
   return {
     id: row.id,
     name: row.name,
@@ -188,6 +190,9 @@ export function formatClientForMcp(row: Client) {
     tax_id: row.taxId,
     notes: row.notes,
     default_currency: row.defaultCurrency,
+    ...(nonUsd && {
+      payment_rails_note: `Client default_currency is ${cur}. Invoices billed in ${cur} can only be paid by bank transfer — USDC / wallet payments are USD-only. Surface this to the user when the client is created or when an invoice is drafted in this currency.`,
+    }),
     archived: row.archivedAt !== null,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
