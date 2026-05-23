@@ -61,6 +61,14 @@ export type CreateInvoiceInput = {
   notes?: string | null;
   terms?: string | null;
   clientRequestId?: string | null;
+  /** Per-invoice payment-rail gate.
+   *  - undefined → caller (MCP create_invoice handler) defaults to ["bank"]
+   *  - ["bank"]               → bank panel only, no wallet
+   *  - ["bank","crypto_wallet"] → both rails
+   *  - []                     → no payment block at all
+   *  Wallet is opt-in: a non-empty value omitting crypto_wallet hides the
+   *  wallet address on the share page and the Pay-with-USDC button. */
+  acceptedPaymentMethods?: string[];
   /** Per-invoice bank-account picker:
    *  - undefined → use the business's default account (or prompt if none set)
    *  - []        → no bank panel on this invoice
@@ -439,6 +447,7 @@ export async function createInvoice(
       terms: input.terms ?? null,
       shareSlug,
       clientRequestId: input.clientRequestId ?? null,
+      acceptedPaymentMethods: input.acceptedPaymentMethods ?? null,
       acceptedBankAccountIds: resolvedBankAccountIds,
       // Snapshots land on finalize (send), not at draft time.
     })
