@@ -216,6 +216,35 @@ export type CreateInvoiceResult =
       }>;
     };
 
+/**
+ * Smart default for `accepted_payment_methods` when the caller didn't pick.
+ * - bank configured → ["bank"] (bank wins when both rails are set up, since
+ *   most clients pay invoices via bank transfer by habit).
+ * - else any wallet configured → ["crypto_wallet"] (crypto-only merchants
+ *   default to the crypto flow without having to opt in every time).
+ * - else → ["bank"] (neutral; no payment block will render either way).
+ *
+ * The caller can always override with an explicit value at create_invoice
+ * time (e.g. accept_crypto on a single invoice when the merchant normally
+ * defaults to bank).
+ */
+async function deriveDefaultAcceptedPaymentMethods(
+  businessId: string,
+  bankAccountCount: number,
+): Promise<string[]> {
+  if (bankAccountCount > 0) return ["bank"];
+  const [biz] = await db
+    .select({
+      evm: businesses.evmWalletAddress,
+      starknet: businesses.starknetWalletAddress,
+      aptos: businesses.aptosWalletAddress,
+    })
+    .from(businesses)
+    .where(eq(businesses.id, businessId));
+  const hasWallet = !!(biz?.evm || biz?.starknet || biz?.aptos);
+  return hasWallet ? ["crypto_wallet"] : ["bank"];
+}
+
 export async function createInvoice(
   ctx: ScopedCtx,
   input: CreateInvoiceInput,
@@ -447,7 +476,8 @@ export async function createInvoice(
       terms: input.terms ?? null,
       shareSlug,
       clientRequestId: input.clientRequestId ?? null,
-      acceptedPaymentMethods: input.acceptedPaymentMethods ?? null,
+      acceptedPaymentMethods:
+        input.acceptedPaymentMethods ?? (await deriveDefaultAcceptedPaymentMethods(ctx.businessId, allAccounts.length)),
       acceptedBankAccountIds: resolvedBankAccountIds,
       // Snapshots land on finalize (send), not at draft time.
     })
