@@ -685,27 +685,17 @@ export async function updateInvoice(
   const inv = await getInvoice(ctx, invoiceId);
   if (!inv) return { ok: false, code: "not_found", message: `No invoice with id ${invoiceId}.` };
 
-  // Split fields into two classes. CONTRACT fields change what the invoice
-  // legally says — touching them on a sent/paid invoice would mean the
-  // client received a different document than what's now on file. Keep
-  // those draft-only. DISPLAY fields (payment-rail gates, per-invoice
-  // overrides, bank-account picker) only change how the share page renders
-  // the payment surface; the merchant should keep full control of those
-  // even after the invoice has been delivered.
-  const touchesContract =
-    patch.clientId !== undefined ||
-    patch.businessId !== undefined ||
-    patch.issueDate !== undefined ||
-    patch.dueDate !== undefined ||
-    patch.notes !== undefined ||
-    patch.terms !== undefined;
-  if (!isEditable(inv) && touchesContract) {
-    return {
-      ok: false,
-      code: "invoice_not_draft",
-      message: `Invoice ${inv.invoiceNumber} is ${inv.status}; the fields you're changing affect the invoice contract and only drafts can be edited that way. Display-only fields (accepted_payment_methods, accepted_bank_account_ids, display_overrides) ARE editable on finalized invoices — call update_invoice with just those. To rewrite a sent invoice's contract, use void_invoice + duplicate_invoice instead.`,
-    };
-  }
+  // No status gate. The merchant has full control over their own invoices,
+  // including the ability to edit a sent/paid one. Editing post-send is
+  // legitimately useful (typo fix, address correction, rate adjustment)
+  // but it also means the merchant's record diverges from the PDF/screen-
+  // shot the recipient already has. The MCP tool description tells Claude
+  // to ALWAYS warn the user before touching contract fields (line items,
+  // dates, notes, terms, client_id, business_id) on a non-draft invoice
+  // and to confirm explicitly. Display-only fields (accepted_payment_methods,
+  // accepted_bank_account_ids, display_overrides) never need that warning
+  // because they don't change the invoice itself, only how the share page
+  // renders the payment surface.
   if (patch.clientId && patch.clientId !== inv.clientId) {
     const c = await getClientScoped(ctx, patch.clientId);
     if (!c) return { ok: false, code: "client_not_found", message: `No client with id ${patch.clientId}.` };
@@ -820,13 +810,8 @@ export async function addLineItem(
 ): Promise<LineItemMutateResult<InvoiceWithLineItems>> {
   const inv = await getInvoice(ctx, invoiceId);
   if (!inv) return { ok: false, code: "not_found", message: `No invoice with id ${invoiceId}.` };
-  if (!isEditable(inv)) {
-    return {
-      ok: false,
-      code: "invoice_not_draft",
-      message: `Invoice ${inv.invoiceNumber} is ${inv.status}; only drafts are editable.`,
-    };
-  }
+  // No status gate; merchant has full control. MCP tool description tells
+  // Claude to warn before touching a non-draft invoice.
   const att = await resolveAttachments(ctx, item.attachments);
   if (!att.ok) {
     return {
@@ -867,13 +852,8 @@ export async function updateLineItem(
 ): Promise<LineItemMutateResult<InvoiceWithLineItems>> {
   const inv = await getInvoice(ctx, invoiceId);
   if (!inv) return { ok: false, code: "not_found", message: `No invoice with id ${invoiceId}.` };
-  if (!isEditable(inv)) {
-    return {
-      ok: false,
-      code: "invoice_not_draft",
-      message: `Invoice ${inv.invoiceNumber} is ${inv.status}; only drafts are editable.`,
-    };
-  }
+  // No status gate; merchant has full control. MCP tool description warns
+  // before touching a non-draft invoice.
   const existing = inv.lineItems.find((l) => l.id === lineItemId);
   if (!existing) return { ok: false, code: "not_found", message: `No line item with id ${lineItemId} on invoice ${inv.invoiceNumber}.` };
 
@@ -919,13 +899,8 @@ export async function removeLineItem(
 ): Promise<MutateResult<InvoiceWithLineItems>> {
   const inv = await getInvoice(ctx, invoiceId);
   if (!inv) return { ok: false, code: "not_found", message: `No invoice with id ${invoiceId}.` };
-  if (!isEditable(inv)) {
-    return {
-      ok: false,
-      code: "invoice_not_draft",
-      message: `Invoice ${inv.invoiceNumber} is ${inv.status}; only drafts are editable.`,
-    };
-  }
+  // No status gate; merchant has full control. MCP tool description warns
+  // before touching a non-draft invoice.
   // Verify the line item is actually on THIS invoice before deleting. Without
   // this guard, callers could pass any UUID for lineItemId (the DELETE below
   // matches by id alone) and nuke a row off another user's invoice. The
@@ -1353,22 +1328,48 @@ export async function voidInvoice(
 export async function deleteInvoice(
   ctx: ScopedCtx,
   invoiceId: string,
-): Promise<MutateResult<{ deleted: true }>> {
+): Promise<MutateResult<{ deleted: true; invoice_number: string }>> {
   const inv = await getInvoice(ctx, invoiceId);
   if (!inv) return { ok: false, code: "not_found", message: `No invoice with id ${invoiceId}.` };
-  // Soft-delete (sets deletedAt). The merchant has full control over their
-  // own invoices — drafts, sent, voided, and even paid can be removed.
-  // For sent/paid invoices, void_invoice is usually a better choice because
-  // it keeps the audit record visible to the client; delete pulls the share
-  // page entirely (404) which is more drastic. The MCP tool description
-  // surfaces that nuance — this lib function just respects the merchant's
-  // choice.
+
+  // HARD delete. Line items, events, and payments are FK-cascaded by the
+  // schema (onDelete: cascade on invoice_id) so the row + its children all
+  // disappear in a single statement. The merchant has full control over
+  // their own invoices; this is the gentler version of "rip it out and
+  // start over". For sent/paid invoices, the MCP tool description steers
+  // toward void_invoice instead because the recipient already received a
+  // copy — but if the merchant insists, this respects that choice.
+  await db.delete(invoices).where(eq(invoices.id, inv.id));
+
+  // Reusable invoice numbers. After deletion, set invoice_number_next to
+  // MAX(remaining invoice numbers) + 1 so the next allocation reuses the
+  // hole left at the top. Gaps in the middle remain — sequential allocation
+  // never backtracks past a void or a still-extant invoice — but the LATEST
+  // deleted number becomes available again, which matches the "INV-0001
+  // should be INV-0001 again after I delete it" expectation.
+  const remaining = await db
+    .select({ invoiceNumber: invoices.invoiceNumber })
+    .from(invoices)
+    .where(eq(invoices.businessId, inv.businessId));
+  const [biz] = await db
+    .select({ prefix: businesses.invoiceNumberPrefix })
+    .from(businesses)
+    .where(eq(businesses.id, inv.businessId));
+  const prefix = biz?.prefix ?? "";
+  let maxNum = 0;
+  for (const r of remaining) {
+    const numStr = r.invoiceNumber.startsWith(prefix)
+      ? r.invoiceNumber.slice(prefix.length)
+      : r.invoiceNumber;
+    const n = parseInt(numStr, 10);
+    if (!isNaN(n) && n > maxNum) maxNum = n;
+  }
   await db
-    .update(invoices)
-    .set({ deletedAt: new Date(), updatedAt: new Date() })
-    .where(eq(invoices.id, inv.id));
-  await writeEvent(inv.id, "deleted", ctx.tokenId, { prior_status: inv.status });
-  return { ok: true, value: { deleted: true } };
+    .update(businesses)
+    .set({ invoiceNumberNext: maxNum + 1, updatedAt: new Date() })
+    .where(eq(businesses.id, inv.businessId));
+
+  return { ok: true, value: { deleted: true, invoice_number: inv.invoiceNumber } };
 }
 
 export async function setShareEnabled(
