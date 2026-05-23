@@ -21,7 +21,7 @@ const WALLET_LABEL_HINTS = /\b(wallet|usdc|usdt|crypto|onchain|on-chain|\.eth)\b
  * Reject add_bank_account / update_bank_account inputs that look like a crypto
  * wallet was jammed in. Model worked around when the user said "set my wallet"
  * by stuffing a 0x address into account_number — which then rendered as
- * "Account number: 0x…" on the share page AND left businesses.wallet_address
+ * "Account number: 0x…" on the share page AND left businesses.evm_wallet_address
  * empty so the Pay-with-USDC button never appeared. Surface a structured
  * error pointing at the right tool instead of silently accepting bad data.
  */
@@ -36,7 +36,7 @@ function rejectIfWalletShaped(fields: {
       "invalid_input",
       "account_number looks like a crypto wallet address (0x… 40 hex). Bank accounts are for fiat rails only.",
       {
-        hint: `Call update_business_profile({ wallet_address: "${an}" }) instead. The Pay-with-USDC button reads businesses.wallet_address — not bank account fields. Storing the wallet here also renders incorrectly on the share page as "Account number: 0x…".`,
+        hint: `Call update_business_profile({ evm_wallet_address: "${an}" }) instead. The Pay-with-USDC button reads businesses.evm_wallet_address — not bank account fields. Storing the wallet here also renders incorrectly on the share page as "Account number: 0x…".`,
       },
     );
   }
@@ -47,7 +47,7 @@ function rejectIfWalletShaped(fields: {
       "invalid_input",
       "This looks like a crypto wallet entry (label/holder mentions wallet / USDC / crypto / .eth). Bank accounts are for fiat rails only.",
       {
-        hint: "For onchain payouts, call update_business_profile({ wallet_address: '0x...' }). If you really meant a fiat account, rename the label so it doesn't mention 'wallet' or 'USDC'.",
+        hint: "For onchain payouts, call update_business_profile({ evm_wallet_address: '0x...' }). If you really meant a fiat account, rename the label so it doesn't mention 'wallet' or 'USDC'.",
       },
     );
   }
@@ -130,7 +130,7 @@ export function registerBankAccountTools(server: McpServer) {
     {
       title: "Add a bank account",
       description:
-        "Create a new bank payout account for a business — for FIAT rails only (USD ACH/Fedwire, INR IFSC, EUR SEPA/IBAN, international SWIFT). A merchant can have multiple accounts (e.g. USD primary + INR HDFC + EUR Wise) and pick which one(s) to show on each invoice. `label` is a short human name the merchant uses to disambiguate ('USD primary', 'INR HDFC'). Fill the fields appropriate for the receiving rail: IFSC for India, SWIFT for international wires into the account, IBAN for Europe, ach_routing for US domestic ACH transfers, fedwire_routing for US domestic wires (often a different 9-digit number than ACH at the same bank — set both if the bank provides them). `branch_address` is required by most US/EU sending banks. Pass `set_default: true` to make this the merchant's default account for new invoices — if no accounts exist yet, the first one added becomes default automatically.\n\n**DO NOT use this tool to store a crypto wallet address.** A 0x… EVM address or an ENS name does NOT go into `account_number`. Wallets live on the BUSINESS record. If the user says 'add my wallet', 'set my USDC address', 'I want to receive crypto', etc., call `update_business_profile({ wallet_address: '0x…' })` instead. This tool will REJECT any `account_number` that looks like an EVM address (0x + 40 hex). Wallet-as-bank-account creates the wrong rendering on the share page (\"Account number: 0x…\") and also leaves the real wallet field empty so the Pay-with-USDC button never appears.",
+        "Create a new bank payout account for a business — for FIAT rails only (USD ACH/Fedwire, INR IFSC, EUR SEPA/IBAN, international SWIFT). A merchant can have multiple accounts (e.g. USD primary + INR HDFC + EUR Wise) and pick which one(s) to show on each invoice. `label` is a short human name the merchant uses to disambiguate ('USD primary', 'INR HDFC'). Fill the fields appropriate for the receiving rail: IFSC for India, SWIFT for international wires into the account, IBAN for Europe, ach_routing for US domestic ACH transfers, fedwire_routing for US domestic wires (often a different 9-digit number than ACH at the same bank — set both if the bank provides them). `branch_address` is required by most US/EU sending banks. Pass `set_default: true` to make this the merchant's default account for new invoices — if no accounts exist yet, the first one added becomes default automatically.\n\n**DO NOT use this tool to store a crypto wallet address.** A 0x… EVM address or an ENS name does NOT go into `account_number`. Wallets live on the BUSINESS record in chain-specific fields: `evm_wallet_address`, `starknet_wallet_address`, `aptos_wallet_address`. If the user says 'add my wallet', 'set my USDC address', 'I want to receive crypto', etc., call `update_business_profile` with the right chain field instead (ask which chain if ambiguous). This tool will REJECT any `account_number` that looks like an EVM address (0x + 40 hex). Wallet-as-bank-account creates the wrong rendering on the share page (\"Account number: 0x…\") and also leaves the real wallet field empty so the Pay-with-USDC button never appears.",
       inputSchema: addInput,
     },
     async (args, extra) => {
@@ -169,7 +169,7 @@ export function registerBankAccountTools(server: McpServer) {
     {
       title: "Update a bank account",
       description:
-        "Modify any subset of fields on an existing bank account (label, holder, bank name, account number, IFSC, SWIFT, IBAN, ach_routing, fedwire_routing, branch address, currency). Omitted fields are unchanged; pass null to clear a nullable field. To change which account is the default, use `set_default_bank_account` instead. Soft-deleted accounts can't be updated — use add_bank_account to add a new one.\n\nThis tool is for FIAT rails only. Wallet addresses don't go into `account_number` — they live on the business via `update_business_profile({ wallet_address })`. The tool rejects EVM-shaped `account_number` (0x + 40 hex).",
+        "Modify any subset of fields on an existing bank account (label, holder, bank name, account number, IFSC, SWIFT, IBAN, ach_routing, fedwire_routing, branch address, currency). Omitted fields are unchanged; pass null to clear a nullable field. To change which account is the default, use `set_default_bank_account` instead. Soft-deleted accounts can't be updated — use add_bank_account to add a new one.\n\nThis tool is for FIAT rails only. Wallet addresses don't go into `account_number` — they live on the business via `update_business_profile({ evm_wallet_address / starknet_wallet_address / aptos_wallet_address })`. The tool rejects EVM-shaped `account_number` (0x + 40 hex).",
       inputSchema: updateInput,
     },
     async (args, extra) => {

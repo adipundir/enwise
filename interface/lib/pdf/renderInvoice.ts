@@ -150,12 +150,28 @@ export async function buildInvoicePdfData(
         invoice.businessContactNameSnapshot,
         business?.contactName,
       ),
-      walletAddress: cryptoOn
+      evmWalletAddress: cryptoOn
         ? pickScalar(
             bizOv,
-            "wallet_address",
-            invoice.businessWalletAddressSnapshot,
-            business?.walletAddress,
+            "evm_wallet_address",
+            invoice.businessEvmWalletAddressSnapshot,
+            business?.evmWalletAddress,
+          )
+        : null,
+      starknetWalletAddress: cryptoOn
+        ? pickScalar(
+            bizOv,
+            "starknet_wallet_address",
+            invoice.businessStarknetWalletAddressSnapshot,
+            business?.starknetWalletAddress,
+          )
+        : null,
+      aptosWalletAddress: cryptoOn
+        ? pickScalar(
+            bizOv,
+            "aptos_wallet_address",
+            invoice.businessAptosWalletAddressSnapshot,
+            business?.aptosWalletAddress,
           )
         : null,
       addressLine1: businessAddrSrc?.line1 ?? businessAddrLive?.addressLine1 ?? null,

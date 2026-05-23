@@ -84,12 +84,12 @@ async function handle(
   // if no snapshot. Chain is always live — merchants who switch chains
   // expect outstanding invoices to be payable on the new chain immediately.
   let merchantWallet: `0x${string}` | null = null;
-  if (isHexAddress(invoice.businessWalletAddressSnapshot)) {
-    merchantWallet = invoice.businessWalletAddressSnapshot.toLowerCase() as `0x${string}`;
+  if (isHexAddress(invoice.businessEvmWalletAddressSnapshot)) {
+    merchantWallet = invoice.businessEvmWalletAddressSnapshot.toLowerCase() as `0x${string}`;
   }
   const [biz] = await db
     .select({
-      wallet: businesses.walletAddress,
+      wallet: businesses.evmWalletAddress,
       paymentChainId: businesses.paymentChainId,
     })
     .from(businesses)

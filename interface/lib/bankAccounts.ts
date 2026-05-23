@@ -43,8 +43,8 @@ export type BankAccountPatch = Partial<{
  *
  * The bug this catches: callers misroute the merchant's wallet into a bank
  * account row, which (a) renders as a fake "Account number: 0x…" on invoices
- * and (b) leaves businesses.wallet_address empty so the Pay-with-USDC button
- * never appears. Wallets live on businesses.wallet_address, period.
+ * and (b) leaves businesses.evm_wallet_address empty so the Pay-with-USDC button
+ * never appears. Wallets live on businesses.evm_wallet_address, period.
  */
 const EVM_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
 const WALLET_HINT = /\b(wallet|usdc|usdt|crypto|onchain|on-chain|\.eth)\b/i;
@@ -67,14 +67,14 @@ function assertNotWalletShaped(fields: {
   if (an && EVM_ADDRESS.test(an)) {
     throw new BankAccountValidationError(
       "account_number is an EVM-shaped wallet address (0x + 40 hex). Bank accounts are for fiat rails only.",
-      "Set the wallet via updateBusinessProfile({ walletAddress: '0x...' }) instead. Pay-with-USDC reads the business's wallet_address field, not bank account fields.",
+      "Set the wallet via updateBusinessProfile({ evmWalletAddress: '0x...' }) instead. Pay-with-USDC reads the business's wallet_address field, not bank account fields.",
     );
   }
   const haystack = `${fields.label ?? ""} ${fields.accountHolder ?? ""}`;
   if (haystack.trim() && WALLET_HINT.test(haystack)) {
     throw new BankAccountValidationError(
       "label/account_holder mentions wallet / USDC / crypto / .eth. Bank accounts are for fiat rails only.",
-      "Set the wallet via updateBusinessProfile({ walletAddress: '0x...' }). If you really meant a fiat account, rename it so the label/holder doesn't mention wallet/USDC/crypto.",
+      "Set the wallet via updateBusinessProfile({ evmWalletAddress: '0x...' }). If you really meant a fiat account, rename it so the label/holder doesn't mention wallet/USDC/crypto.",
     );
   }
 }

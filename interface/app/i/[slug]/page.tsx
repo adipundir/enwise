@@ -51,7 +51,9 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
           logoUrl: invoice.businessLogoUrlSnapshot,
           taxId: invoice.businessTaxIdSnapshot,
           contactName: invoice.businessContactNameSnapshot,
-          walletAddress: invoice.businessWalletAddressSnapshot,
+          evmWalletAddress: invoice.businessEvmWalletAddressSnapshot,
+          starknetWalletAddress: invoice.businessStarknetWalletAddressSnapshot,
+          aptosWalletAddress: invoice.businessAptosWalletAddressSnapshot,
           snapshot: invoice.businessAddressSnapshot,
         },
       ]
@@ -65,8 +67,15 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
   const bankAccounts = paymentMethodEnabled(invoice, "bank")
     ? await resolveBankAccountsForShare(invoice)
     : [];
-  const businessWallet = paymentMethodEnabled(invoice, "crypto_wallet")
-    ? ((business && "walletAddress" in business ? business.walletAddress : null) ?? null)
+  const cryptoOn = paymentMethodEnabled(invoice, "crypto_wallet");
+  const businessEvmWallet = cryptoOn
+    ? ((business && "evmWalletAddress" in business ? business.evmWalletAddress : null) ?? null)
+    : null;
+  const businessStarknetWallet = cryptoOn
+    ? ((business && "starknetWalletAddress" in business ? business.starknetWalletAddress : null) ?? null)
+    : null;
+  const businessAptosWallet = cryptoOn
+    ? ((business && "aptosWalletAddress" in business ? business.aptosWalletAddress : null) ?? null)
     : null;
   const businessContact =
     (business && "contactName" in business ? business.contactName : null) ?? null;
@@ -104,7 +113,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
     invoice.status === "sent" &&
     invoice.currency.toUpperCase() === "USD" &&
     outstandingUsdcUnits > 0n &&
-    isEvmAddress(businessWallet);
+    isEvmAddress(businessEvmWallet);
 
   after(async () => {
     try {
@@ -134,10 +143,10 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                 txHash={latestPayment?.txHash}
                 chainId={latestPayment?.chainId}
               />
-            ) : canPayWithWallet && isEvmAddress(businessWallet) ? (
+            ) : canPayWithWallet && isEvmAddress(businessEvmWallet) ? (
               <PayWithWalletButton
                 slug={slug}
-                merchantWallet={businessWallet}
+                merchantWallet={businessEvmWallet}
                 amountUsdcUnits={outstandingUsdcUnits.toString()}
                 amountLabel={`${outstandingDecimal} USDC`}
                 chainId={merchantChainId}
@@ -365,18 +374,41 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
             </section>
           )}
 
-          {bankAccounts.length > 0 || businessWallet ? (
+          {bankAccounts.length > 0 ||
+          businessEvmWallet ||
+          businessStarknetWallet ||
+          businessAptosWallet ? (
             <section className="mt-10 space-y-6">
               <div className="text-[10px] uppercase tracking-widest text-zinc-500">
                 Payment details
               </div>
-              {businessWallet ? (
+              {businessEvmWallet ? (
                 <div className="flex flex-col gap-0.5 text-sm">
                   <dt className="text-[10px] uppercase tracking-widest text-zinc-500">
-                    Wallet address
+                    EVM (USDC on Base / ETH / Arbitrum / etc.)
                   </dt>
                   <dd>
-                    <CopyableField value={businessWallet} mono />
+                    <CopyableField value={businessEvmWallet} mono />
+                  </dd>
+                </div>
+              ) : null}
+              {businessStarknetWallet ? (
+                <div className="flex flex-col gap-0.5 text-sm">
+                  <dt className="text-[10px] uppercase tracking-widest text-zinc-500">
+                    Starknet (USDC)
+                  </dt>
+                  <dd>
+                    <CopyableField value={businessStarknetWallet} mono />
+                  </dd>
+                </div>
+              ) : null}
+              {businessAptosWallet ? (
+                <div className="flex flex-col gap-0.5 text-sm">
+                  <dt className="text-[10px] uppercase tracking-widest text-zinc-500">
+                    Aptos (USDC)
+                  </dt>
+                  <dd>
+                    <CopyableField value={businessAptosWallet} mono />
                   </dd>
                 </div>
               ) : null}
@@ -518,7 +550,9 @@ type BaseBusiness = {
   logoUrl?: string | null;
   taxId?: string | null;
   contactName?: string | null;
-  walletAddress?: string | null;
+  evmWalletAddress?: string | null;
+  starknetWalletAddress?: string | null;
+  aptosWalletAddress?: string | null;
   snapshot?: unknown;
   // address fields appear directly on the live row
   addressLine1?: string | null;
@@ -533,7 +567,6 @@ type BaseClient = {
   name?: string | null;
   contactName?: string | null;
   email?: string | null;
-  walletAddress?: string | null;
   snapshot?: unknown;
   addressLine1?: string | null;
   addressLine2?: string | null;
@@ -560,7 +593,9 @@ function applyBusinessOverrides(
   if ("legal_name" in ov) out.legalName = ov.legal_name;
   if ("tax_id" in ov) out.taxId = ov.tax_id;
   if ("contact_name" in ov) out.contactName = ov.contact_name;
-  if ("wallet_address" in ov) out.walletAddress = ov.wallet_address;
+  if ("evm_wallet_address" in ov) out.evmWalletAddress = ov.evm_wallet_address;
+  if ("starknet_wallet_address" in ov) out.starknetWalletAddress = ov.starknet_wallet_address;
+  if ("aptos_wallet_address" in ov) out.aptosWalletAddress = ov.aptos_wallet_address;
   if ("logo_url" in ov) out.logoUrl = ov.logo_url;
   if ("address" in ov) {
     // Replace the snapshot so buildAddressLines reads the override; also
@@ -589,7 +624,6 @@ function applyClientOverrides(
   if ("name" in ov) out.name = ov.name;
   if ("contact_name" in ov) out.contactName = ov.contact_name;
   if ("email" in ov) out.email = ov.email;
-  if ("wallet_address" in ov) out.walletAddress = ov.wallet_address;
   if ("address" in ov) {
     out.snapshot = ov.address ?? null;
     out.addressLine1 = null;

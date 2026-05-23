@@ -43,7 +43,9 @@ export type DisplayOverrides = {
     legal_name?: string | null;
     tax_id?: string | null;
     contact_name?: string | null;
-    wallet_address?: string | null;
+    evm_wallet_address?: string | null;
+    starknet_wallet_address?: string | null;
+    aptos_wallet_address?: string | null;
     logo_url?: string | null;
     address?: AddressFields | null;
     bank_details?: BankFields | null;
@@ -52,7 +54,6 @@ export type DisplayOverrides = {
     name?: string | null;
     contact_name?: string | null;
     email?: string | null;
-    wallet_address?: string | null;
     address?: AddressFields | null;
   };
 };

@@ -43,7 +43,9 @@ const updateInput = {
   legal_name: z.string().max(200).nullish(),
   tax_id: z.string().max(64).nullish(),
   contact_name: z.string().max(200).nullish(),
-  wallet_address: z.string().max(200).nullish(),
+  evm_wallet_address: z.string().max(200).nullish(),
+  starknet_wallet_address: z.string().max(200).nullish(),
+  aptos_wallet_address: z.string().max(200).nullish(),
   address_line1: z.string().max(200).nullish(),
   address_line2: z.string().max(200).nullish(),
   city: z.string().max(100).nullish(),
@@ -109,7 +111,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Get business profile",
       description:
-        "Return the full profile for a business: name, legal_name, tax_id, contact_name, invoice_number_prefix, logo_url, brand_color, email_reply_to, default_payment_terms_days, default_notes, full address, wallet_address, payment_chain_id (preferred EVM chain for receiving USDC), and timestamps. Currency is not stored on the business — it lives on the client (default_currency) or per invoice. Bank payout details are managed separately via list_bank_accounts / add_bank_account / etc. If the user owns only one business, `business_id` can be omitted; if they own multiple, pass `business_id`. Call this before update_business_profile to show the user what's currently on file.",
+        "Return the full profile for a business: name, legal_name, tax_id, contact_name, invoice_number_prefix, logo_url, brand_color, email_reply_to, default_payment_terms_days, default_notes, full address, evm_wallet_address, starknet_wallet_address, aptos_wallet_address, payment_chain_id (preferred EVM chain for receiving USDC), and timestamps. Currency is not stored on the business — it lives on the client (default_currency) or per invoice. Bank payout details are managed separately via list_bank_accounts / add_bank_account / etc. If the user owns only one business, `business_id` can be omitted; if they own multiple, pass `business_id`. Call this before update_business_profile to show the user what's currently on file.",
       inputSchema: getProfileInput,
     },
     async (args, extra) => {
@@ -134,7 +136,7 @@ export function registerBusinessTools(server: McpServer) {
     {
       title: "Update business profile",
       description:
-        "Update any subset of a business profile (name, tax ID, address, invoice number prefix, logo, contact person, wallet address, preferred crypto chain, etc.). Currency lives on the client (default_currency) or per invoice, not on the business. Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. To manage BANK ACCOUNTS, use the dedicated tools — add_bank_account / update_bank_account / remove_bank_account / set_default_bank_account / list_bank_accounts (a business can have multiple bank accounts; one is marked default for new invoices). `contact_name` is the person at the business who handles invoicing — used in PDF letterhead / email footer. **`wallet_address` is the ONLY place a crypto wallet belongs.** It's the merchant's onchain payout identity (raw 0x… or ENS name like `acme.eth`). The Pay-with-USDC button on the share page reads THIS field — not bank account fields. Whenever the user says 'add my wallet' / 'set my USDC address' / 'I want to receive crypto' / pastes a 0x… address / pastes a .eth name, the tool you want is THIS one with `wallet_address`. DO NOT call add_bank_account with a wallet stuffed into account_number — that tool will reject EVM-shaped input and points you back here. `payment_chain_id` selects the EVM chain payers will send USDC on — 8453 for Base mainnet, 84532 for Base Sepolia; pass null to use the platform default. Pass `business_id` if the user owns multiple businesses.",
+        "Update any subset of a business profile (name, tax ID, address, invoice number prefix, logo, contact person, per-chain wallets, preferred EVM crypto chain, etc.). Currency lives on the client (default_currency) or per invoice, not on the business. Omitted fields are left unchanged. Pass null to clear a nullable field. Logo can be passed as either `{ image_url: 'https://…' }` or `{ image_base64: '…', mime_type: 'image/png' }`. To manage BANK ACCOUNTS, use the dedicated tools — add_bank_account / update_bank_account / remove_bank_account / set_default_bank_account / list_bank_accounts (a business can have multiple bank accounts; one is marked default for new invoices). `contact_name` is the person at the business who handles invoicing — used in PDF letterhead / email footer.\n\n**WALLETS — three chain-specific fields. ALL crypto goes here, never in bank accounts.**\n  - `evm_wallet_address`: raw 0x + 40 hex (e.g. 0xabc…) or an ENS name like `name.eth`. Used by EVM USDC payers (Base, Ethereum, Arbitrum, Optimism, Polygon, etc.). The Pay-with-USDC button on the share page reads THIS field specifically and only fires on raw 0x.\n  - `starknet_wallet_address`: raw 0x + up to 64 hex, or a Starknet Domains name like `name.stark`. Used by Starknet USDC payers. Rendered on the invoice; no client-side pay button yet.\n  - `aptos_wallet_address`: raw 0x + up to 64 hex, or an Aptos Names handle like `name.apt`. Used by Aptos USDC payers. Rendered on the invoice; no client-side pay button yet.\n\nWhen the user says 'add my wallet' / 'set my USDC address' / 'I want to receive crypto' / pastes a 0x address: ASK which chain (EVM / Starknet / Aptos) unless the format makes it obvious. A 40-hex 0x address is unambiguously EVM. A longer 0x string could be either Starknet or Aptos — ASK. The user can set as many as they want; the invoice surfaces every configured chain. DO NOT call add_bank_account with a wallet — that tool rejects EVM-shaped input and points back here. `payment_chain_id` selects the EVM chain payers will send USDC on for the Pay button — 8453 Base mainnet, 84532 Base Sepolia; pass null for platform default. Pass `business_id` if the user owns multiple businesses.",
       inputSchema: updateInput,
     },
     async (args, extra) => {
@@ -150,7 +152,9 @@ export function registerBusinessTools(server: McpServer) {
       if (input.legal_name !== undefined) patch.legalName = input.legal_name ?? null;
       if (input.tax_id !== undefined) patch.taxId = input.tax_id ?? null;
       if (input.contact_name !== undefined) patch.contactName = input.contact_name ?? null;
-      if (input.wallet_address !== undefined) patch.walletAddress = input.wallet_address ?? null;
+      if (input.evm_wallet_address !== undefined) patch.evmWalletAddress = input.evm_wallet_address ?? null;
+      if (input.starknet_wallet_address !== undefined) patch.starknetWalletAddress = input.starknet_wallet_address ?? null;
+      if (input.aptos_wallet_address !== undefined) patch.aptosWalletAddress = input.aptos_wallet_address ?? null;
       if (input.address_line1 !== undefined) patch.addressLine1 = input.address_line1 ?? null;
       if (input.address_line2 !== undefined) patch.addressLine2 = input.address_line2 ?? null;
       if (input.city !== undefined) patch.city = input.city ?? null;

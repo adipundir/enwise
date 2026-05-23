@@ -953,8 +953,9 @@ export async function finalizeInvoice(
   // finalize must capture the business it's actually rendered under at
   // send time.
   const bizRows = await db.execute(sql`
-    select name, legal_name, tax_id, contact_name, wallet_address, logo_url,
-           address_line1, address_line2, city, region, postal_code, country
+    select name, legal_name, tax_id, contact_name,
+           evm_wallet_address, starknet_wallet_address, aptos_wallet_address,
+           logo_url, address_line1, address_line2, city, region, postal_code, country
     from businesses where id = ${inv.businessId}
   `);
   const biz = bizRows.rows[0] as
@@ -963,7 +964,9 @@ export async function finalizeInvoice(
         legal_name: string | null;
         tax_id: string | null;
         contact_name: string | null;
-        wallet_address: string | null;
+        evm_wallet_address: string | null;
+        starknet_wallet_address: string | null;
+        aptos_wallet_address: string | null;
         logo_url: string | null;
         address_line1: string | null;
         address_line2: string | null;
@@ -1003,7 +1006,9 @@ export async function finalizeInvoice(
       businessLegalNameSnapshot: biz.legal_name,
       businessTaxIdSnapshot: biz.tax_id,
       businessContactNameSnapshot: biz.contact_name,
-      businessWalletAddressSnapshot: biz.wallet_address,
+      businessEvmWalletAddressSnapshot: biz.evm_wallet_address,
+      businessStarknetWalletAddressSnapshot: biz.starknet_wallet_address,
+      businessAptosWalletAddressSnapshot: biz.aptos_wallet_address,
       businessLogoUrlSnapshot: biz.logo_url,
       businessAddressSnapshot: {
         line1: biz.address_line1,
@@ -1230,7 +1235,9 @@ export async function revertFinalizeInvoice(
       businessLegalNameSnapshot: null,
       businessTaxIdSnapshot: null,
       businessContactNameSnapshot: null,
-      businessWalletAddressSnapshot: null,
+      businessEvmWalletAddressSnapshot: null,
+      businessStarknetWalletAddressSnapshot: null,
+      businessAptosWalletAddressSnapshot: null,
       businessAddressSnapshot: null,
       businessLogoUrlSnapshot: null,
       businessBankAccountsSnapshot: null,

@@ -208,7 +208,9 @@ export interface InvoicePdfData {
     legalName: string | null;
     logoUrl: string | null;
     contactName: string | null;
-    walletAddress: string | null;
+    evmWalletAddress: string | null;
+    starknetWalletAddress: string | null;
+    aptosWalletAddress: string | null;
     addressLine1: string | null;
     addressLine2: string | null;
     city: string | null;
@@ -381,14 +383,33 @@ export function InvoiceDocument({
           </View>
         )}
 
-        {business.bankAccounts.length > 0 || business.walletAddress ? (
+        {business.bankAccounts.length > 0 ||
+        business.evmWalletAddress ||
+        business.starknetWalletAddress ||
+        business.aptosWalletAddress ? (
           <View style={{ marginTop: 24 }} wrap={false}>
             <Text style={styles.blockLabel}>Payment details</Text>
-            {business.walletAddress ? (
+            {business.evmWalletAddress ? (
               <View style={styles.walletRow}>
-                <Text style={styles.bankCellLabel}>Wallet address</Text>
+                <Text style={styles.bankCellLabel}>EVM (USDC on Base / ETH / Arbitrum / etc.)</Text>
                 <Text style={{ ...styles.bankCellValue, ...styles.bankCellMono }}>
-                  {business.walletAddress}
+                  {business.evmWalletAddress}
+                </Text>
+              </View>
+            ) : null}
+            {business.starknetWalletAddress ? (
+              <View style={styles.walletRow}>
+                <Text style={styles.bankCellLabel}>Starknet (USDC)</Text>
+                <Text style={{ ...styles.bankCellValue, ...styles.bankCellMono }}>
+                  {business.starknetWalletAddress}
+                </Text>
+              </View>
+            ) : null}
+            {business.aptosWalletAddress ? (
+              <View style={styles.walletRow}>
+                <Text style={styles.bankCellLabel}>Aptos (USDC)</Text>
+                <Text style={{ ...styles.bankCellValue, ...styles.bankCellMono }}>
+                  {business.aptosWalletAddress}
                 </Text>
               </View>
             ) : null}

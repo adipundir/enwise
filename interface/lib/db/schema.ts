@@ -115,10 +115,18 @@ export const businesses = pgTable(
     // Optional human contact at the business — counterpart to clients.contactName.
     // Surfaced in the email footer / PDF letterhead when present.
     contactName: text("contact_name"),
-    // Onchain payment address. Free-form string so users can enter a raw
-    // 0x… address, an ENS name, or a multi-chain identifier. No format
-    // enforcement — UI just renders what's there.
-    walletAddress: text("wallet_address"),
+    // Onchain payment addresses, one per supported chain family. All three
+    // chains have native (Circle-issued) USDC. Format is enforced by per-
+    // column CHECK constraints in migration 0028:
+    //   evm:     0x + 40 hex, or *.eth ENS name
+    //   starknet: 0x + 1..64 hex, or *.stark name
+    //   aptos:   0x + 1..64 hex, or *.apt name
+    // The Pay-with-USDC button reads evmWalletAddress specifically and only
+    // fires on raw 0x; the other two render on the invoice as additional
+    // payment-info rows (no client-side pay flow yet).
+    evmWalletAddress: text("evm_wallet_address"),
+    starknetWalletAddress: text("starknet_wallet_address"),
+    aptosWalletAddress: text("aptos_wallet_address"),
     addressLine1: text("address_line1"),
     addressLine2: text("address_line2"),
     city: text("city"),
@@ -416,7 +424,9 @@ export const invoices = pgTable(
     businessLegalNameSnapshot: text("business_legal_name_snapshot"),
     businessTaxIdSnapshot: text("business_tax_id_snapshot"),
     businessContactNameSnapshot: text("business_contact_name_snapshot"),
-    businessWalletAddressSnapshot: text("business_wallet_address_snapshot"),
+    businessEvmWalletAddressSnapshot: text("business_evm_wallet_address_snapshot"),
+    businessStarknetWalletAddressSnapshot: text("business_starknet_wallet_address_snapshot"),
+    businessAptosWalletAddressSnapshot: text("business_aptos_wallet_address_snapshot"),
     businessAddressSnapshot: jsonb("business_address_snapshot"),
     businessLogoUrlSnapshot: text("business_logo_url_snapshot"),
     /** Frozen at finalize: an array of {id?, label, account_holder, bank_name,
