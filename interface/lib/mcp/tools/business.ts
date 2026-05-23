@@ -4,6 +4,7 @@ import {
   formatBusinessForMcp,
   getBusinessProfile,
   updateBusinessProfile,
+  WalletAddressValidationError,
   type BusinessPatch,
 } from "@/lib/businesses";
 import { ctxFromAuthInfo, scopeFromCtx } from "@/lib/mcp/context";
@@ -195,7 +196,15 @@ export function registerBusinessTools(server: McpServer) {
         }
       }
 
-      const updated = await updateBusinessProfile(scope.scoped, patch);
+      let updated;
+      try {
+        updated = await updateBusinessProfile(scope.scoped, patch);
+      } catch (e) {
+        if (e instanceof WalletAddressValidationError) {
+          return toolError("invalid_input", e.message, { hint: e.hint });
+        }
+        throw e;
+      }
       if (!updated) {
         return toolError(
           "not_found",

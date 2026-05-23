@@ -36,6 +36,49 @@ export type BankAccountPatch = Partial<{
   currency: string | null;
 }>;
 
+/**
+ * Library-level wallet guard. Defense-in-depth alongside the MCP-tool input
+ * validation and the DB CHECK constraint. Any caller — MCP, internal API,
+ * future REST endpoint, ad-hoc script — gets the same protection.
+ *
+ * The bug this catches: callers misroute the merchant's wallet into a bank
+ * account row, which (a) renders as a fake "Account number: 0x…" on invoices
+ * and (b) leaves businesses.wallet_address empty so the Pay-with-USDC button
+ * never appears. Wallets live on businesses.wallet_address, period.
+ */
+const EVM_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
+const WALLET_HINT = /\b(wallet|usdc|usdt|crypto|onchain|on-chain|\.eth)\b/i;
+
+class BankAccountValidationError extends Error {
+  code = "wallet_in_bank_account";
+  hint: string;
+  constructor(message: string, hint: string) {
+    super(message);
+    this.hint = hint;
+  }
+}
+
+function assertNotWalletShaped(fields: {
+  accountNumber?: string | null;
+  label?: string | null;
+  accountHolder?: string | null;
+}) {
+  const an = fields.accountNumber?.trim();
+  if (an && EVM_ADDRESS.test(an)) {
+    throw new BankAccountValidationError(
+      "account_number is an EVM-shaped wallet address (0x + 40 hex). Bank accounts are for fiat rails only.",
+      "Set the wallet via updateBusinessProfile({ walletAddress: '0x...' }) instead. Pay-with-USDC reads the business's wallet_address field, not bank account fields.",
+    );
+  }
+  const haystack = `${fields.label ?? ""} ${fields.accountHolder ?? ""}`;
+  if (haystack.trim() && WALLET_HINT.test(haystack)) {
+    throw new BankAccountValidationError(
+      "label/account_holder mentions wallet / USDC / crypto / .eth. Bank accounts are for fiat rails only.",
+      "Set the wallet via updateBusinessProfile({ walletAddress: '0x...' }). If you really meant a fiat account, rename it so the label/holder doesn't mention wallet/USDC/crypto.",
+    );
+  }
+}
+
 /** List all non-deleted bank accounts for a business, default first. */
 export async function listBankAccounts(
   businessId: string,
@@ -95,6 +138,11 @@ export async function addBankAccount(
   businessId: string,
   input: BankAccountInput,
 ): Promise<BusinessBankAccount> {
+  assertNotWalletShaped({
+    accountNumber: input.accountNumber,
+    label: input.label,
+    accountHolder: input.accountHolder,
+  });
   const existing = await listBankAccounts(businessId);
   const wantsDefault = input.setDefault === true || existing.length === 0;
   if (wantsDefault) {
@@ -125,6 +173,11 @@ export async function updateBankAccount(
   bankAccountId: string,
   patch: BankAccountPatch,
 ): Promise<BusinessBankAccount | null> {
+  assertNotWalletShaped({
+    accountNumber: patch.accountNumber,
+    label: patch.label,
+    accountHolder: patch.accountHolder,
+  });
   if (Object.keys(patch).length === 0) {
     const [row] = await db
       .select()

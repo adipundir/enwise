@@ -43,10 +43,43 @@ export async function getBusinessProfile(
   return row ?? null;
 }
 
+/**
+ * wallet_address must be a recognizable onchain identifier: either a raw
+ * EVM address (0x + 40 hex) or a plausible ENS name (foo.eth / foo.bar.eth).
+ * Rejects anything else — including bank account numbers, IBANs, emails,
+ * free-form text — at the library layer so any caller (MCP, future REST,
+ * scripts) gets the same guarantee. The DB CHECK constraint is the third
+ * layer of defense.
+ *
+ * The Pay-with-USDC button on the share page ALSO requires raw 0x; ENS is
+ * accepted for display only. That's a separate gate in the share page.
+ */
+const EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+const ENS_NAME_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)*\.eth$/i;
+
+export class WalletAddressValidationError extends Error {
+  code = "invalid_wallet_address";
+  hint =
+    "wallet_address must be a raw 0x… EVM address (40 hex chars) or an ENS name ending in .eth. Bank account numbers, IBANs, and free-form text are rejected. If the user meant to add a bank account, call addBankAccount instead.";
+}
+
+function assertValidWalletAddress(value: string | null | undefined) {
+  if (value === undefined || value === null) return;
+  const v = value.trim();
+  if (v === "") return; // empty string treated as null
+  if (EVM_ADDRESS_RE.test(v) || ENS_NAME_RE.test(v)) return;
+  throw new WalletAddressValidationError(
+    `wallet_address "${v}" is not a recognizable onchain identifier (expected raw 0x + 40 hex, or an ENS name like name.eth).`,
+  );
+}
+
 export async function updateBusinessProfile(
   ctx: ScopedCtx,
   patch: BusinessPatch,
 ): Promise<Business | null> {
+  if (patch.walletAddress !== undefined) {
+    assertValidWalletAddress(patch.walletAddress);
+  }
   if (Object.keys(patch).length === 0) {
     return getBusinessProfile(ctx);
   }
