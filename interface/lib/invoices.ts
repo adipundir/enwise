@@ -911,7 +911,25 @@ export async function removeLineItem(
       message: `Invoice ${inv.invoiceNumber} is ${inv.status}; only drafts are editable.`,
     };
   }
-  await db.delete(invoiceLineItems).where(eq(invoiceLineItems.id, lineItemId));
+  // Verify the line item is actually on THIS invoice before deleting. Without
+  // this guard, callers could pass any UUID for lineItemId (the DELETE below
+  // matches by id alone) and nuke a row off another user's invoice. The
+  // ownership check on `inv` only proves the caller owns the invoice they
+  // passed, not the line item. updateLineItem already has the equivalent
+  // guard; this lines up the two paths.
+  const existing = inv.lineItems.find((l) => l.id === lineItemId);
+  if (!existing) {
+    return {
+      ok: false,
+      code: "not_found",
+      message: `No line item with id ${lineItemId} on invoice ${inv.invoiceNumber}.`,
+    };
+  }
+  await db
+    .delete(invoiceLineItems)
+    .where(
+      and(eq(invoiceLineItems.id, lineItemId), eq(invoiceLineItems.invoiceId, inv.id)),
+    );
   // Renumber positions and recompute.
   const remaining = await db
     .select()
