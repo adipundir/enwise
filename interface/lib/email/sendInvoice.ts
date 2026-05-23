@@ -202,6 +202,19 @@ export async function sendInvoiceByEmail(
           "Check RESEND_API_KEY, verify the sending domain, and confirm the from-address is on a verified domain. Retry send_invoice once fixed.",
       };
     }
+    // Persist the primary recipient on the invoice row so void_invoice can
+    // notify the same address later. Tracks send-time overrides (the merchant
+    // may have passed `to` explicitly, different from client.email). Only
+    // [0] — cc/bcc don't get void notifications.
+    {
+      const { db } = await import("@/lib/db");
+      const { invoices } = await import("@/lib/db/schema");
+      const { eq } = await import("drizzle-orm");
+      await db
+        .update(invoices)
+        .set({ sentToEmail: toArray[0]!, updatedAt: new Date() })
+        .where(eq(invoices.id, sent.id));
+    }
     return {
       ok: true,
       invoice: sent,

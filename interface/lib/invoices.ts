@@ -684,11 +684,26 @@ export async function updateInvoice(
 ): Promise<MutateResult<InvoiceWithLineItems>> {
   const inv = await getInvoice(ctx, invoiceId);
   if (!inv) return { ok: false, code: "not_found", message: `No invoice with id ${invoiceId}.` };
-  if (!isEditable(inv)) {
+
+  // Split fields into two classes. CONTRACT fields change what the invoice
+  // legally says — touching them on a sent/paid invoice would mean the
+  // client received a different document than what's now on file. Keep
+  // those draft-only. DISPLAY fields (payment-rail gates, per-invoice
+  // overrides, bank-account picker) only change how the share page renders
+  // the payment surface; the merchant should keep full control of those
+  // even after the invoice has been delivered.
+  const touchesContract =
+    patch.clientId !== undefined ||
+    patch.businessId !== undefined ||
+    patch.issueDate !== undefined ||
+    patch.dueDate !== undefined ||
+    patch.notes !== undefined ||
+    patch.terms !== undefined;
+  if (!isEditable(inv) && touchesContract) {
     return {
       ok: false,
       code: "invoice_not_draft",
-      message: `Invoice ${inv.invoiceNumber} is ${inv.status}; only drafts are editable.`,
+      message: `Invoice ${inv.invoiceNumber} is ${inv.status}; the fields you're changing affect the invoice contract and only drafts can be edited that way. Display-only fields (accepted_payment_methods, accepted_bank_account_ids, display_overrides) ARE editable on finalized invoices — call update_invoice with just those. To rewrite a sent invoice's contract, use void_invoice + duplicate_invoice instead.`,
     };
   }
   if (patch.clientId && patch.clientId !== inv.clientId) {
@@ -1311,6 +1326,27 @@ export async function voidInvoice(
     .set({ status: "void", voidedAt: new Date(), updatedAt: new Date() })
     .where(eq(invoices.id, inv.id));
   await writeEvent(inv.id, "voided", ctx.tokenId, opts.reason ? { reason: opts.reason } : undefined);
+
+  // Notify the recipient the invoice was previously delivered to (the
+  // `to[0]` from send_invoice). Fire-and-forget: void must succeed in the
+  // books even if email infra is down. The outcome is logged onto the
+  // invoice's event stream for the audit trail.
+  if (inv.sentToEmail) {
+    const { sendInvoiceVoidedEmail } = await import("@/lib/email/sendInvoiceVoided");
+    const result = await sendInvoiceVoidedEmail({
+      invoiceId: inv.id,
+      reason: opts.reason ?? null,
+    });
+    await writeEvent(
+      inv.id,
+      result.ok ? "void_email_sent" : "void_email_failed",
+      ctx.tokenId,
+      result.ok
+        ? { to: result.to, resend_id: result.resendId }
+        : { reason: result.reason },
+    );
+  }
+
   return { ok: true, value: (await getInvoice(ctx, inv.id))! };
 }
 
@@ -1320,17 +1356,18 @@ export async function deleteInvoice(
 ): Promise<MutateResult<{ deleted: true }>> {
   const inv = await getInvoice(ctx, invoiceId);
   if (!inv) return { ok: false, code: "not_found", message: `No invoice with id ${invoiceId}.` };
-  if (!isEditable(inv)) {
-    return {
-      ok: false,
-      code: "invoice_not_draft",
-      message: `Invoice ${inv.invoiceNumber} is ${inv.status}; only drafts can be deleted. Use void_invoice instead.`,
-    };
-  }
+  // Soft-delete (sets deletedAt). The merchant has full control over their
+  // own invoices — drafts, sent, voided, and even paid can be removed.
+  // For sent/paid invoices, void_invoice is usually a better choice because
+  // it keeps the audit record visible to the client; delete pulls the share
+  // page entirely (404) which is more drastic. The MCP tool description
+  // surfaces that nuance — this lib function just respects the merchant's
+  // choice.
   await db
     .update(invoices)
     .set({ deletedAt: new Date(), updatedAt: new Date() })
     .where(eq(invoices.id, inv.id));
+  await writeEvent(inv.id, "deleted", ctx.tokenId, { prior_status: inv.status });
   return { ok: true, value: { deleted: true } };
 }
 

@@ -43,6 +43,20 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   brandMeta: { color: c.muted, lineHeight: 1.4 },
+  voidBanner: {
+    marginBottom: 24,
+    padding: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    backgroundColor: "#fef2f2",
+  },
+  voidBannerTitle: {
+    color: "#991b1b",
+    fontWeight: 700,
+    marginBottom: 2,
+  },
+  voidBannerBody: { color: "#7f1d1d", lineHeight: 1.4 },
   metaBlock: { textAlign: "right", maxWidth: 220 },
   metaLabel: {
     color: c.muted,
@@ -247,6 +261,15 @@ export function InvoiceDocument({
       subject={`Invoice ${invoice.invoiceNumber}`}
     >
       <Page size="A4" style={styles.page}>
+        {invoice.status === "void" ? (
+          <View style={styles.voidBanner}>
+            <Text style={styles.voidBannerTitle}>VOIDED</Text>
+            <Text style={styles.voidBannerBody}>
+              This invoice has been voided by the issuer. No payment is due. If
+              you have already paid, please contact the issuer directly.
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.header}>
           <View style={styles.brandBlock}>
             {business.logoUrl ? (

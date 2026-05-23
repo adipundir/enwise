@@ -406,6 +406,11 @@ export const invoices = pgTable(
     shareSlug: text("share_slug").notNull().unique(),
     shareEnabled: boolean("share_enabled").notNull().default(true),
     sentAt: timestamp("sent_at", { withTimezone: true }),
+    // Last recipient email the invoice was delivered to (the `to[0]` from
+    // sendInvoiceByEmail; ignores cc/bcc). Used to notify the recipient when
+    // the invoice is voided. Distinct from clientEmailSnapshot, which is
+    // frozen at finalize — sent_to_email tracks send-time overrides.
+    sentToEmail: text("sent_to_email"),
     viewedAt: timestamp("viewed_at", { withTimezone: true }),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     voidedAt: timestamp("voided_at", { withTimezone: true }),

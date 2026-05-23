@@ -204,6 +204,13 @@
       "when": 1779580800000,
       "tag": "0028_multichain_wallets",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1779667200000,
+      "tag": "0029_invoice_sent_to_email",
+      "breakpoints": true
     }
   ]
 }
