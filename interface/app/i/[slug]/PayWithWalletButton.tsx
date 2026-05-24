@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { erc20Abi } from "viem";
 import {
   useConnect,
@@ -69,6 +69,42 @@ function RainbowButton({
   );
 }
 
+function CrossFade({ stateKey, children }: { stateKey: string; children: React.ReactNode }) {
+  const [displayed, setDisplayed] = useState(children);
+  const [displayedKey, setDisplayedKey] = useState(stateKey);
+  const [animClass, setAnimClass] = useState("opacity-100 scale-100");
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    if (stateKey === displayedKey) return;
+    clearTimeout(timeoutRef.current);
+    setAnimClass("opacity-0 scale-95");
+    timeoutRef.current = setTimeout(() => {
+      setDisplayed(children);
+      setDisplayedKey(stateKey);
+      setAnimClass("opacity-0 scale-105");
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setAnimClass("opacity-100 scale-100");
+        });
+      });
+    }, 150);
+    return () => clearTimeout(timeoutRef.current);
+  }, [stateKey, displayedKey, children]);
+
+  useEffect(() => {
+    if (stateKey === displayedKey) {
+      setDisplayed(children);
+    }
+  }, [children, stateKey, displayedKey]);
+
+  return (
+    <div className={`transition-all duration-200 ease-out ${animClass}`}>
+      {displayed}
+    </div>
+  );
+}
+
 function PayInner({ slug, merchantWallet, amountUsdcUnits, amountLabel, chainId }: Props) {
   const { address, chainId: walletChainId, status } = useConnection();
   const { connect, connectors, isPending: isConnecting, error: connectError } =
@@ -82,82 +118,14 @@ function PayInner({ slug, merchantWallet, amountUsdcUnits, amountLabel, chainId 
   const onWrongChain = status === "connected" && walletChainId !== resolved.chainId;
   const amount = BigInt(amountUsdcUnits);
 
-  // 1. Disconnected — single Connect button. Always routes through the
-  // WalletConnect modal so the payer sees a unified wallet picker (browser
-  // extensions, mobile QR, deep links) instead of having a single browser
-  // extension auto-intercept the connection.
-  if (status !== "connected" || !address) {
+  // Eagerly initialize WalletConnect SDK so the modal opens instantly.
+  const warmedRef = useRef(false);
+  useEffect(() => {
+    if (warmedRef.current) return;
+    warmedRef.current = true;
     const wc = connectors.find((c) => c.id === "walletConnect");
-    return (
-      <div className="flex flex-col items-end gap-1.5">
-        <RainbowButton
-          onClick={() => {
-            if (wc) connect({ connector: wc });
-          }}
-          disabled={isConnecting || !wc}
-        >
-          {isConnecting ? "Connecting…" : "Connect wallet to pay"}
-        </RainbowButton>
-        {connectError ? (
-          <span className="max-w-xs text-right text-xs text-red-700">
-            {connectError.message}
-          </span>
-        ) : null}
-      </div>
-    );
-  }
-
-  // 2. Wrong network. The wallet-side chain switch is best-effort on mobile
-  // WalletConnect — the wallet sends back a confirmation asynchronously,
-  // and wagmi often reports an ambiguous error even when the switch
-  // succeeds. Swallow that error here; the next render of useConnection()
-  // sees the updated chainId and advances us to the Pay state automatically.
-  if (onWrongChain) {
-    return (
-      <div className="flex flex-col items-end gap-1.5">
-        <RainbowButton
-          onClick={async () => {
-            try {
-              await switchChainAsync({ chainId: resolved.chainId });
-            } catch {
-              // Mobile wallet may still switch successfully even though
-              // wagmi resolves with an error here — wait for chainId to
-              // update via the wallet's own emit.
-            }
-          }}
-          disabled={isSwitching}
-        >
-          {isSwitching
-            ? "Approve on your wallet…"
-            : `Switch to ${resolved.chain.name}`}
-        </RainbowButton>
-        <WalletMeta address={address} onDisconnect={() => disconnect()} />
-      </div>
-    );
-  }
-
-  // 3. Paid
-  if (phase.kind === "paid") {
-    return <PaidBadge slug={slug} txHash={phase.txHash} chainId={resolved.chainId} />;
-  }
-
-  // 4. In-flight
-  if (phase.kind === "signing" || phase.kind === "confirming" || phase.kind === "verifying") {
-    const label =
-      phase.kind === "signing"
-        ? "Confirm in wallet…"
-        : phase.kind === "confirming"
-        ? "Sending tx…"
-        : "Verifying on-chain…";
-    return (
-      <div className="flex flex-col items-end gap-1.5">
-        <span className="rounded-md bg-zinc-100 px-3.5 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-zinc-200">
-          {label}
-        </span>
-        <WalletMeta address={address} onDisconnect={() => disconnect()} />
-      </div>
-    );
-  }
+    wc?.getProvider?.().catch(() => {});
+  }, [connectors]);
 
   async function onPay() {
     setPhase({ kind: "signing" });
@@ -188,16 +156,90 @@ function PayInner({ slug, merchantWallet, amountUsdcUnits, amountLabel, chainId 
     }
   }
 
-  // 5. Ready to pay (also error retry state)
-  return (
-    <div className="flex flex-col items-end gap-1.5">
-      <RainbowButton onClick={onPay}>Pay {amountLabel}</RainbowButton>
-      <WalletMeta address={address} onDisconnect={() => disconnect()} />
-      {phase.kind === "error" ? (
-        <span className="max-w-xs text-right text-xs text-red-700">{phase.message}</span>
-      ) : null}
-    </div>
-  );
+  const stateKey =
+    status !== "connected" || !address
+      ? "connect"
+      : onWrongChain
+      ? "switch"
+      : phase.kind === "paid"
+      ? "paid"
+      : phase.kind === "signing" || phase.kind === "confirming" || phase.kind === "verifying"
+      ? "inflight"
+      : "ready";
+
+  if (phase.kind === "paid") {
+    return (
+      <CrossFade stateKey={stateKey}>
+        <PaidBadge slug={slug} txHash={phase.txHash} chainId={resolved.chainId} />
+      </CrossFade>
+    );
+  }
+
+  let content: React.ReactNode;
+
+  if (status !== "connected" || !address) {
+    const wc = connectors.find((c) => c.id === "walletConnect");
+    content = (
+      <div className="flex flex-col items-end gap-1.5">
+        <RainbowButton
+          onClick={() => {
+            if (wc) connect({ connector: wc });
+          }}
+          disabled={isConnecting || !wc}
+        >
+          {isConnecting ? "Connecting…" : "Connect wallet to pay"}
+        </RainbowButton>
+      </div>
+    );
+  } else if (onWrongChain) {
+    content = (
+      <div className="flex flex-col items-end gap-1.5">
+        <RainbowButton
+          onClick={async () => {
+            try {
+              await switchChainAsync({ chainId: resolved.chainId });
+            } catch {
+              // Mobile wallet may still switch successfully even though
+              // wagmi resolves with an error here.
+            }
+          }}
+          disabled={isSwitching}
+        >
+          {isSwitching
+            ? "Approve on your wallet…"
+            : `Switch to ${resolved.chain.name}`}
+        </RainbowButton>
+        <WalletMeta address={address} onDisconnect={() => disconnect()} />
+      </div>
+    );
+  } else if (phase.kind === "signing" || phase.kind === "confirming" || phase.kind === "verifying") {
+    const label =
+      phase.kind === "signing"
+        ? "Confirm in wallet…"
+        : phase.kind === "confirming"
+        ? "Sending tx…"
+        : "Verifying on-chain…";
+    content = (
+      <div className="flex flex-col items-end gap-1.5">
+        <span className="rounded-md bg-zinc-100 px-3.5 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-zinc-200">
+          {label}
+        </span>
+        <WalletMeta address={address} onDisconnect={() => disconnect()} />
+      </div>
+    );
+  } else {
+    content = (
+      <div className="flex flex-col items-end gap-1.5">
+        <RainbowButton onClick={onPay}>Pay {amountLabel}</RainbowButton>
+        <WalletMeta address={address} onDisconnect={() => disconnect()} />
+        {phase.kind === "error" ? (
+          <span className="max-w-xs text-right text-xs text-red-700">{phase.message}</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  return <CrossFade stateKey={stateKey}>{content}</CrossFade>;
 }
 
 function WalletMeta({
