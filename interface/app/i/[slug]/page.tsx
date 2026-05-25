@@ -152,6 +152,26 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                 chainId={merchantChainId}
               />
             ) : null}
+            <a
+              href={`/i/${slug}/pdf`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 16 16"
+                className="size-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <path
+                  d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3M8 2v8m0 0 3-3m-3 3L5 7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Download PDF
+            </a>
           </div>
         </header>
 

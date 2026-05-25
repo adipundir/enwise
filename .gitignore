@@ -59,6 +59,7 @@ memory/
 *.pptx
 *.tex
 *.skill
+*.pdf
 image.png
 INSTRUCTIONS.md
 # Ethereum reference docs (downloaded from ethskills.com — reference, not source)
