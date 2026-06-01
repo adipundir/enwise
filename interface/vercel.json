@@ -3,14 +3,6 @@
     {
       "path": "/api/cron/recurring",
       "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/cron/index-shielded",
-      "schedule": "*/2 * * * *"
-    },
-    {
-      "path": "/api/cron/sweep-private",
-      "schedule": "*/5 * * * *"
     }
   ]
 }
