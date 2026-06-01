@@ -462,7 +462,12 @@ export const invoices = pgTable(
   },
   (t) => [
     index("invoices_owner_idx").on(t.ownerUserId),
-    uniqueIndex("invoices_business_number_idx").on(t.businessId, t.invoiceNumber),
+    // Partial: a soft-deleted invoice must not reserve its number. Hard
+    // delete is the norm now, but legacy soft-deleted rows (and any future
+    // ones) should free their number for reuse.
+    uniqueIndex("invoices_business_number_idx")
+      .on(t.businessId, t.invoiceNumber)
+      .where(sql`${t.deletedAt} is null`),
     uniqueIndex("invoices_idempotency_idx")
       .on(t.ownerUserId, t.clientRequestId)
       .where(sql`${t.clientRequestId} is not null`),

@@ -211,6 +211,13 @@
       "when": 1779667200000,
       "tag": "0029_invoice_sent_to_email",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1780444800000,
+      "tag": "0030_reusable_invoice_numbers",
+      "breakpoints": true
     }
   ]
 }

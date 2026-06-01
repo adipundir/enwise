@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { businesses, invoices } from "@/lib/db/schema";
 import type { ScopedCtx } from "@/lib/mcp/context";
@@ -162,6 +162,7 @@ export async function claimInvoiceNumber(
         select 1 from invoices i
         where i.business_id = b.id
           and i.invoice_number = b.invoice_number_prefix || lpad(${desired}::text, ${PAD}, '0')
+          and i.deleted_at is null
           and (${exclude}::uuid is null or i.id <> ${exclude}::uuid)
       )
     returning
@@ -200,7 +201,7 @@ export async function suggestAvailableNumbers(
   const rows = await db
     .select({ invoiceNumber: invoices.invoiceNumber })
     .from(invoices)
-    .where(eq(invoices.businessId, ctx.businessId));
+    .where(and(eq(invoices.businessId, ctx.businessId), isNull(invoices.deletedAt)));
   const used = new Set<number>();
   for (const r of rows) {
     const numStr = r.invoiceNumber.startsWith(biz.prefix)

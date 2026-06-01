@@ -1488,7 +1488,7 @@ export async function deleteInvoice(
   const remaining = await db
     .select({ invoiceNumber: invoices.invoiceNumber })
     .from(invoices)
-    .where(eq(invoices.businessId, inv.businessId));
+    .where(and(eq(invoices.businessId, inv.businessId), isNull(invoices.deletedAt)));
   const [biz] = await db
     .select({ prefix: businesses.invoiceNumberPrefix })
     .from(businesses)
