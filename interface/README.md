@@ -1,15 +1,16 @@
 # enwise
 
-An MCP server for running an invoicing business entirely through natural language in Claude. Built on Next.js + Neon Postgres + Vercel.
+An MCP server for running an invoicing business entirely through natural language in Claude. Recipients pay hosted invoices in USDC from their own wallet. Built on Next.js + Neon Postgres + Vercel.
 
 ## What it does
 
 - **MCP server** at `/api/mcp`. Claude calls tools to create invoices, manage clients, send emails, and more.
 - **Public invoice page** at `/i/[slug]`. shareable link for recipients with a downloadable PDF.
 - **Web dashboard** at `/dashboard`. exists for sign-in, API token generation, and a quick overview of what Claude has done. Everything else happens in Claude.
-- **Attachment uploads** via presigned PUT. Claude calls `request_attachment_upload`, gets a 30-min scoped URL, PUTs bytes directly to Vercel Blob — the user's API token never leaves the MCP server, bytes never traverse our function.
+- **Attachment uploads** via presigned PUT. Claude calls `request_attachment_upload`, gets a 30-min scoped URL, PUTs bytes directly to Vercel Blob. The user's API token never leaves the MCP server, bytes never traverse our function.
+- **Wallet payments.** The hosted invoice page renders a Pay-with-USDC button (`PayWithWalletButton`) that connects a wallet via WalletConnect / Reown and sends USDC on Base (mainnet `8453`, testnet Base Sepolia `84532`). Payment is confirmed server-side at `/api/invoices/[slug]/confirm-payment`. Merchants set their receiving wallet per business (`evm_wallet_address`).
 
-41 MCP tools shipped: `whoami`, business profile (2), clients (6), products (6), invoices (14), analytics (3), recurring (7), `send_invoice`, `request_attachment_upload`. Share links, PDFs, and emails are automatic.
+48 MCP tools shipped: `whoami`, business profile (3), clients (6), products (6), invoices (16), bank accounts (5), analytics (3), recurring (7), uploads (1). Share links, PDFs, and emails are automatic.
 
 ## Local development
 
@@ -29,6 +30,7 @@ Required in `.env`:
 DATABASE_URL=postgres://...         # Neon pooled
 AUTH_SECRET=...                     # openssl rand -base64 32
 AUTH_URL=http://localhost:3000
+TOKEN_ENC_KEY=...                   # AES-256-GCM key for api_tokens at rest: openssl rand -base64 32
 CRON_SECRET=...                     # openssl rand -hex 32
 
 # Plus at least one OAuth provider:
@@ -39,9 +41,18 @@ AUTH_GOOGLE_SECRET=...
 
 # Optional. features degrade gracefully if absent:
 RESEND_API_KEY=...                  # email sending
+RESEND_FROM_ADDRESS=...             # sending address (falls back to Resend sandbox)
 BLOB_READ_WRITE_TOKEN=...           # logo + attachment uploads (else logo URLs stored verbatim, attachments disabled)
 PUBLIC_BASE_URL=http://localhost:3000
+
+# Wallet payments (USDC on Base). Pay button is hidden if unset:
+NEXT_PUBLIC_REOWN_PROJECT_ID=...    # WalletConnect / Reown projectId, cloud.reown.com
+NEXT_PUBLIC_DEFAULT_CHAIN_ID=8453   # 8453 Base mainnet, 84532 Base Sepolia. Per-business override available
+# NEXT_PUBLIC_RPC_URL=...           # optional RPC override, falls back to viem default
+# NEXT_PUBLIC_USDC_ADDRESS=...      # optional, defaults to Circle's verified USDC for the chain
 ```
+
+See `.env.example` for the full annotated list.
 
 ### 3. Database
 
@@ -90,6 +101,7 @@ Project → Settings → Environment Variables (Production + Preview + Developme
 | Variable | Where from |
 |---|---|
 | `AUTH_SECRET` | `openssl rand -base64 32` |
+| `TOKEN_ENC_KEY` | `openssl rand -base64 32`. Encrypts API tokens at rest. Set once and never rotate without re-issuing tokens. |
 | `AUTH_URL` | `https://<your-vercel-domain>` (e.g. `enwise.vercel.app`) |
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | GitHub OAuth app (create a separate app or add the prod callback to the existing one) |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth client (add prod callback + origin) |
@@ -98,6 +110,10 @@ Project → Settings → Environment Variables (Production + Preview + Developme
 | `RESEND_API_KEY` | [resend.com/api-keys](https://resend.com/api-keys). Verify a domain first or Resend will reject sends. |
 | `RESEND_FROM_ADDRESS` | Sending address. For testing leave unset. we fall back to Resend's sandbox (`onboarding@resend.dev`), which only delivers to the Resend account owner's address. For production, verify a domain in Resend and set this to e.g. `invoices@yourdomain.com`. |
 | `RESEND_REPLY_TO` | Optional. Server-wide fallback for the `List-Unsubscribe` mailto target when a business hasn't configured its own `email_reply_to`. Defaults to `RESEND_FROM_ADDRESS`. |
+| `NEXT_PUBLIC_REOWN_PROJECT_ID` | WalletConnect / Reown projectId from [cloud.reown.com](https://cloud.reown.com). Required for the Pay-with-USDC button. |
+| `NEXT_PUBLIC_DEFAULT_CHAIN_ID` | `8453` (Base mainnet) for prod, `84532` (Base Sepolia) for testing. Platform fallback when a business hasn't set its own `payment_chain_id`. |
+| `NEXT_PUBLIC_RPC_URL` | Optional RPC override (Alchemy / Infura / QuickNode). Falls back to viem's chain default. |
+| `NEXT_PUBLIC_USDC_ADDRESS` | Optional. Defaults to Circle's verified USDC address for the selected chain. |
 
 ### 5. Update OAuth callback URLs
 
@@ -131,11 +147,13 @@ app/                  # Next.js App Router
 ├─ api/mcp/           # MCP server endpoint
 ├─ api/cron/recurring # daily recurring-invoice cron
 ├─ api/health/        # uptime probe
-└─ i/[slug]/          # public invoice page + PDF
+├─ api/invoices/[slug]/confirm-payment  # server-side USDC payment confirmation
+└─ i/[slug]/          # public invoice page + PDF + PayWithWalletButton
 
 lib/
 ├─ db/                # Drizzle schema + client + migrations
 ├─ mcp/               # MCP server + per-entity tool handlers
+├─ web3/              # chain config + wagmi/WalletConnect providers
 ├─ pdf/               # React-PDF rendering
 ├─ email/             # Resend wrappers
 ├─ storage/           # Vercel Blob helpers + SSRF guard
@@ -161,3 +179,4 @@ vercel.json           # cron schedule
 - [x] **Phase 6**. analytics (client summary, revenue, outstanding)
 - [x] **Phase 7**. recurring invoices + Vercel cron
 - [x] **Phase 8 (audit pass)**. SSRF guard, send idempotency, paid badge, dashboard overview, `/api/health`
+- [x] **Phase 9**. wallet payments. USDC on Base via WalletConnect / Reown, per-business receiving wallet, bank-account tools, server-side payment confirmation
