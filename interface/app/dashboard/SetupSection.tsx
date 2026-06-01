@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type AgentId = "claude-code" | "claude-ai" | "cursor" | "codex" | "windsurf";
+type AgentId = "claude-code" | "claude-ai" | "cursor" | "windsurf";
 
 interface AgentMeta {
   id: AgentId;
@@ -13,7 +13,6 @@ const AGENTS: AgentMeta[] = [
   { id: "claude-code", label: "Claude Code" },
   { id: "claude-ai", label: "Claude.ai" },
   { id: "cursor", label: "Cursor" },
-  { id: "codex", label: "Codex" },
   { id: "windsurf", label: "Windsurf" },
 ];
 
@@ -75,12 +74,6 @@ function buildWindsurfConfig(rawToken: string, mcpUrl: string): string {
   );
 }
 
-function buildCodexConfig(rawToken: string, mcpUrl: string): string {
-  return `[mcp_servers.enwise]
-url = "${mcpUrl}"
-http_headers = { Authorization = "Bearer ${rawToken}" }`;
-}
-
 /**
  * Setup flow with a per-agent dropdown. Each agent has its own three
  * step layout: configure, restart/reload, verify. Tokens are minted on
@@ -112,8 +105,6 @@ export function SetupSection({
         return `Authorization: Bearer ${token}`;
       case "windsurf":
         return buildWindsurfConfig(token, mcpUrl);
-      case "codex":
-        return buildCodexConfig(token, mcpUrl);
       case "cursor":
         return buildJsonConfig(token, mcpUrl);
     }
@@ -122,11 +113,9 @@ export function SetupSection({
   const primaryLabel =
     agent === "claude-ai"
       ? "Copy bearer header"
-      : agent === "codex"
-        ? "Copy TOML config"
-        : agent === "cursor" || agent === "windsurf"
-          ? "Copy JSON config"
-          : "Copy install command";
+      : agent === "cursor" || agent === "windsurf"
+        ? "Copy JSON config"
+        : "Copy install command";
 
   return (
     <section className="space-y-6">
@@ -344,8 +333,6 @@ function step1Body(agent: AgentId): string {
       return "Open claude.ai. Settings, then Connectors, then Add custom connector. Name it enwise. Paste the URL above and add the Authorization header (the button copies the header value).";
     case "cursor":
       return "Click the button below to copy the JSON. Open Cursor Settings, MCP, Add new MCP server. Or edit ~/.cursor/mcp.json and paste it in.";
-    case "codex":
-      return "Click the button below to copy the TOML. Open ~/.codex/config.toml and paste it in.";
     case "windsurf":
       return "Click the button below to copy the JSON. Open Windsurf Settings, Cascade, Model Context Protocol. Or edit ~/.codeium/windsurf/mcp_config.json and paste it in.";
   }
@@ -359,8 +346,6 @@ function step2Title(agent: AgentId): string {
       return "Save the connector";
     case "cursor":
       return "Reload Cursor";
-    case "codex":
-      return "Restart Codex";
     case "windsurf":
       return "Restart Windsurf";
   }
@@ -374,8 +359,6 @@ function step2Body(agent: AgentId): string {
       return "Once saved, the enwise connector is live in any new chat. No restart needed. The settings page should show enwise with a green Connected badge.";
     case "cursor":
       return "Reload Cursor (Cmd-Shift-P, then 'Reload Window'). The enwise tools become available in chats with MCP enabled.";
-    case "codex":
-      return "Quit Codex and start it again. Codex picks up MCP servers from config.toml at launch.";
     case "windsurf":
       return "Quit Windsurf and start it again. Cascade reads the MCP config at launch.";
   }
@@ -389,8 +372,6 @@ function step2Code(agent: AgentId): string | null {
       return null;
     case "cursor":
       return "Cmd-Shift-P\nReload Window";
-    case "codex":
-      return "exit\ncodex";
     case "windsurf":
       return "Quit Windsurf\nOpen Windsurf";
   }
@@ -404,8 +385,6 @@ function step2Hint(agent: AgentId): string {
       return "";
     case "cursor":
       return "Use the command palette to reload the window.";
-    case "codex":
-      return "Quit and reopen the CLI.";
     case "windsurf":
       return "Quit fully and reopen.";
   }
@@ -419,8 +398,6 @@ function step3Tail(agent: AgentId): string {
       return "Claude will walk you through setting up your business so you can start invoicing.";
     case "cursor":
       return "Cursor will walk you through setting up your business so you can start invoicing.";
-    case "codex":
-      return "Codex will walk you through setting up your business so you can start invoicing.";
     case "windsurf":
       return "Windsurf will walk you through setting up your business so you can start invoicing.";
   }

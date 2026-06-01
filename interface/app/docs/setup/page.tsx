@@ -87,7 +87,7 @@ export default async function SetupDocsPage() {
                 </pre>
 
                 <h3 className="mt-5 text-sm font-semibold text-zinc-200">
-                  Claude.ai (web &amp; desktop with native MCP connectors)
+                  Claude.ai (web, native MCP connectors)
                 </h3>
                 <ol className="mt-2 space-y-1 text-sm text-zinc-400 list-decimal list-inside">
                   <li>Settings → Connectors → Add custom connector</li>
@@ -107,35 +107,6 @@ export default async function SetupDocsPage() {
                     </code>
                   </li>
                 </ol>
-
-                <h3 className="mt-5 text-sm font-semibold text-zinc-200">
-                  Claude Desktop (config file + mcp-remote bridge)
-                </h3>
-                <p className="mt-1 text-sm text-zinc-400">
-                  Edit{" "}
-                  <code className="rounded bg-zinc-900 px-1 py-0.5 text-xs">
-                    ~/Library/Application Support/Claude/claude_desktop_config.json
-                  </code>
-                </p>
-                <pre className="mt-2 overflow-auto rounded-md border border-zinc-800 bg-[#0a0a0a] p-4 font-mono text-xs leading-relaxed text-zinc-100">
-{`{
-  "mcpServers": {
-    "enwise": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "${mcpUrl}",
-        "--header",
-        "Authorization: Bearer <YOUR_TOKEN>"
-      ]
-    }
-  }
-}`}
-                </pre>
-                <p className="mt-2 text-xs text-zinc-500">
-                  Restart Claude Desktop after saving the config.
-                </p>
               </>
             }
           />
