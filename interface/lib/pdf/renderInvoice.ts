@@ -6,6 +6,7 @@ import { businesses, clients, type Business, type Client } from "@/lib/db/schema
 import type { InvoiceWithLineItems } from "@/lib/invoices";
 import { resolveInvoiceBankAccounts, toSnapshotShape } from "@/lib/bankAccounts";
 import { InvoiceDocument, type InvoicePdfData } from "@/components/pdf/InvoiceDocument";
+import { registerPdfFonts } from "@/lib/pdf/fonts";
 import {
   paymentMethodEnabled,
   type DisplayOverrides,
@@ -50,6 +51,7 @@ function pickScalar<T>(
 export async function renderInvoicePdf(
   invoice: InvoiceWithLineItems,
 ): Promise<NodeJS.ReadableStream> {
+  registerPdfFonts();
   const data = await buildInvoicePdfData(invoice);
   const element = createElement(
     InvoiceDocument,
@@ -63,6 +65,7 @@ export async function renderInvoicePdf(
 export async function renderInvoiceBuffer(
   invoice: InvoiceWithLineItems,
 ): Promise<Buffer> {
+  registerPdfFonts();
   const data = await buildInvoicePdfData(invoice);
   const element = createElement(
     InvoiceDocument,

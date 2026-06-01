@@ -20,7 +20,7 @@ const c = {
 };
 
 const styles = StyleSheet.create({
-  page: { padding: 40, fontSize: 10, color: c.ink, fontFamily: "Helvetica" },
+  page: { padding: 40, fontSize: 10, color: c.ink, fontFamily: "Inter" },
   header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 28 },
   brandBlock: { flexDirection: "column", maxWidth: 280 },
   logo: { width: 64, height: 64, marginBottom: 12, objectFit: "contain" },

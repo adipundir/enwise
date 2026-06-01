@@ -11,8 +11,9 @@ import {
 import { formatMoney } from "@/lib/money";
 import type { InvoiceWithLineItems } from "@/lib/invoices";
 
-// Using default Helvetica to avoid serverless font-loading complexity.
-// Upgrade to Inter via Font.register() when we care about typography polish.
+// Inter (registered in lib/pdf/fonts.ts) matches the hosted invoice page and,
+// unlike the built-in WinAnsi Helvetica, renders non-Latin-1 currency symbols
+// such as the rupee sign correctly.
 
 const c = {
   black: "#0a0a0a",
@@ -27,7 +28,7 @@ const styles = StyleSheet.create({
     padding: 40,
     fontSize: 10,
     color: c.ink,
-    fontFamily: "Helvetica",
+    fontFamily: "Inter",
   },
   header: {
     flexDirection: "row",

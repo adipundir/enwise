@@ -15,6 +15,7 @@ import {
   PaymentReceiptDocument,
   type PaymentReceiptData,
 } from "@/components/pdf/PaymentReceiptDocument";
+import { registerPdfFonts } from "@/lib/pdf/fonts";
 
 type AddressSnap = {
   line1?: string | null;
@@ -28,6 +29,7 @@ type AddressSnap = {
 export async function renderReceiptStream(
   invoice: InvoiceWithLineItems,
 ): Promise<NodeJS.ReadableStream> {
+  registerPdfFonts();
   const data = await buildReceiptData(invoice);
   if (!data) throw new Error("Cannot render receipt: invoice has no recorded payment");
   return renderToStream(
@@ -38,6 +40,7 @@ export async function renderReceiptStream(
 export async function renderReceiptBuffer(
   invoice: InvoiceWithLineItems,
 ): Promise<Buffer> {
+  registerPdfFonts();
   const data = await buildReceiptData(invoice);
   if (!data) throw new Error("Cannot render receipt: invoice has no recorded payment");
   return renderToBuffer(
