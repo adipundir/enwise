@@ -108,8 +108,8 @@ export function InvoiceEmail({
           <Section>
             <Text style={styles.greeting}>Hi {contactName ?? clientName},</Text>
             <Text style={styles.body1}>
-              The PDF is attached, and full details — including payment
-              instructions — are on the hosted page linked below.
+              The PDF is attached. Full details, including payment
+              instructions, are linked below.
             </Text>
 
             {customMessage ? (
