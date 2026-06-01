@@ -11,7 +11,8 @@
     "db:migrate": "tsx lib/db/migrate.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "smoke:mcp": "tsx lib/db/smoke-mcp.ts"
+    "smoke:mcp": "tsx lib/db/smoke-mcp.ts",
+    "smoke:numbering": "tsx lib/db/smoke-numbering.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",

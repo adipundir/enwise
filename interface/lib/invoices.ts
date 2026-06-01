@@ -21,7 +21,13 @@ import {
   toSnapshotShape,
 } from "@/lib/bankAccounts";
 import { addAmounts, computeLine, isValidCurrency } from "@/lib/money";
-import { allocateInvoiceNumber } from "@/lib/numbering";
+import {
+  allocateInvoiceNumber,
+  claimInvoiceNumber,
+  formatInvoiceNumber,
+  parseDesiredInvoiceNumber,
+  suggestAvailableNumbers,
+} from "@/lib/numbering";
 import {
   resolveAttachment,
   type AttachmentInput,
@@ -55,6 +61,9 @@ export type LineItemInput = {
 export type CreateInvoiceInput = {
   clientId: string;
   lineItems: LineItemInput[];
+  /** Desired invoice number. Bare digits ("2") or full form ("INV-0002").
+   *  Must be available in this business; omit to auto-assign the next one. */
+  invoiceNumber?: string;
   issueDate?: string; // YYYY-MM-DD
   dueDate?: string;   // YYYY-MM-DD
   currency?: string;  // ISO 4217. Falls back to client.default_currency; otherwise create_invoice returns currency_required.
@@ -96,6 +105,15 @@ function addDays(iso: string, days: number): string {
 
 function isEditable(inv: Invoice): boolean {
   return inv.status === "draft" && inv.deletedAt === null;
+}
+
+/** Postgres unique-constraint violation (SQLSTATE 23505). */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: unknown }).code === "23505"
+  );
 }
 
 function recomputeTotals(lines: Pick<InvoiceLineItem, "lineSubtotal" | "lineTax">[]) {
@@ -199,6 +217,8 @@ export type CreateInvoiceResult =
         | "onboarding_required"
         | "bank_account_required"
         | "invalid_bank_account"
+        | "invalid_invoice_number"
+        | "duplicate_invoice_number"
         | "attachment_too_large"
         | "attachment_invalid_mime"
         | "attachment_storage_unavailable";
@@ -214,6 +234,9 @@ export type CreateInvoiceResult =
         currency: string | null;
         is_default: boolean;
       }>;
+      /** Populated on duplicate_invoice_number: free numbers the user can
+       *  pick from instead. */
+      available_numbers?: string[];
     };
 
 /**
@@ -267,6 +290,7 @@ export async function createInvoice(
       addressLine1: businesses.addressLine1,
       country: businesses.country,
       taxId: businesses.taxId,
+      invoiceNumberPrefix: businesses.invoiceNumberPrefix,
     })
     .from(businesses)
     .where(eq(businesses.id, ctx.businessId));
@@ -366,14 +390,54 @@ export async function createInvoice(
     resolvedBankAccountIds = null;
   }
 
-  // Allocate invoice number + snapshot business (atomic).
-  const allocation = await allocateInvoiceNumber(ctx);
-  if (!allocation) {
-    return {
-      ok: false,
-      code: "client_not_found",
-      message: "Business row missing for this token. auth integrity failure.",
-    };
+  // Allocate invoice number + snapshot business (atomic). When the caller
+  // requested a specific number, claim it if available; otherwise take the
+  // next one in sequence.
+  let allocation: Awaited<ReturnType<typeof allocateInvoiceNumber>>;
+  if (input.invoiceNumber !== undefined) {
+    const prefix = biz?.invoiceNumberPrefix ?? "";
+    const parsed = parseDesiredInvoiceNumber(input.invoiceNumber, prefix);
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        code: "invalid_invoice_number",
+        message: `"${input.invoiceNumber}" isn't a valid invoice number.`,
+        hint:
+          parsed.reason === "range"
+            ? "Use a whole number between 1 and 1000000."
+            : `Pass either the digits (e.g. "2") or the full form with this business's prefix (e.g. "${prefix}0002").`,
+      };
+    }
+    const claim = await claimInvoiceNumber(ctx, parsed.n);
+    if (!claim.ok) {
+      if (claim.reason === "business_missing") {
+        return {
+          ok: false,
+          code: "client_not_found",
+          message: "Business row missing for this token. auth integrity failure.",
+        };
+      }
+      const suggestion = await suggestAvailableNumbers(ctx);
+      return {
+        ok: false,
+        code: "duplicate_invoice_number",
+        message: `Invoice number ${formatInvoiceNumber(prefix, parsed.n)} is already in use in this business.`,
+        hint: `Pick an available number${
+          suggestion.available.length ? ` (free: ${suggestion.available.join(", ")})` : ""
+        }, or omit invoice_number to auto-assign ${suggestion.nextAuto}.`,
+        available_numbers: suggestion.available,
+      };
+    }
+    allocation = claim.value;
+  } else {
+    allocation = await allocateInvoiceNumber(ctx);
+    if (!allocation) {
+      return {
+        ok: false,
+        code: "client_not_found",
+        message: "Business row missing for this token. auth integrity failure.",
+      };
+    }
   }
 
   const currencyRaw = input.currency ?? client.defaultCurrency;
@@ -458,30 +522,50 @@ export async function createInvoice(
 
   const totals = recomputeTotals(computedLines);
 
-  const [invoice] = await db
-    .insert(invoices)
-    .values({
-      ownerUserId: ctx.userId,
-      businessId: ctx.businessId,
-      clientId: client.id,
-      invoiceNumber: allocation.invoiceNumber,
-      status: "draft",
-      issueDate,
-      dueDate,
-      currency,
-      subtotal: totals.subtotal,
-      taxTotal: totals.taxTotal,
-      total: totals.total,
-      notes: input.notes ?? null,
-      terms: input.terms ?? null,
-      shareSlug,
-      clientRequestId: input.clientRequestId ?? null,
-      acceptedPaymentMethods:
-        input.acceptedPaymentMethods ?? (await deriveDefaultAcceptedPaymentMethods(ctx.businessId, allAccounts.length)),
-      acceptedBankAccountIds: resolvedBankAccountIds,
-      // Snapshots land on finalize (send), not at draft time.
-    })
-    .returning();
+  let invoice: Invoice | undefined;
+  try {
+    [invoice] = await db
+      .insert(invoices)
+      .values({
+        ownerUserId: ctx.userId,
+        businessId: ctx.businessId,
+        clientId: client.id,
+        invoiceNumber: allocation.invoiceNumber,
+        status: "draft",
+        issueDate,
+        dueDate,
+        currency,
+        subtotal: totals.subtotal,
+        taxTotal: totals.taxTotal,
+        total: totals.total,
+        notes: input.notes ?? null,
+        terms: input.terms ?? null,
+        shareSlug,
+        clientRequestId: input.clientRequestId ?? null,
+        acceptedPaymentMethods:
+          input.acceptedPaymentMethods ?? (await deriveDefaultAcceptedPaymentMethods(ctx.businessId, allAccounts.length)),
+        acceptedBankAccountIds: resolvedBankAccountIds,
+        // Snapshots land on finalize (send), not at draft time.
+      })
+      .returning();
+  } catch (err) {
+    // Lost a race for the (business_id, invoice_number) unique index — another
+    // invoice claimed this number between our availability check and the
+    // insert. Surface it as a clean, retryable error.
+    if (isUniqueViolation(err)) {
+      const suggestion = await suggestAvailableNumbers(ctx);
+      return {
+        ok: false,
+        code: "duplicate_invoice_number",
+        message: `Invoice number ${allocation.invoiceNumber} was just taken by another invoice.`,
+        hint: `Retry with a free number${
+          suggestion.available.length ? ` (free: ${suggestion.available.join(", ")})` : ""
+        }, or omit invoice_number to auto-assign ${suggestion.nextAuto}.`,
+        available_numbers: suggestion.available,
+      };
+    }
+    throw err;
+  }
   if (!invoice) {
     return {
       ok: false,
@@ -631,6 +715,9 @@ export type UpdateInvoiceInput = {
   clientId?: string;
   /** Move the invoice to render under a different business. Drafts only. */
   businessId?: string;
+  /** Renumber the invoice. Bare digits ("2") or full form ("INV-0002").
+   *  Must be available in the (possibly new) business. */
+  invoiceNumber?: string;
   issueDate?: string;
   dueDate?: string;
   notes?: string | null;
@@ -654,8 +741,13 @@ export type MutateResult<T> =
         | "not_found"
         | "invoice_not_draft"
         | "client_not_found"
-        | "business_not_found";
+        | "business_not_found"
+        | "invalid_invoice_number"
+        | "duplicate_invoice_number";
       message: string;
+      hint?: string;
+      /** Populated on duplicate_invoice_number: free numbers to pick from. */
+      available_numbers?: string[];
     };
 
 /**
@@ -700,16 +792,18 @@ export async function updateInvoice(
     const c = await getClientScoped(ctx, patch.clientId);
     if (!c) return { ok: false, code: "client_not_found", message: `No client with id ${patch.clientId}.` };
   }
-  // Moving to a different business: validate ownership, then re-allocate
-  // the invoice number under the destination (numbering is per-business).
-  let newInvoiceNumber: string | null = null;
-  if (patch.businessId && patch.businessId !== inv.businessId) {
+  // Destination business (defaults to current). Numbering is per-business, so
+  // a move re-numbers under the destination.
+  const targetBusinessId = patch.businessId ?? inv.businessId;
+  const movingBusiness =
+    patch.businessId !== undefined && patch.businessId !== inv.businessId;
+  if (movingBusiness) {
     const [target] = await db
       .select({ id: businesses.id })
       .from(businesses)
       .where(
         and(
-          eq(businesses.id, patch.businessId),
+          eq(businesses.id, patch.businessId!),
           eq(businesses.ownerUserId, ctx.userId),
         ),
       );
@@ -720,10 +814,57 @@ export async function updateInvoice(
         message: `No business with id ${patch.businessId} on this account.`,
       };
     }
-    const allocation = await allocateInvoiceNumber({
-      ...ctx,
-      businessId: patch.businessId,
-    });
+  }
+
+  const targetCtx: ScopedCtx = { ...ctx, businessId: targetBusinessId };
+
+  // Resolve the invoice number for the destination:
+  //   explicit invoice_number → claim it (must be available),
+  //   else moving business → auto-allocate next under destination,
+  //   else → unchanged.
+  let newInvoiceNumber: string | null = null;
+  if (patch.invoiceNumber !== undefined) {
+    const [tbiz] = await db
+      .select({ prefix: businesses.invoiceNumberPrefix })
+      .from(businesses)
+      .where(eq(businesses.id, targetBusinessId));
+    const prefix = tbiz?.prefix ?? "";
+    const parsed = parseDesiredInvoiceNumber(patch.invoiceNumber, prefix);
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        code: "invalid_invoice_number",
+        message: `"${patch.invoiceNumber}" isn't a valid invoice number.`,
+        hint:
+          parsed.reason === "range"
+            ? "Use a whole number between 1 and 1000000."
+            : `Pass either the digits (e.g. "2") or the full form with the business's prefix (e.g. "${prefix}0002").`,
+      };
+    }
+    const desiredFormatted = formatInvoiceNumber(prefix, parsed.n);
+    if (movingBusiness || desiredFormatted !== inv.invoiceNumber) {
+      const claim = await claimInvoiceNumber(targetCtx, parsed.n, {
+        excludeInvoiceId: inv.id,
+      });
+      if (!claim.ok) {
+        if (claim.reason === "business_missing") {
+          return { ok: false, code: "business_not_found", message: "Destination business not found." };
+        }
+        const suggestion = await suggestAvailableNumbers(targetCtx);
+        return {
+          ok: false,
+          code: "duplicate_invoice_number",
+          message: `Invoice number ${desiredFormatted} is already in use in this business.`,
+          hint: `Pick an available number${
+            suggestion.available.length ? ` (free: ${suggestion.available.join(", ")})` : ""
+          }, or omit invoice_number to keep the current one.`,
+          available_numbers: suggestion.available,
+        };
+      }
+      newInvoiceNumber = claim.value.invoiceNumber;
+    }
+  } else if (movingBusiness) {
+    const allocation = await allocateInvoiceNumber(targetCtx);
     if (!allocation) {
       return {
         ok: false,
@@ -736,10 +877,8 @@ export async function updateInvoice(
 
   const values: Partial<Invoice> = { updatedAt: new Date() };
   if (patch.clientId !== undefined) values.clientId = patch.clientId;
-  if (patch.businessId !== undefined && patch.businessId !== inv.businessId) {
-    values.businessId = patch.businessId;
-    if (newInvoiceNumber) values.invoiceNumber = newInvoiceNumber;
-  }
+  if (movingBusiness) values.businessId = patch.businessId;
+  if (newInvoiceNumber) values.invoiceNumber = newInvoiceNumber;
   if (patch.issueDate !== undefined) values.issueDate = patch.issueDate;
   if (patch.dueDate !== undefined) values.dueDate = patch.dueDate;
   if (patch.notes !== undefined) values.notes = patch.notes;
@@ -753,8 +892,7 @@ export async function updateInvoice(
   if (patch.acceptedBankAccountIds !== undefined) {
     // Validate against the destination business's accounts (handles the
     // case where the invoice is being moved AND the picker is being set
-    // in the same call).
-    const targetBusinessId = (patch.businessId ?? inv.businessId);
+    // in the same call). targetBusinessId is resolved above.
     if (patch.acceptedBankAccountIds !== null && patch.acceptedBankAccountIds.length > 0) {
       const owned = await listBankAccounts(targetBusinessId);
       const ownedIds = new Set(owned.map((a) => a.id));
