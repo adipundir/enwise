@@ -75,10 +75,20 @@ function CrossFade({ stateKey, children }: { stateKey: string; children: React.R
   const [animClass, setAnimClass] = useState("opacity-100 scale-100");
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // While not mid-transition, keep the shown content live as children change
+  // within the same key (e.g. the inflight label cycling). Adjusting state
+  // during render is React-endorsed and does not loop: the follow-up re-render
+  // sees the same children reference, so the guard settles immediately.
+  if (stateKey === displayedKey && displayed !== children) {
+    setDisplayed(children);
+  }
+
   useEffect(() => {
     if (stateKey === displayedKey) return;
     clearTimeout(timeoutRef.current);
-    setAnimClass("opacity-0 scale-95");
+    // Begin the fade-out on the next frame so setState is never called
+    // synchronously inside the effect body.
+    const raf = requestAnimationFrame(() => setAnimClass("opacity-0 scale-95"));
     timeoutRef.current = setTimeout(() => {
       setDisplayed(children);
       setDisplayedKey(stateKey);
@@ -89,14 +99,11 @@ function CrossFade({ stateKey, children }: { stateKey: string; children: React.R
         });
       });
     }, 150);
-    return () => clearTimeout(timeoutRef.current);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timeoutRef.current);
+    };
   }, [stateKey, displayedKey, children]);
-
-  useEffect(() => {
-    if (stateKey === displayedKey) {
-      setDisplayed(children);
-    }
-  }, [children, stateKey, displayedKey]);
 
   return (
     <div className={`transition-all duration-200 ease-out ${animClass}`}>
