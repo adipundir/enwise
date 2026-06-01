@@ -138,7 +138,8 @@ Each error includes a \`hint\` string. Relay the hint to the user; don't rephras
 - Always confirm the invoice number and total when you create an invoice so the user has a trail.
 - When quoting totals, always include the currency.
 - Don't echo raw UUIDs to the user. Use the invoice number, client name, or product name instead.
-- Prefer calling \`find_client\` once and reusing the id over passing names through repeated tool calls.`,
+- Prefer calling \`find_client\` once and reusing the id over passing names through repeated tool calls.
+- Never use em dashes (the long dash, U+2014) in any content you write into a record: invoice notes, line-item descriptions/notes, terms, email subject or message, business or client fields. Use periods, commas, colons, or parentheses instead. Only include one if the user explicitly asks for it or pastes text that already contains it.`,
     },
   );
 
