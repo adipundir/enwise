@@ -123,6 +123,16 @@ export function decryptStoredToken(blobB64: string): string | null {
   }
 }
 
+/**
+ * True when a valid TOKEN_ENC_KEY is configured on this server — i.e. newly
+ * minted tokens will be encrypted-at-rest and therefore displayable on the
+ * dashboard. Callers use this to avoid re-minting a token they still won't be
+ * able to show (which would otherwise churn a fresh token on every page load).
+ */
+export function isEncryptionConfigured(): boolean {
+  return readEncKey() !== null;
+}
+
 export async function createToken(params: {
   createdByUserId: string;
   name: string;

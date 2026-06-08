@@ -6,7 +6,12 @@ import { businesses, clients, invoices } from "@/lib/db/schema";
 import { auth } from "@/auth";
 import { invoiceShareUrl } from "@/lib/invoices";
 import { formatMoney, addAmounts } from "@/lib/money";
-import { createToken, getActiveToken } from "@/lib/tokens";
+import {
+  createToken,
+  getActiveToken,
+  isEncryptionConfigured,
+  revokeToken,
+} from "@/lib/tokens";
 import { SetupSection } from "./SetupSection";
 import { OutstandingStat, OUTSTANDING_HIDDEN_COOKIE } from "./OutstandingStat";
 import { CopyLinkButton } from "./CopyLinkButton";
@@ -37,12 +42,24 @@ export default async function DashboardHome({
 
   // createToken runs in auth.ts on signup, so any user reaching this page
   // should already have an encrypted token. The lazy create below stays as
-  // a defensive fallback for users who somehow reach the dashboard without
-  // one (e.g., signup hook misfires).
+  // a defensive fallback for two cases:
+  //   - No active token at all (signup hook misfired).
+  //   - An active token exists but its ciphertext is null, so getActiveToken
+  //     can't return a displayable raw value. This happens for tokens minted
+  //     before TOKEN_ENC_KEY was configured (or while it was misconfigured).
+  //     Those users can never copy their key, so mint a fresh encrypted one
+  //     and revoke the stale row. Guard the re-mint on isEncryptionConfigured:
+  //     if the key is still absent the new token would also be undisplayable,
+  //     and we'd churn a fresh token on every dashboard load.
   let bootstrapRawToken: string | null = null;
   if (userId) {
     const active = await getActiveToken(userId);
-    if (!active) {
+    const needsRotate =
+      !active || (active.rawToken === null && isEncryptionConfigured());
+    if (needsRotate) {
+      if (active) {
+        await revokeToken({ userId, tokenId: active.tokenId });
+      }
       const created = await createToken({
         createdByUserId: userId,
         name: "Default",
