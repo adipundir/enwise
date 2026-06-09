@@ -130,6 +130,34 @@ export async function Landing() {
           </div>
         </section>
 
+        {/* Payments */}
+        <section className="border-t border-zinc-900">
+          <div className="mx-auto w-full max-w-6xl px-6 py-16 sm:py-20">
+            <div className="text-[11px] uppercase tracking-widest text-zinc-500">
+              Get paid
+            </div>
+            <h2 className="mt-3 display text-2xl leading-tight sm:text-3xl text-zinc-100">
+              Accept USDC on Base and Arbitrum.
+            </h2>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-500">
+              Add a wallet and every invoice gets a Pay button. The client picks
+              which chain to pay on, the same wallet receives on all of them.
+              enwise verifies the transfer on-chain and marks the invoice paid
+              automatically.
+            </p>
+
+            <div className="mt-8 flex flex-wrap items-center gap-2.5">
+              <Chip>USDC on Base</Chip>
+              <Chip>USDC on Arbitrum</Chip>
+            </div>
+
+            <p className="mt-6 max-w-xl text-xs leading-relaxed text-zinc-600">
+              Prefer a bank transfer? Add account details and show either rail,
+              or both, per invoice.
+            </p>
+          </div>
+        </section>
+
         {/* Pricing */}
         <section id="pricing" className="border-t border-zinc-900">
           <div className="mx-auto w-full max-w-6xl px-6 py-16 sm:py-20">
@@ -190,6 +218,15 @@ function Stat({ big, label }: { big: string; label: string }) {
       </div>
       <div className="mt-2 text-sm leading-relaxed text-zinc-500">{label}</div>
     </div>
+  );
+}
+
+function Chip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs font-medium text-zinc-200">
+      <span aria-hidden className="size-1.5 rounded-full bg-zinc-400" />
+      {children}
+    </span>
   );
 }
 
