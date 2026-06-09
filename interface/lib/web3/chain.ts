@@ -8,29 +8,43 @@
  * Supported chains:
  *   8453   = Base mainnet
  *   84532  = Base Sepolia (testnet)
+ *   42161  = Arbitrum One mainnet
  *
- * Add a chain: append to SUPPORTED with its USDC + (optional) RPC override
- * env-var name. The wagmi config + verify endpoint pick up new chains
- * automatically via SUPPORTED_CHAIN_IDS.
+ * Add a chain: append to SUPPORTED with its USDC contract and the name of
+ * its server-only RPC override env var. The wagmi config + verify endpoint
+ * pick up new chains automatically via SUPPORTED_CHAIN_IDS.
  */
 
 import { fallback, http, type Transport } from "viem";
-import { base, baseSepolia, type Chain } from "viem/chains";
+import { arbitrum, base, baseSepolia, type Chain } from "viem/chains";
 
 type ChainEntry = {
   chain: Chain;
   /** Canonical USDC ERC-20 contract on this chain. */
   usdcAddress: `0x${string}`;
+  /** Name of the server-only RPC override env var (Alchemy / Infura) for
+   *  THIS chain. Each chain needs its own — a Base RPC URL returns wrong /
+   *  empty data for an Arbitrum receipt. Falls back to the chain's public
+   *  RPC when unset. */
+  rpcEnvVar: string;
 };
 
 const SUPPORTED = {
   8453: {
     chain: base,
     usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    rpcEnvVar: "BASE_RPC_URL",
   },
   84532: {
     chain: baseSepolia,
     usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    rpcEnvVar: "BASE_SEPOLIA_RPC_URL",
+  },
+  42161: {
+    chain: arbitrum,
+    // Circle-issued native USDC on Arbitrum One (NOT the bridged USDC.e).
+    usdcAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    rpcEnvVar: "ARBITRUM_RPC_URL",
   },
 } as const satisfies Record<number, ChainEntry>;
 
@@ -81,17 +95,18 @@ export function resolveChain(chainId?: number | null): ResolvedChain {
         : DEFAULT_CHAIN_ID;
   const entry = SUPPORTED[id];
   const chain = entry.chain;
-  const usdcAddress =
-    (process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}` | undefined) ??
-    entry.usdcAddress;
-  // Priority: NEXT_PUBLIC_RPC_URL (client-readable override) →
-  // BASE_RPC_URL (server-only override, typically the paid Alchemy URL) →
-  // chain's public default. Dedup so we don't double-call the same URL on
-  // failure.
-  const envClient = process.env.NEXT_PUBLIC_RPC_URL;
-  const envServer = process.env.BASE_RPC_URL;
+  const usdcAddress = entry.usdcAddress;
+  // Priority: this chain's own server-only RPC override (e.g. BASE_RPC_URL,
+  // ARBITRUM_RPC_URL — the paid Alchemy/Infura URL) → the chain's public
+  // default. The override is read by its per-chain env-var name so we never
+  // point an Arbitrum verify at a Base RPC. On the client these server vars
+  // are absent (not NEXT_PUBLIC_), so it transparently uses the public RPC —
+  // fine, since the actual transfer is signed by the user's wallet and the
+  // authoritative verification happens server-side. Dedup so we don't
+  // double-call the same URL on failure.
+  const envServer = process.env[entry.rpcEnvVar];
   const publicDefault = chain.rpcUrls.default.http[0];
-  const rpcUrls = [envClient, envServer, publicDefault].filter(
+  const rpcUrls = [envServer, publicDefault].filter(
     (u, i, arr): u is string => !!u && arr.indexOf(u) === i,
   );
   const explorerUrl =
@@ -133,3 +148,63 @@ export function chainLabel(chainId: number): string {
 export const ALL_SUPPORTED_CHAINS: readonly Chain[] = SUPPORTED_CHAIN_IDS.map(
   (id) => SUPPORTED[id].chain,
 );
+
+/**
+ * Resolve the set of chains a payer may pay an invoice on, in display order.
+ *
+ * Precedence (first non-empty, after filtering to currently-supported ids):
+ *   1. the invoice's own `accepted_chain_ids` override
+ *   2. the business's `accepted_chain_ids` default set
+ *   3. `[businessPreferred ?? DEFAULT_CHAIN_ID]` — the legacy single-chain path
+ *
+ * Always returns at least one chain: an override that filters down to empty
+ * (e.g. a stale id no longer supported) falls through rather than leaving the
+ * invoice with no payable chain. Hiding the wallet rail entirely is the job of
+ * `accepted_payment_methods`, not this function. Deduplicated, order preserved.
+ */
+export function resolveAcceptedChainIds(opts: {
+  invoiceAccepted?: number[] | null;
+  businessAccepted?: number[] | null;
+  businessPreferred?: number | null;
+}): SupportedChainId[] {
+  const supported = (arr: number[] | null | undefined): SupportedChainId[] => {
+    if (!arr) return [];
+    const seen = new Set<number>();
+    const out: SupportedChainId[] = [];
+    for (const id of arr) {
+      if (isSupportedChainId(id) && !seen.has(id)) {
+        seen.add(id);
+        out.push(id);
+      }
+    }
+    return out;
+  };
+  const fromInvoice = supported(opts.invoiceAccepted);
+  if (fromInvoice.length) return fromInvoice;
+  const fromBusiness = supported(opts.businessAccepted);
+  if (fromBusiness.length) return fromBusiness;
+  const preferred =
+    opts.businessPreferred != null && isSupportedChainId(opts.businessPreferred)
+      ? opts.businessPreferred
+      : DEFAULT_CHAIN_ID;
+  return [preferred];
+}
+
+/**
+ * Which chain to pre-select for the payer: the merchant's preferred chain if
+ * it's in the accepted set, else the first accepted chain. `accepted` must be
+ * non-empty (guaranteed by resolveAcceptedChainIds).
+ */
+export function defaultSelectedChainId(
+  accepted: SupportedChainId[],
+  businessPreferred?: number | null,
+): SupportedChainId {
+  if (
+    businessPreferred != null &&
+    isSupportedChainId(businessPreferred) &&
+    accepted.includes(businessPreferred)
+  ) {
+    return businessPreferred;
+  }
+  return accepted[0]!;
+}

@@ -33,6 +33,7 @@ export type BusinessPatch = Partial<{
   defaultPaymentTermsDays: number;
   defaultNotes: string | null;
   paymentChainId: number | null;
+  acceptedChainIds: number[] | null;
 }>;
 
 export async function getBusinessProfile(
@@ -155,6 +156,7 @@ export function formatBusinessForMcp(row: Business) {
     default_payment_terms_days: row.defaultPaymentTermsDays,
     default_notes: row.defaultNotes,
     payment_chain_id: row.paymentChainId,
+    accepted_chain_ids: row.acceptedChainIds,
   };
 }
 

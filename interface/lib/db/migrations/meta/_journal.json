@@ -218,6 +218,13 @@
       "when": 1780444800000,
       "tag": "0030_reusable_invoice_numbers",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1780531200000,
+      "tag": "0031_multichain_accepted_chains",
+      "breakpoints": true
     }
   ]
 }

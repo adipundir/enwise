@@ -145,10 +145,18 @@ export const businesses = pgTable(
     // Bank payout details now live in business_bank_accounts (one row per
     // account, with an is_default flag). Use add_bank_account / set_default_bank_account
     // MCP tools to manage them.
-    // Preferred EVM chain id for receiving USDC wallet payments. NULL = use
-    // platform default (NEXT_PUBLIC_DEFAULT_CHAIN_ID, currently Base mainnet).
-    // Supported values are enumerated in lib/web3/chain.ts.
+    // Preferred EVM chain id for receiving USDC wallet payments. Acts as the
+    // pre-selected chain in the payer's chain picker and the fallback when no
+    // accepted_chain_ids set exists. NULL = use platform default
+    // (NEXT_PUBLIC_DEFAULT_CHAIN_ID, currently Base mainnet).
     paymentChainId: integer("payment_chain_id"),
+    // The set of EVM chains this business accepts USDC on. The payer picks one
+    // from this list at pay time; all chains pay to the same evmWalletAddress
+    // (Base and Arbitrum are both EVM). NULL = fall back to [paymentChainId ??
+    // platform default]. Supported values are enumerated in lib/web3/chain.ts;
+    // resolution lives in resolveAcceptedChainIds(). Read LIVE (not snapshot),
+    // so changing it affects all outstanding invoices.
+    acceptedChainIds: integer("accepted_chain_ids").array(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -453,6 +461,12 @@ export const invoices = pgTable(
      *  [] = explicitly hide the bank panel even if accepted_payment_methods
      *  permits it. Otherwise: render exactly these accounts in order. */
     acceptedBankAccountIds: uuid("accepted_bank_account_ids").array(),
+    /** Per-invoice override for which EVM chains the payer may pay on. NULL =
+     *  use the business's accepted_chain_ids (or its payment_chain_id
+     *  fallback). Non-null = exactly these chains for this invoice. Read live,
+     *  not snapshotted — mirrors how payment_chain_id behaves. Resolution in
+     *  resolveAcceptedChainIds(). */
+    acceptedChainIds: integer("accepted_chain_ids").array(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

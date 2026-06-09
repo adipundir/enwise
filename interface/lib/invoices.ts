@@ -85,6 +85,12 @@ export type CreateInvoiceInput = {
    *  When exactly one id is passed and the business has no current default,
    *  that id is promoted to default for future invoices. */
   acceptedBankAccountIds?: string[];
+  /** Per-invoice override of the EVM chains the payer may pay on.
+   *  - undefined → use the business's accepted_chain_ids (or its
+   *    payment_chain_id fallback)
+   *  - [id, …]   → exactly these chains for this invoice
+   *  Validated against SUPPORTED_CHAIN_IDS at the MCP layer. */
+  acceptedChainIds?: number[];
 };
 
 export type InvoiceWithLineItems = Invoice & {
@@ -545,7 +551,9 @@ export async function createInvoice(
         acceptedPaymentMethods:
           input.acceptedPaymentMethods ?? (await deriveDefaultAcceptedPaymentMethods(ctx.businessId, allAccounts.length)),
         acceptedBankAccountIds: resolvedBankAccountIds,
-        // Snapshots land on finalize (send), not at draft time.
+        acceptedChainIds: input.acceptedChainIds ?? null,
+        // Snapshots land on finalize (send), not at draft time. Chain set is
+        // read live (like payment_chain_id), so it's not snapshotted here.
       })
       .returning();
   } catch (err) {
@@ -731,6 +739,11 @@ export type UpdateInvoiceInput = {
    *  of this patch). See CreateInvoiceInput.acceptedBankAccountIds for the
    *  semantics of null vs [] vs [id, ...]. */
   acceptedBankAccountIds?: string[] | null;
+  /** Per-invoice override of payable EVM chains. NULL = fall back to the
+   *  business's accepted_chain_ids / payment_chain_id. [id, …] = exactly
+   *  these. Display-only (safe on any status) — it changes which chains the
+   *  payer can pick, not the invoice contract. */
+  acceptedChainIds?: number[] | null;
 };
 
 export type MutateResult<T> =
@@ -912,6 +925,9 @@ export async function updateInvoice(
       }
     }
     values.acceptedBankAccountIds = patch.acceptedBankAccountIds;
+  }
+  if (patch.acceptedChainIds !== undefined) {
+    values.acceptedChainIds = patch.acceptedChainIds;
   }
 
   await db.update(invoices).set(values).where(eq(invoices.id, inv.id));
