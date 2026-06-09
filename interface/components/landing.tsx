@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import { ArbitrumLogo, BaseLogo } from "@/components/chain-logos";
 import { RotatingWord } from "@/components/rotating-word";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -146,9 +147,15 @@ export async function Landing() {
               automatically.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-2.5">
-              <Chip>USDC on Base</Chip>
-              <Chip>USDC on Arbitrum</Chip>
+            <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-4">
+              <span className="inline-flex items-center gap-2.5 text-sm text-zinc-300">
+                <BaseLogo className="size-6" />
+                Base
+              </span>
+              <span className="inline-flex items-center gap-2.5 text-sm text-zinc-300">
+                <ArbitrumLogo className="size-6" />
+                Arbitrum
+              </span>
             </div>
 
             <p className="mt-6 max-w-xl text-xs leading-relaxed text-zinc-600">
@@ -218,15 +225,6 @@ function Stat({ big, label }: { big: string; label: string }) {
       </div>
       <div className="mt-2 text-sm leading-relaxed text-zinc-500">{label}</div>
     </div>
-  );
-}
-
-function Chip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs font-medium text-zinc-200">
-      <span aria-hidden className="size-1.5 rounded-full bg-zinc-400" />
-      {children}
-    </span>
   );
 }
 
