@@ -10,7 +10,7 @@ import {
   useWriteContract,
 } from "wagmi";
 import { WalletProviders } from "@/lib/web3/providers";
-import { resolveChain } from "@/lib/web3/chain";
+import { chainLabel, isSupportedChainId, resolveChain } from "@/lib/web3/chain";
 import { PaidBadge } from "./PaidBadge";
 
 type Props = {
@@ -20,9 +20,12 @@ type Props = {
   amountUsdcUnits: string;
   /** "236.00 USDC" for the button label. */
   amountLabel: string;
-  /** Which chain the merchant accepts on. Looked up by share page from
-   *  business.payment_chain_id (or platform default if null). */
-  chainId: number;
+  /** The EVM chains the merchant accepts on, in display order. The payer
+   *  picks one; all pay to the same merchantWallet. Resolved by the share
+   *  page from the invoice / business accepted_chain_ids. */
+  acceptedChainIds: number[];
+  /** Which accepted chain to pre-select (merchant's preferred, else first). */
+  defaultChainId: number;
 };
 
 export function PayWithWalletButton(props: Props) {
@@ -112,7 +115,14 @@ function CrossFade({ stateKey, children }: { stateKey: string; children: React.R
   );
 }
 
-function PayInner({ slug, merchantWallet, amountUsdcUnits, amountLabel, chainId }: Props) {
+function PayInner({
+  slug,
+  merchantWallet,
+  amountUsdcUnits,
+  amountLabel,
+  acceptedChainIds,
+  defaultChainId,
+}: Props) {
   const { address, chainId: walletChainId, status } = useConnection();
   const { connect, connectors, isPending: isConnecting, error: connectError } =
     useConnect();
@@ -120,10 +130,34 @@ function PayInner({ slug, merchantWallet, amountUsdcUnits, amountLabel, chainId 
   const { switchChainAsync, isPending: isSwitching } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  // Which accepted chain the payer is paying on. Starts at the merchant's
+  // preferred; the payer can switch among accepted chains via the selector.
+  const [selectedChainId, setSelectedChainId] = useState<number>(defaultChainId);
 
-  const resolved = useMemo(() => resolveChain(chainId), [chainId]);
+  const resolved = useMemo(() => resolveChain(selectedChainId), [selectedChainId]);
   const onWrongChain = status === "connected" && walletChainId !== resolved.chainId;
+  const inflight =
+    phase.kind === "signing" ||
+    phase.kind === "confirming" ||
+    phase.kind === "verifying";
   const amount = BigInt(amountUsdcUnits);
+
+  // Picking a chain updates the target and, when already connected, asks the
+  // wallet to switch networks right away so the Pay button is ready. Disabled
+  // mid-transaction so we never change chain under an in-flight transfer.
+  async function pickChain(id: number) {
+    if (inflight || id === selectedChainId) return;
+    setSelectedChainId(id);
+    setPhase({ kind: "idle" });
+    if (status === "connected" && walletChainId !== id && isSupportedChainId(id)) {
+      try {
+        await switchChainAsync({ chainId: id });
+      } catch {
+        // Wallet declined / handled out-of-band; the "Switch to …" button
+        // remains as the explicit fallback.
+      }
+    }
+  }
 
   // Eagerly initialize WalletConnect SDK so the modal opens instantly.
   const warmedRef = useRef(false);
@@ -149,7 +183,7 @@ function PayInner({ slug, merchantWallet, amountUsdcUnits, amountLabel, chainId 
       const res = await fetch(`/api/invoices/${slug}/confirm-payment`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ txHash }),
+        body: JSON.stringify({ txHash, chainId: resolved.chainId }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: "verification failed" }));
@@ -246,7 +280,61 @@ function PayInner({ slug, merchantWallet, amountUsdcUnits, amountLabel, chainId 
     );
   }
 
-  return <CrossFade stateKey={stateKey}>{content}</CrossFade>;
+  return (
+    <div className="flex flex-col items-end gap-2">
+      {acceptedChainIds.length > 1 ? (
+        <ChainSelector
+          chains={acceptedChainIds}
+          selected={selectedChainId}
+          onSelect={pickChain}
+          disabled={inflight || isSwitching}
+        />
+      ) : null}
+      <CrossFade stateKey={stateKey}>{content}</CrossFade>
+    </div>
+  );
+}
+
+function ChainSelector({
+  chains,
+  selected,
+  onSelect,
+  disabled,
+}: {
+  chains: number[];
+  selected: number;
+  onSelect: (id: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Pay on chain"
+      className="inline-flex items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 ring-1 ring-zinc-200"
+    >
+      {chains.map((id) => {
+        const active = id === selected;
+        return (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => onSelect(id)}
+            className={
+              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 " +
+              (active
+                ? "bg-zinc-900 text-zinc-50"
+                : "text-zinc-600 hover:text-zinc-900")
+            }
+          >
+            {chainLabel(id)}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function WalletMeta({

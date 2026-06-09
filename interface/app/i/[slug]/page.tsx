@@ -14,7 +14,10 @@ import {
   paymentMethodEnabled,
   type DisplayOverrides,
 } from "@/lib/invoices/displayResolver";
-import { DEFAULT_CHAIN_ID, isSupportedChainId } from "@/lib/web3/chain";
+import {
+  defaultSelectedChainId,
+  resolveAcceptedChainIds,
+} from "@/lib/web3/chain";
 import { resolveInvoiceBankAccounts, toSnapshotShape } from "@/lib/bankAccounts";
 
 const USDC_DECIMALS = 6;
@@ -81,18 +84,27 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
     (business && "contactName" in business ? business.contactName : null) ?? null;
 
   // Wallet-pay button gate: invoice must be USD, unpaid, and the merchant must
-  // have a 0x wallet on file. Chain is whatever the merchant has set as their
-  // preferred receiving chain (businesses.payment_chain_id); falls back to
-  // the platform default. We always read this LIVE — changing chain affects
-  // all outstanding invoices, which matches merchant expectations.
+  // have a 0x wallet on file. The payer picks which EVM chain to pay on from
+  // the merchant's accepted set; all chains pay to the same evm wallet. We
+  // read the chain config LIVE (per-invoice override → business set → the
+  // business's preferred-chain fallback) so changing it affects all
+  // outstanding invoices, matching merchant expectations.
   const [bizChainRow] = await db
-    .select({ paymentChainId: businesses.paymentChainId })
+    .select({
+      paymentChainId: businesses.paymentChainId,
+      acceptedChainIds: businesses.acceptedChainIds,
+    })
     .from(businesses)
     .where(eq(businesses.id, invoice.businessId));
-  const merchantChainId =
-    bizChainRow?.paymentChainId && isSupportedChainId(bizChainRow.paymentChainId)
-      ? bizChainRow.paymentChainId
-      : DEFAULT_CHAIN_ID;
+  const acceptedChainIds = resolveAcceptedChainIds({
+    invoiceAccepted: invoice.acceptedChainIds,
+    businessAccepted: bizChainRow?.acceptedChainIds ?? null,
+    businessPreferred: bizChainRow?.paymentChainId ?? null,
+  });
+  const defaultChainId = defaultSelectedChainId(
+    acceptedChainIds,
+    bizChainRow?.paymentChainId ?? null,
+  );
 
   // Latest on-chain payment for this invoice — used by the Paid badge to
   // show a clickable explorer link. Null when the invoice was marked paid
@@ -149,7 +161,8 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                 merchantWallet={businessEvmWallet}
                 amountUsdcUnits={outstandingUsdcUnits.toString()}
                 amountLabel={`${outstandingDecimal} USDC`}
-                chainId={merchantChainId}
+                acceptedChainIds={acceptedChainIds}
+                defaultChainId={defaultChainId}
               />
             ) : null}
             <a

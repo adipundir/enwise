@@ -25,13 +25,19 @@ import { businesses, invoices } from "@/lib/db/schema";
 import { recordOnchainPayment } from "@/lib/invoices";
 import { addAmounts } from "@/lib/money";
 import { sendPaymentReceivedEmails } from "@/lib/email/sendPaymentReceived";
-import { resolveChain, transportFor } from "@/lib/web3/chain";
+import {
+  defaultSelectedChainId,
+  isSupportedChainId,
+  resolveAcceptedChainIds,
+  resolveChain,
+  transportFor,
+} from "@/lib/web3/chain";
 
 const REQUIRED_CONFIRMATIONS = 1n;
 
 export const runtime = "nodejs";
 
-type Body = { txHash?: unknown };
+type Body = { txHash?: unknown; chainId?: unknown };
 
 function isHexAddress(s: unknown): s is `0x${string}` {
   return typeof s === "string" && /^0x[a-fA-F0-9]{40}$/.test(s);
@@ -91,6 +97,7 @@ async function handle(
     .select({
       wallet: businesses.evmWalletAddress,
       paymentChainId: businesses.paymentChainId,
+      acceptedChainIds: businesses.acceptedChainIds,
     })
     .from(businesses)
     .where(eq(businesses.id, invoice.businessId));
@@ -104,7 +111,35 @@ async function handle(
     );
   }
 
-  const resolved = resolveChain(biz?.paymentChainId ?? null);
+  // The payer chose which chain to pay on. Verify it's one this merchant
+  // actually accepts for this invoice — never trust the client's chain claim.
+  // Resolution mirrors the share page (invoice override → business set →
+  // preferred-chain fallback). A missing chainId (older client) defaults to
+  // the merchant's preferred chain, preserving the old single-chain behavior.
+  const accepted = resolveAcceptedChainIds({
+    invoiceAccepted: invoice.acceptedChainIds,
+    businessAccepted: biz?.acceptedChainIds ?? null,
+    businessPreferred: biz?.paymentChainId ?? null,
+  });
+  let chosenChainId: number;
+  if (body.chainId === undefined) {
+    chosenChainId = defaultSelectedChainId(accepted, biz?.paymentChainId ?? null);
+  } else if (
+    isSupportedChainId(body.chainId) &&
+    accepted.includes(body.chainId)
+  ) {
+    chosenChainId = body.chainId;
+  } else {
+    return NextResponse.json(
+      {
+        error: "chain not accepted for this invoice",
+        accepted_chain_ids: accepted,
+      },
+      { status: 409 },
+    );
+  }
+
+  const resolved = resolveChain(chosenChainId);
   const publicClient = createPublicClient({
     chain: resolved.chain,
     transport: transportFor(resolved),

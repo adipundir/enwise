@@ -23,6 +23,7 @@ import {
 } from "@/lib/invoices";
 import { sendInvoiceByEmail, type SendInvoiceOutcome } from "@/lib/email/sendInvoice";
 import { withIdempotency } from "@/lib/idempotency";
+import { SUPPORTED_CHAIN_IDS } from "@/lib/web3/chain";
 import { ctxFromAuthInfo, scopeFromCtx } from "@/lib/mcp/context";
 import { toolError, toolOk, zodToToolError, type ErrorCode } from "@/lib/mcp/errors";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -102,6 +103,15 @@ const lineItemSchema = z.object({
 
 const paymentMethodsTopSchema = z.array(z.enum(["bank", "crypto_wallet"]));
 
+const supportedChainIdSchema = z
+  .number()
+  .int()
+  .refine((n) => (SUPPORTED_CHAIN_IDS as readonly number[]).includes(n), {
+    message: `must be one of: ${SUPPORTED_CHAIN_IDS.join(", ")}`,
+  });
+// Per-invoice override of payable EVM chains. Array of supported chain ids.
+const chainIdsSchema = z.array(supportedChainIdSchema);
+
 const createSchema = {
   business_id: uuid.optional(),
   client_id: uuid,
@@ -127,6 +137,11 @@ const createSchema = {
    *  the business has multiple accounts and no default is set yet — in
    *  that case ASK the user which account, then retry with their pick). */
   accepted_bank_account_ids: z.array(uuid).optional(),
+  /** Per-invoice override of which EVM chains the payer may pay on (e.g.
+   *  `[8453, 42161]` for Base + Arbitrum). Omit to use the business's
+   *  accepted_chain_ids / payment_chain_id. The same evm_wallet_address
+   *  receives on every chain. */
+  accepted_chain_ids: chainIdsSchema.optional(),
 };
 
 async function businessBelongsToUser(
@@ -198,6 +213,7 @@ export function registerInvoiceTools(server: McpServer) {
         clientRequestId: d.client_request_id ?? null,
         acceptedPaymentMethods: d.accepted_payment_methods,
         acceptedBankAccountIds: d.accepted_bank_account_ids,
+        acceptedChainIds: d.accepted_chain_ids,
         lineItems: d.line_items.map((l) => ({
           description: l.description,
           quantity: l.quantity,
@@ -305,6 +321,7 @@ export function registerInvoiceTools(server: McpServer) {
         display_overrides: displayOverridesSchema.optional(),
         accepted_payment_methods: paymentMethodsSchema.optional(),
         accepted_bank_account_ids: bankAccountIdsSchema.optional(),
+        accepted_chain_ids: chainIdsSchema.nullable().optional(),
       },
     },
     async (args, extra) => {
@@ -321,6 +338,7 @@ export function registerInvoiceTools(server: McpServer) {
           display_overrides: displayOverridesSchema.optional(),
           accepted_payment_methods: paymentMethodsSchema.optional(),
           accepted_bank_account_ids: bankAccountIdsSchema.optional(),
+          accepted_chain_ids: chainIdsSchema.nullable().optional(),
         })
         .safeParse(args);
       if (!parsed.success) return zodToToolError(parsed.error);
@@ -348,6 +366,9 @@ export function registerInvoiceTools(server: McpServer) {
         }),
         ...(d.accepted_bank_account_ids !== undefined && {
           acceptedBankAccountIds: d.accepted_bank_account_ids,
+        }),
+        ...(d.accepted_chain_ids !== undefined && {
+          acceptedChainIds: d.accepted_chain_ids,
         }),
       });
       if (!r.ok)
