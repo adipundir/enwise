@@ -134,10 +134,10 @@ export async function Landing() {
         <section className="border-t border-zinc-900">
           <div className="mx-auto w-full max-w-6xl px-6 py-16 sm:py-20">
             <div className="text-[11px] uppercase tracking-widest text-zinc-500">
-              Get paid
+              Accept payments
             </div>
             <h2 className="mt-3 display text-2xl leading-tight sm:text-3xl text-zinc-100">
-              Accept USDC on Base and Arbitrum.
+              Accept payments directly from the invoice.
             </h2>
             <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-500">
               Add a wallet and every invoice gets a Pay button. The client picks
