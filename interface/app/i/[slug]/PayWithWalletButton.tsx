@@ -9,9 +9,32 @@ import {
   useSwitchChain,
   useWriteContract,
 } from "wagmi";
+import { ArbitrumLogo, BaseLogo } from "@/components/chain-logos";
 import { WalletProviders } from "@/lib/web3/providers";
-import { chainLabel, isSupportedChainId, resolveChain } from "@/lib/web3/chain";
+import { chainLabel, isSupportedChainId, resolveChain, type SupportedChainId } from "@/lib/web3/chain";
 import { PaidBadge } from "./PaidBadge";
+
+function isUserRejection(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: number | string; message?: string; shortMessage?: string };
+  if (e.code === 4001 || e.code === "ACTION_REJECTED") return true;
+  const msg = (e.shortMessage ?? e.message ?? "").toLowerCase();
+  return (
+    msg.includes("user rejected") ||
+    msg.includes("user denied") ||
+    msg.includes("rejected the request")
+  );
+}
+
+function friendlyErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const msg = error.message;
+    if (msg.length < 100 && !msg.includes("Contract Call") && !msg.includes("Request Arguments")) {
+      return msg;
+    }
+  }
+  return "Payment failed. Please try again.";
+}
 
 type Props = {
   slug: string;
@@ -124,14 +147,15 @@ function PayInner({
   defaultChainId,
 }: Props) {
   const { address, chainId: walletChainId, status } = useConnection();
-  const { connect, connectors, isPending: isConnecting, error: connectError } =
-    useConnect();
+  const { connectAsync, connectors, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChainAsync, isPending: isSwitching } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupMode, setSetupMode] = useState<"connect" | "network">("connect");
   // Which accepted chain the payer is paying on. Starts at the merchant's
-  // preferred; the payer can switch among accepted chains via the selector.
+  // preferred; the payer picks one in the setup modal before connecting.
   const [selectedChainId, setSelectedChainId] = useState<number>(defaultChainId);
 
   const resolved = useMemo(() => resolveChain(selectedChainId), [selectedChainId]);
@@ -143,8 +167,8 @@ function PayInner({
   const amount = BigInt(amountUsdcUnits);
 
   // Picking a chain updates the target and, when already connected, asks the
-  // wallet to switch networks right away so the Pay button is ready. Disabled
-  // mid-transaction so we never change chain under an in-flight transfer.
+  // wallet to switch networks. Disabled mid-transaction so we never change
+  // chain under an in-flight transfer.
   async function pickChain(id: number) {
     if (inflight || id === selectedChainId) return;
     setSelectedChainId(id);
@@ -152,9 +176,72 @@ function PayInner({
     if (status === "connected" && walletChainId !== id && isSupportedChainId(id)) {
       try {
         await switchChainAsync({ chainId: id });
+      } catch (e) {
+        if (!isUserRejection(e)) {
+          // Wallet declined for a reason other than user cancel; the "Switch to …"
+          // button remains as the explicit fallback.
+        }
+      }
+    }
+  }
+
+  async function handleConnectDirect() {
+    const wc = connectors.find((c) => c.id === "walletConnect");
+    if (!wc) return;
+    const chainId = acceptedChainIds[0] ?? defaultChainId;
+    setSelectedChainId(chainId);
+    try {
+      await connectAsync({
+        connector: wc,
+        ...(isSupportedChainId(chainId) ? { chainId } : {}),
+      });
+      if (isSupportedChainId(chainId)) {
+        try {
+          await switchChainAsync({ chainId });
+        } catch {
+          // Connected but on a different chain — "Switch to …" handles it.
+        }
+      }
+    } catch (e) {
+      if (!isUserRejection(e)) {
+        setPhase({ kind: "error", message: "Could not connect wallet. Please try again." });
+      }
+    }
+  }
+
+  function openSetup(mode: "connect" | "network") {
+    setSetupMode(mode);
+    setSetupOpen(true);
+  }
+
+  async function handleSetupConfirm() {
+    if (setupMode === "connect") {
+      const wc = connectors.find((c) => c.id === "walletConnect");
+      if (!wc) return;
+      try {
+        await connectAsync({
+          connector: wc,
+          ...(isSupportedChainId(selectedChainId) ? { chainId: selectedChainId as SupportedChainId } : {}),
+        });
+        if (isSupportedChainId(selectedChainId)) {
+          try {
+            await switchChainAsync({ chainId: selectedChainId });
+          } catch {
+            // Connected but on a different chain — "Switch to …" handles it.
+          }
+        }
+        setSetupOpen(false);
+      } catch (e) {
+        if (!isUserRejection(e)) {
+          setPhase({ kind: "error", message: "Could not connect wallet. Please try again." });
+        }
+      }
+    } else {
+      try {
+        await pickChain(selectedChainId);
+        setSetupOpen(false);
       } catch {
-        // Wallet declined / handled out-of-band; the "Switch to …" button
-        // remains as the explicit fallback.
+        // pickChain already swallows user rejections.
       }
     }
   }
@@ -192,8 +279,11 @@ function PayInner({
       }
       setPhase({ kind: "paid", txHash });
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      setPhase({ kind: "error", message });
+      if (isUserRejection(e)) {
+        setPhase({ kind: "idle" });
+        return;
+      }
+      setPhase({ kind: "error", message: friendlyErrorMessage(e) });
     }
   }
 
@@ -219,14 +309,17 @@ function PayInner({
   let content: React.ReactNode;
 
   if (status !== "connected" || !address) {
-    const wc = connectors.find((c) => c.id === "walletConnect");
     content = (
       <div className="flex flex-col items-end gap-1.5">
         <RainbowButton
           onClick={() => {
-            if (wc) connect({ connector: wc });
+            if (acceptedChainIds.length === 1) {
+              void handleConnectDirect();
+            } else {
+              openSetup("connect");
+            }
           }}
-          disabled={isConnecting || !wc}
+          disabled={isConnecting}
         >
           {isConnecting ? "Connecting…" : "Connect wallet to pay"}
         </RainbowButton>
@@ -239,9 +332,11 @@ function PayInner({
           onClick={async () => {
             try {
               await switchChainAsync({ chainId: resolved.chainId });
-            } catch {
-              // Mobile wallet may still switch successfully even though
-              // wagmi resolves with an error here.
+            } catch (e) {
+              if (!isUserRejection(e)) {
+                // Mobile wallet may still switch successfully even though
+                // wagmi resolves with an error here.
+              }
             }
           }}
           disabled={isSwitching}
@@ -250,7 +345,13 @@ function PayInner({
             ? "Approve on your wallet…"
             : `Switch to ${resolved.chain.name}`}
         </RainbowButton>
-        <WalletMeta address={address} onDisconnect={() => disconnect()} />
+        <WalletMeta
+          address={address}
+          chainId={selectedChainId}
+          showNetworkPicker={acceptedChainIds.length > 1}
+          onChangeNetwork={() => openSetup("network")}
+          onDisconnect={() => disconnect()}
+        />
       </div>
     );
   } else if (phase.kind === "signing" || phase.kind === "confirming" || phase.kind === "verifying") {
@@ -265,14 +366,26 @@ function PayInner({
         <span className="rounded-md bg-zinc-100 px-3.5 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-zinc-200">
           {label}
         </span>
-        <WalletMeta address={address} onDisconnect={() => disconnect()} />
+        <WalletMeta
+          address={address}
+          chainId={selectedChainId}
+          showNetworkPicker={acceptedChainIds.length > 1}
+          onChangeNetwork={() => openSetup("network")}
+          onDisconnect={() => disconnect()}
+        />
       </div>
     );
   } else {
     content = (
       <div className="flex flex-col items-end gap-1.5">
         <RainbowButton onClick={onPay}>Pay {amountLabel}</RainbowButton>
-        <WalletMeta address={address} onDisconnect={() => disconnect()} />
+        <WalletMeta
+          address={address}
+          chainId={selectedChainId}
+          showNetworkPicker={acceptedChainIds.length > 1}
+          onChangeNetwork={() => openSetup("network")}
+          onDisconnect={() => disconnect()}
+        />
         {phase.kind === "error" ? (
           <span className="max-w-xs text-right text-xs text-red-700">{phase.message}</span>
         ) : null}
@@ -281,71 +394,189 @@ function PayInner({
   }
 
   return (
-    <div className="flex flex-col items-end gap-2">
-      {acceptedChainIds.length > 1 ? (
-        <ChainSelector
+    <>
+      <CrossFade stateKey={stateKey}>{content}</CrossFade>
+      {setupOpen ? (
+        <PaySetupModal
+          mode={setupMode}
           chains={acceptedChainIds}
-          selected={selectedChainId}
-          onSelect={pickChain}
-          disabled={inflight || isSwitching}
+          selectedChainId={selectedChainId}
+          onSelectChain={setSelectedChainId}
+          onConfirm={handleSetupConfirm}
+          onClose={() => setSetupOpen(false)}
+          isPending={isConnecting || isSwitching}
         />
       ) : null}
-      <CrossFade stateKey={stateKey}>{content}</CrossFade>
-    </div>
+    </>
   );
 }
 
-function ChainSelector({
+function ChainLogo({ chainId, className }: { chainId: number; className?: string }) {
+  if (chainId === 8453 || chainId === 84532) {
+    return <BaseLogo className={className} />;
+  }
+  if (chainId === 42161) {
+    return <ArbitrumLogo className={className} />;
+  }
+  return (
+    <span
+      className={`inline-flex size-5 items-center justify-center rounded-full bg-zinc-200 text-[9px] font-semibold text-zinc-600 ${className ?? ""}`}
+      aria-hidden
+    >
+      {chainLabel(chainId).slice(0, 1)}
+    </span>
+  );
+}
+
+function PaySetupModal({
+  mode,
   chains,
-  selected,
-  onSelect,
-  disabled,
+  selectedChainId,
+  onSelectChain,
+  onConfirm,
+  onClose,
+  isPending,
 }: {
+  mode: "connect" | "network";
   chains: number[];
-  selected: number;
-  onSelect: (id: number) => void;
-  disabled?: boolean;
+  selectedChainId: number;
+  onSelectChain: (id: number) => void;
+  onConfirm: () => void;
+  onClose: () => void;
+  isPending: boolean;
 }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !isPending) onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isPending, onClose]);
+
+  const title = mode === "connect" ? "Connect wallet to pay" : "Choose network";
+  const confirmLabel =
+    mode === "connect"
+      ? isPending
+        ? "Connecting…"
+        : "Connect wallet"
+      : isPending
+      ? "Switching…"
+      : "Continue";
+
   return (
     <div
-      role="radiogroup"
-      aria-label="Pay on chain"
-      className="inline-flex items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 ring-1 ring-zinc-200"
+      aria-modal="true"
+      role="dialog"
+      aria-labelledby="pay-setup-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !isPending) onClose();
+      }}
     >
-      {chains.map((id) => {
-        const active = id === selected;
-        return (
+      <div className="relative w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-6 shadow-xl">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={isPending}
+          className="absolute right-3 top-3 rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label="Close"
+        >
+          <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M3 3l10 10M13 3L3 13" strokeLinecap="round" />
+          </svg>
+        </button>
+
+        <h2 id="pay-setup-title" className="pr-6 text-base font-semibold text-zinc-900">
+          {title}
+        </h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          {mode === "connect"
+            ? "Select the network you want to pay on, then connect your wallet."
+            : "Select the network for this payment."}
+        </p>
+
+        {chains.length > 1 ? (
+          <div role="radiogroup" aria-label="Pay on chain" className="mt-5 space-y-2">
+            {chains.map((id) => {
+              const active = id === selectedChainId;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  disabled={isPending}
+                  onClick={() => onSelectChain(id)}
+                  className={
+                    "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 " +
+                    (active
+                      ? "border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900"
+                      : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50")
+                  }
+                >
+                  <ChainLogo chainId={id} className="size-5 shrink-0" />
+                  <span className="text-sm font-medium text-zinc-900">{chainLabel(id)}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-5 flex items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5">
+            <ChainLogo chainId={chains[0]!} className="size-5 shrink-0" />
+            <span className="text-sm font-medium text-zinc-900">{chainLabel(chains[0]!)}</span>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end gap-2">
           <button
-            key={id}
             type="button"
-            role="radio"
-            aria-checked={active}
-            disabled={disabled}
-            onClick={() => onSelect(id)}
-            className={
-              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 " +
-              (active
-                ? "bg-zinc-900 text-zinc-50"
-                : "text-zinc-600 hover:text-zinc-900")
-            }
+            onClick={onClose}
+            disabled={isPending}
+            className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {chainLabel(id)}
+            Cancel
           </button>
-        );
-      })}
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isPending}
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-50 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 function WalletMeta({
   address,
+  chainId,
+  showNetworkPicker,
+  onChangeNetwork,
   onDisconnect,
 }: {
   address: `0x${string}`;
+  chainId: number;
+  showNetworkPicker: boolean;
+  onChangeNetwork: () => void;
   onDisconnect: () => void;
 }) {
   return (
-    <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+    <div className="flex flex-wrap items-center justify-end gap-1.5 text-[11px] text-zinc-500">
+      {showNetworkPicker ? (
+        <>
+          <button
+            type="button"
+            onClick={onChangeNetwork}
+            className="hover:text-zinc-800 hover:underline underline-offset-2"
+          >
+            {chainLabel(chainId)}
+          </button>
+          <span aria-hidden>·</span>
+        </>
+      ) : null}
       <span className="font-mono">
         {address.slice(0, 6)}…{address.slice(-4)}
       </span>
