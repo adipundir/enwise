@@ -1,8 +1,10 @@
 import { z } from "zod";
 import {
   createBusiness,
+  deleteBusiness,
   formatBusinessForMcp,
   getBusinessProfile,
+  setDefaultBusiness,
   updateBusinessProfile,
   WalletAddressValidationError,
   type BusinessPatch,
@@ -222,6 +224,60 @@ export function registerBusinessTools(server: McpServer) {
         );
       }
       return toolOk(formatBusinessForMcp(updated));
+    },
+  );
+
+  const setDefaultInput = {
+    business_id: uuid,
+  };
+
+  server.registerTool(
+    "set_default_business",
+    {
+      title: "Set default business",
+      description:
+        "Make a business the user's default. The default is what tools fall back to when `business_id` is omitted on a multi-business account, and what new invoices render under unless the user says otherwise. Use when the user says 'make X my main/primary/default business'. `business_id` is required — resolve it via whoami first. (To set a default at creation time, create_business already accepts `set_as_default`.)",
+      inputSchema: setDefaultInput,
+    },
+    async (args, extra) => {
+      const parsed = z.object(setDefaultInput).safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const scope = await scopeFromCtx(ctx, parsed.data.business_id);
+      if (!scope.ok) return scope.error;
+      await setDefaultBusiness(scope.scoped);
+      const profile = await getBusinessProfile(scope.scoped);
+      return toolOk({
+        default_business_id: scope.scoped.businessId,
+        name: profile?.name ?? null,
+      });
+    },
+  );
+
+  const deleteInput = {
+    business_id: uuid.optional(),
+    confirm_business_name: z.string().min(1).max(200),
+  };
+
+  server.registerTool(
+    "delete_business",
+    {
+      title: "Delete business (permanent)",
+      description:
+        "**HARD-DELETE** a business and everything under it: ALL its invoices (with line items, payment records, event history), recurring invoice templates, bank accounts, and the business profile itself. THIS IS PERMANENT and unrecoverable — share links for every invoice under this business will 404 for recipients. Clients and products are account-level and are NOT touched.\n\nMandatory pre-call confirmation. Tell the user exactly what goes: 'Deleting <name> permanently removes the business AND its N invoices, recurring templates, and bank accounts. Recipients lose access to every share link. This cannot be undone. To confirm, please say the business name.' Get an explicit yes AND the name before calling. `confirm_business_name` must match the business's current name (case-insensitive) — the call is refused with `confirmation_mismatch` otherwise.\n\nIf the user only wants to stop using a business while keeping its invoice history, suggest leaving it in place (businesses cost nothing) or moving invoices first. If they're deleting their ONLY business, warn that the account needs a new create_business before invoicing again.\n\nReturns counts of what was deleted plus `new_default_business_id` (the default is repointed to the oldest remaining business when the deleted one was the default).",
+      inputSchema: deleteInput,
+    },
+    async (args, extra) => {
+      const parsed = z.object(deleteInput).safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const scope = await scopeFromCtx(ctx, parsed.data.business_id);
+      if (!scope.ok) return scope.error;
+      const r = await deleteBusiness(scope.scoped, {
+        confirmName: parsed.data.confirm_business_name,
+      });
+      if (!r.ok) return toolError(r.code, r.message, { hint: r.hint });
+      return toolOk(r.value);
     },
   );
 }

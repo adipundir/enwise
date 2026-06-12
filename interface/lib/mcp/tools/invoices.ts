@@ -13,10 +13,12 @@ import {
   formatInvoiceSummaryForMcp,
   getInvoice,
   invoiceShareUrl,
+  listInvoicePayments,
   listInvoices,
   markInvoicePaid,
   removeLineItem,
   setShareEnabled,
+  unmarkInvoicePaid,
   updateInvoice,
   updateLineItem,
   voidInvoice,
@@ -164,6 +166,8 @@ function mapMutateError(code: string): ErrorCode {
       return "business_not_found";
     case "invoice_not_draft":
       return "invoice_not_draft";
+    case "invalid_transition":
+      return "invalid_transition";
     case "duplicate_invoice_number":
     case "invalid_invoice_number":
       return code;
@@ -686,6 +690,64 @@ export function registerInvoiceTools(server: McpServer) {
       });
       if (!r.ok) return toolError(mapMutateError(r.code), r.message);
       return toolOk({ ...formatInvoiceForMcp(r.value), share_url: invoiceShareUrl(r.value.shareSlug) });
+    },
+  );
+
+  server.registerTool(
+    "unmark_invoice_paid",
+    {
+      title: "Unmark invoice paid",
+      description:
+        "Undo mark_invoice_paid: reset amount_paid to 0, clear paid_at, and flip a 'paid' invoice back to 'sent'. Use when the user marked the wrong invoice paid or recorded a payment that never arrived (also clears PARTIAL payments recorded via mark_invoice_paid). Refused with `invalid_transition` when the invoice has chain-verified onchain USDC payments — the transaction exists on chain and the books can't contradict it (relay the hint; list_invoice_payments shows the txs). The reversal is recorded in the invoice's event log, so the audit trail stays honest. Confirm with the user before calling.",
+      inputSchema: {
+    business_id: uuid.optional(), invoice_id: uuid },
+    },
+    async (args, extra) => {
+      const parsed = z.object({
+      business_id: uuid.optional(), invoice_id: uuid }).safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
+      const r = await unmarkInvoicePaid(ctx, parsed.data.invoice_id);
+      if (!r.ok) return toolError(mapMutateError(r.code), r.message, { hint: r.hint });
+      return toolOk({ ...formatInvoiceForMcp(r.value), share_url: invoiceShareUrl(r.value.shareSlug) });
+    },
+  );
+
+  server.registerTool(
+    "list_invoice_payments",
+    {
+      title: "List onchain payments on an invoice",
+      description:
+        "Return the chain-verified onchain payment records for an invoice: chain_id, tx_hash, payer_address, amount, currency, paid_at. Use when the user asks 'did they pay on-chain?', 'what's the transaction hash?', or before explaining why unmark_invoice_paid was refused. Payments recorded manually via mark_invoice_paid are NOT rows here — they live on the invoice itself as amount_paid (see get_invoice). An empty list means no onchain payments.",
+      inputSchema: {
+    business_id: uuid.optional(), invoice_id: uuid },
+    },
+    async (args, extra) => {
+      const parsed = z.object({
+      business_id: uuid.optional(), invoice_id: uuid }).safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
+      const rows = await listInvoicePayments(ctx, parsed.data.invoice_id);
+      if (!rows) return toolError("not_found", `No invoice with id ${parsed.data.invoice_id}.`);
+      return toolOk({
+        payments: rows.map((p) => ({
+          id: p.id,
+          chain_id: p.chainId,
+          tx_hash: p.txHash,
+          payment_method: p.paymentMethod,
+          payer_address: p.payerAddress,
+          amount: p.amount,
+          currency: p.currency,
+          paid_at: p.paidAt.toISOString(),
+          recorded_at: p.recordedAt.toISOString(),
+        })),
+      });
     },
   );
 

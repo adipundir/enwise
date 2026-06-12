@@ -26,6 +26,8 @@ export type ErrorCode =
   | "multiple_businesses"
   | "no_businesses"
   | "business_not_found"
+  | "confirmation_mismatch"
+  | "client_in_use"
   | "bad_message"
   | "expired"
   | "future"

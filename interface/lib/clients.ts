@@ -1,6 +1,11 @@
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { clients, type Client } from "@/lib/db/schema";
+import {
+  clients,
+  invoices,
+  recurringInvoiceTemplates,
+  type Client,
+} from "@/lib/db/schema";
 import type { ScopedCtx } from "@/lib/mcp/context";
 
 const DEFAULT_FIND_LIMIT = 5;
@@ -94,6 +99,67 @@ export async function archiveClient(
     )
     .returning();
   return row ?? null;
+}
+
+export async function unarchiveClient(
+  ctx: ScopedCtx,
+  clientId: string,
+): Promise<Client | null> {
+  const [row] = await db
+    .update(clients)
+    .set({ archivedAt: null, updatedAt: new Date() })
+    .where(
+      and(eq(clients.id, clientId), eq(clients.ownerUserId, ctx.userId)),
+    )
+    .returning();
+  return row ?? null;
+}
+
+export type DeleteClientResult =
+  | { ok: true; value: { deleted: true; name: string } }
+  | {
+      ok: false;
+      code: "not_found" | "client_in_use";
+      message: string;
+      hint?: string;
+    };
+
+/**
+ * HARD-delete a client. Only possible when nothing references them: the
+ * invoices and recurring-template FKs are onDelete: restrict, so we
+ * pre-check and return a structured error instead of surfacing a raw FK
+ * violation. Clients with history should be archived instead.
+ */
+export async function deleteClient(
+  ctx: ScopedCtx,
+  clientId: string,
+): Promise<DeleteClientResult> {
+  const client = await getClient(ctx, clientId);
+  if (!client) {
+    return { ok: false, code: "not_found", message: `No client with id ${clientId}.` };
+  }
+  const [{ value: invoiceCount }] = await db
+    .select({ value: count() })
+    .from(invoices)
+    .where(eq(invoices.clientId, clientId));
+  const [{ value: templateCount }] = await db
+    .select({ value: count() })
+    .from(recurringInvoiceTemplates)
+    .where(eq(recurringInvoiceTemplates.clientId, clientId));
+  if (Number(invoiceCount) > 0 || Number(templateCount) > 0) {
+    return {
+      ok: false,
+      code: "client_in_use",
+      message: `Client "${client.name}" has ${invoiceCount} invoice(s) and ${templateCount} recurring template(s) referencing them and cannot be hard-deleted.`,
+      hint: "Use archive_client to hide them while keeping history. To force a hard delete, the user must first delete every referencing invoice (delete_invoice) and cancel every recurring template (cancel_recurring_invoice).",
+    };
+  }
+  await db
+    .delete(clients)
+    .where(
+      and(eq(clients.id, clientId), eq(clients.ownerUserId, ctx.userId)),
+    );
+  return { ok: true, value: { deleted: true, name: client.name } };
 }
 
 export type ClientMatch = {

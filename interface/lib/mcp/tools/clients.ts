@@ -2,10 +2,12 @@ import { z } from "zod";
 import {
   archiveClient,
   createClient,
+  deleteClient,
   findClients,
   formatClientForMcp,
   getClient,
   listClients,
+  unarchiveClient,
   updateClient,
   type ClientCreate,
   type ClientPatch,
@@ -255,7 +257,7 @@ export function registerClientTools(server: McpServer) {
     {
       title: "Archive client",
       description:
-        "Archive a client. They stop showing in list_clients and find_client (unless include_archived is set). Existing invoices are untouched. Soft action. restore by calling update_client. Pass `business_id` when the user owns multiple businesses.",
+        "Archive a client. They stop showing in list_clients and find_client (unless include_archived is set). Existing invoices are untouched. Soft action — restore anytime with unarchive_client. Pass `business_id` when the user owns multiple businesses.",
       inputSchema: { business_id: uuid.optional(), client_id: clientIdSchema },
     },
     async (args, extra) => {
@@ -271,6 +273,52 @@ export function registerClientTools(server: McpServer) {
         return toolError("not_found", `No client with id ${parsed.data.client_id}.`);
       }
       return toolOk(formatClientForMcp(row));
+    },
+  );
+
+  server.registerTool(
+    "unarchive_client",
+    {
+      title: "Unarchive client",
+      description:
+        "Restore an archived client so they show up again in list_clients / find_client and can be invoiced normally. Undoes archive_client. To find archived clients, call find_client or list_clients with `include_archived: true`.",
+      inputSchema: { business_id: uuid.optional(), client_id: clientIdSchema },
+    },
+    async (args, extra) => {
+      const parsed = z
+        .object({ business_id: uuid.optional(), client_id: clientIdSchema })
+        .safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const scope = await scopeFromCtx(ctx, parsed.data.business_id);
+      if (!scope.ok) return scope.error;
+      const row = await unarchiveClient(scope.scoped, parsed.data.client_id);
+      if (!row) {
+        return toolError("not_found", `No client with id ${parsed.data.client_id}.`);
+      }
+      return toolOk(formatClientForMcp(row));
+    },
+  );
+
+  server.registerTool(
+    "delete_client",
+    {
+      title: "Delete client (permanent)",
+      description:
+        "**HARD-DELETE** a client record. Permanent, no undo. Only succeeds when NOTHING references the client — if they have any invoices or recurring templates the call is refused with `client_in_use` (relay the hint). For a client with history, archive_client is almost always what the user wants; offer it first. Use delete_client for mistakes — a typo'd duplicate, a test entry. ALWAYS confirm with the user before calling.",
+      inputSchema: { business_id: uuid.optional(), client_id: clientIdSchema },
+    },
+    async (args, extra) => {
+      const parsed = z
+        .object({ business_id: uuid.optional(), client_id: clientIdSchema })
+        .safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const ctx = ctxFromAuthInfo(extra.authInfo);
+      const scope = await scopeFromCtx(ctx, parsed.data.business_id);
+      if (!scope.ok) return scope.error;
+      const r = await deleteClient(scope.scoped, parsed.data.client_id);
+      if (!r.ok) return toolError(r.code, r.message, { hint: r.hint });
+      return toolOk(r.value);
     },
   );
 }

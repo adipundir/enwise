@@ -2,10 +2,12 @@ import { z } from "zod";
 import {
   archiveProduct,
   createProduct,
+  deleteProduct,
   findProducts,
   formatProductForMcp,
   getProduct,
   listProducts,
+  unarchiveProduct,
   updateProduct,
   type ProductCreate,
   type ProductPatch,
@@ -284,6 +286,56 @@ export function registerProductTools(server: McpServer) {
         return toolError("not_found", `No product with id ${parsed.data.product_id}.`);
       }
       return toolOk(formatProductForMcp(row));
+    },
+  );
+
+  server.registerTool(
+    "unarchive_product",
+    {
+      title: "Unarchive product",
+      description:
+        "Restore an archived product so it shows up again in list_products / find_product and can be referenced on new invoices. Undoes archive_product. To find archived products, call find_product or list_products with `include_archived: true`.",
+      inputSchema: {
+    business_id: uuid.optional(), product_id: productIdSchema },
+    },
+    async (args, extra) => {
+      const parsed = z.object({
+      business_id: uuid.optional(), product_id: productIdSchema }).safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
+      const row = await unarchiveProduct(ctx, parsed.data.product_id);
+      if (!row) {
+        return toolError("not_found", `No product with id ${parsed.data.product_id}.`);
+      }
+      return toolOk(formatProductForMcp(row));
+    },
+  );
+
+  server.registerTool(
+    "delete_product",
+    {
+      title: "Delete product (permanent)",
+      description:
+        "**HARD-DELETE** a catalog product. Permanent, no undo. Existing invoices are safe — line items snapshot description and price at invoice time, so they render unchanged and just lose the product_id link. Recurring templates that reference the product by id keep working (their line items are self-contained copies). Use for typo'd duplicates or test entries; if the user just wants it out of the picker, archive_product is the softer option. ALWAYS confirm with the user before calling.",
+      inputSchema: {
+    business_id: uuid.optional(), product_id: productIdSchema },
+    },
+    async (args, extra) => {
+      const parsed = z.object({
+      business_id: uuid.optional(), product_id: productIdSchema }).safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
+      const r = await deleteProduct(ctx, parsed.data.product_id);
+      if (!r) {
+        return toolError("not_found", `No product with id ${parsed.data.product_id}.`);
+      }
+      return toolOk(r);
     },
   );
 }

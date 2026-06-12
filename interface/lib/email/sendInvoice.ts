@@ -95,13 +95,15 @@ export async function sendInvoiceByEmail(
   // 3. Finalize invoice (snapshot + status=sent).
   const finalized = await finalizeInvoice(ctx, invoice.id);
   if (!finalized.ok) {
-    // Finalize never moves businesses or renumbers, so business_not_found /
-    // duplicate_invoice_number / invalid_invoice_number are unreachable here;
-    // fold them into not_found for the SendInvoiceOutcome shape.
+    // Finalize never moves businesses, renumbers, or reverts payments, so
+    // business_not_found / duplicate_invoice_number / invalid_invoice_number /
+    // invalid_transition are unreachable here; fold them into not_found for
+    // the SendInvoiceOutcome shape.
     const code =
       finalized.code === "business_not_found" ||
       finalized.code === "duplicate_invoice_number" ||
-      finalized.code === "invalid_invoice_number"
+      finalized.code === "invalid_invoice_number" ||
+      finalized.code === "invalid_transition"
         ? "not_found"
         : finalized.code;
     return { ok: false, code, message: finalized.message };

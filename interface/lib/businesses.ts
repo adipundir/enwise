@@ -1,6 +1,13 @@
-import { eq } from "drizzle-orm";
+import { and, asc, count, eq, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { businesses, users, type Business } from "@/lib/db/schema";
+import {
+  businesses,
+  businessBankAccounts,
+  invoices,
+  recurringInvoiceTemplates,
+  users,
+  type Business,
+} from "@/lib/db/schema";
 import type { ScopedCtx } from "@/lib/mcp/context";
 import { uniqueSlug } from "@/lib/slug";
 
@@ -187,4 +194,135 @@ export async function createBusiness(params: {
       .where(eq(users.id, params.userId));
   }
   return created;
+}
+
+/**
+ * Make `ctx.businessId` the user's default business. The id is already
+ * ownership-validated by scopeFromCtx at the tool boundary.
+ */
+export async function setDefaultBusiness(ctx: ScopedCtx): Promise<void> {
+  await db
+    .update(users)
+    .set({ defaultBusinessId: ctx.businessId })
+    .where(eq(users.id, ctx.userId));
+}
+
+export type DeleteBusinessResult =
+  | {
+      ok: true;
+      value: {
+        deleted: true;
+        name: string;
+        invoices_deleted: number;
+        recurring_templates_deleted: number;
+        bank_accounts_deleted: number;
+        remaining_business_count: number;
+        new_default_business_id: string | null;
+      };
+    }
+  | {
+      ok: false;
+      code: "not_found" | "confirmation_mismatch";
+      message: string;
+      hint?: string;
+    };
+
+/**
+ * HARD-delete a business and everything under it. The FK graph does most of
+ * the work: deleting the business row cascades invoices (and their line
+ * items, events, payment records), bank accounts, and idempotency keys.
+ * Recurring templates reference the business with onDelete: restrict, so
+ * they are deleted explicitly first.
+ *
+ * `confirmName` must match the business name exactly (case-insensitive,
+ * trimmed) — a second factor against deleting the wrong business_id.
+ *
+ * The neon-http driver has no transactions, so the deletes run sequentially
+ * (same pattern as deleteInvoice). A crash between steps leaves templates
+ * gone but the business intact; re-running the call completes the job.
+ *
+ * Clients and products are account-level and untouched. If the user's
+ * default business was the one deleted, the oldest remaining business
+ * becomes the new default (the FK sets it null; we repoint explicitly so
+ * whoami doesn't show a null default on a multi-business account).
+ */
+export async function deleteBusiness(
+  ctx: ScopedCtx,
+  opts: { confirmName: string },
+): Promise<DeleteBusinessResult> {
+  const business = await getBusinessProfile(ctx);
+  if (!business) {
+    return {
+      ok: false,
+      code: "not_found",
+      message: "Business not found.",
+    };
+  }
+  const given = opts.confirmName.trim().toLowerCase();
+  if (given !== business.name.trim().toLowerCase()) {
+    return {
+      ok: false,
+      code: "confirmation_mismatch",
+      message: `confirm_business_name ("${opts.confirmName}") does not match this business's name ("${business.name}").`,
+      hint: "Re-send with the exact business name. If the user named a different business, resolve its business_id via whoami first.",
+    };
+  }
+
+  const [{ value: invoiceCount }] = await db
+    .select({ value: count() })
+    .from(invoices)
+    .where(eq(invoices.businessId, business.id));
+  const [{ value: bankAccountCount }] = await db
+    .select({ value: count() })
+    .from(businessBankAccounts)
+    .where(eq(businessBankAccounts.businessId, business.id));
+
+  const deletedTemplates = await db
+    .delete(recurringInvoiceTemplates)
+    .where(eq(recurringInvoiceTemplates.businessId, business.id))
+    .returning({ id: recurringInvoiceTemplates.id });
+
+  await db.delete(businesses).where(eq(businesses.id, business.id));
+
+  const remaining = await db
+    .select({ id: businesses.id })
+    .from(businesses)
+    .where(
+      and(
+        eq(businesses.ownerUserId, ctx.userId),
+        ne(businesses.id, business.id),
+      ),
+    )
+    .orderBy(asc(businesses.createdAt));
+
+  // The FK nulled defaultBusinessId if it pointed at the deleted business.
+  // Repoint to the oldest remaining business so the implicit business
+  // fallback stays deterministic and visible in whoami.
+  let newDefaultId: string | null = null;
+  const [user] = await db
+    .select({ defaultBusinessId: users.defaultBusinessId })
+    .from(users)
+    .where(eq(users.id, ctx.userId));
+  if (user && user.defaultBusinessId === null && remaining[0]) {
+    newDefaultId = remaining[0].id;
+    await db
+      .update(users)
+      .set({ defaultBusinessId: newDefaultId })
+      .where(eq(users.id, ctx.userId));
+  } else {
+    newDefaultId = user?.defaultBusinessId ?? null;
+  }
+
+  return {
+    ok: true,
+    value: {
+      deleted: true,
+      name: business.name,
+      invoices_deleted: Number(invoiceCount ?? 0),
+      recurring_templates_deleted: deletedTemplates.length,
+      bank_accounts_deleted: Number(bankAccountCount ?? 0),
+      remaining_business_count: remaining.length,
+      new_default_business_id: newDefaultId,
+    },
+  };
 }

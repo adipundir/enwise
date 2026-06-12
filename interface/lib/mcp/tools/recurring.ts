@@ -204,6 +204,31 @@ export function registerRecurringTools(server: McpServer) {
   );
 
   server.registerTool(
+    "get_recurring_invoice",
+    {
+      title: "Get recurring invoice template",
+      description:
+        "Fetch a single recurring invoice template by id, including its full line items, cadence (interval + anchor_day), next_run_at / last_run_at, auto_send flag, and active status. Use when the user asks for the details of one schedule ('what's on the monthly Acme invoice?') — list_recurring_invoices to resolve the id first if you only have a client or name.",
+      inputSchema: {
+    business_id: uuid.optional(), recurring_id: uuid },
+    },
+    async (args, extra) => {
+      const parsed = z.object({
+      business_id: uuid.optional(), recurring_id: uuid }).safeParse(args);
+      if (!parsed.success) return zodToToolError(parsed.error);
+      const __u = ctxFromAuthInfo(extra.authInfo);
+      const __s = await scopeFromCtx(__u, (parsed.data as { business_id?: string }).business_id);
+      if (!__s.ok) return __s.error;
+      const ctx = __s.scoped;
+      const row = await getRecurring(ctx, parsed.data.recurring_id);
+      if (!row) {
+        return toolError("not_found", `No recurring template with id ${parsed.data.recurring_id}.`);
+      }
+      return toolOk(formatRecurringForMcp(row));
+    },
+  );
+
+  server.registerTool(
     "pause_recurring_invoice",
     {
       title: "Pause recurring template",

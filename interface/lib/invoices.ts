@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "@/lib/db";
 import {
@@ -756,7 +756,8 @@ export type MutateResult<T> =
         | "client_not_found"
         | "business_not_found"
         | "invalid_invoice_number"
-        | "duplicate_invoice_number";
+        | "duplicate_invoice_number"
+        | "invalid_transition";
       message: string;
       hint?: string;
       /** Populated on duplicate_invoice_number: free numbers to pick from. */
@@ -1287,6 +1288,81 @@ export async function markInvoicePaid(
     amount_paid: newAmountPaid,
   });
   return { ok: true, value: (await getInvoice(ctx, inv.id))! };
+}
+
+/**
+ * Undo mark_invoice_paid: reset amountPaid to 0, clear paidAt, and flip a
+ * "paid" invoice back to "sent". Refused when chain-verified onchain
+ * payments exist — those are recorded against an immutable tx hash and the
+ * books must not contradict the chain. The reversal is written to the
+ * invoice's event stream so the audit trail shows both the payment and the
+ * correction.
+ */
+export async function unmarkInvoicePaid(
+  ctx: ScopedCtx,
+  invoiceId: string,
+): Promise<MutateResult<InvoiceWithLineItems>> {
+  const inv = await getInvoice(ctx, invoiceId);
+  if (!inv) return { ok: false, code: "not_found", message: `No invoice with id ${invoiceId}.` };
+  if (inv.status === "void") {
+    return {
+      ok: false,
+      code: "invalid_transition",
+      message: `Invoice ${inv.invoiceNumber} is void; there is no paid state to revert.`,
+    };
+  }
+  if (inv.status !== "paid" && Number(inv.amountPaid) <= 0) {
+    return {
+      ok: false,
+      code: "invalid_transition",
+      message: `Invoice ${inv.invoiceNumber} has no recorded payment to revert.`,
+    };
+  }
+  const onchain = await db
+    .select({ id: invoicePayments.id })
+    .from(invoicePayments)
+    .where(eq(invoicePayments.invoiceId, inv.id))
+    .limit(1);
+  if (onchain.length > 0) {
+    return {
+      ok: false,
+      code: "invalid_transition",
+      message: `Invoice ${inv.invoiceNumber} has chain-verified onchain payment(s) recorded against it. Those can't be unmarked — the transaction exists on chain.`,
+      hint: "Use list_invoice_payments to show the user the recorded transactions. If the books still need correcting (e.g. a refund was issued), void_invoice + duplicate_invoice is the auditable path.",
+    };
+  }
+  await db
+    .update(invoices)
+    .set({
+      status: "sent",
+      amountPaid: "0",
+      paidAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(invoices.id, inv.id));
+  await writeEvent(inv.id, "payment_reverted", ctx.tokenId, {
+    previous_amount_paid: inv.amountPaid,
+    previous_status: inv.status,
+  });
+  return { ok: true, value: (await getInvoice(ctx, inv.id))! };
+}
+
+/**
+ * All payment records on an invoice (today: chain-verified onchain
+ * payments; manual mark_invoice_paid lives on the invoice row itself as
+ * amountPaid and is not a row here).
+ */
+export async function listInvoicePayments(
+  ctx: ScopedCtx,
+  invoiceId: string,
+): Promise<InvoicePayment[] | null> {
+  const inv = await getInvoice(ctx, invoiceId);
+  if (!inv) return null;
+  return db
+    .select()
+    .from(invoicePayments)
+    .where(eq(invoicePayments.invoiceId, inv.id))
+    .orderBy(asc(invoicePayments.paidAt));
 }
 
 // ---------- Onchain payments (no ScopedCtx) ----------

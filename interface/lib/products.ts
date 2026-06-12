@@ -89,6 +89,39 @@ export async function archiveProduct(
   return row ?? null;
 }
 
+export async function unarchiveProduct(
+  ctx: ScopedCtx,
+  productId: string,
+): Promise<Product | null> {
+  const [row] = await db
+    .update(products)
+    .set({ archivedAt: null, updatedAt: new Date() })
+    .where(
+      and(eq(products.id, productId), eq(products.ownerUserId, ctx.userId)),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * HARD-delete a catalog product. Always succeeds: line items reference
+ * products with onDelete: set null and snapshot description/price at
+ * invoice time, so existing invoices render unchanged — they just lose
+ * the product_id link.
+ */
+export async function deleteProduct(
+  ctx: ScopedCtx,
+  productId: string,
+): Promise<{ deleted: true; name: string } | null> {
+  const [row] = await db
+    .delete(products)
+    .where(
+      and(eq(products.id, productId), eq(products.ownerUserId, ctx.userId)),
+    )
+    .returning({ name: products.name });
+  return row ? { deleted: true, name: row.name } : null;
+}
+
 export type ProductMatch = {
   id: string;
   name: string;
