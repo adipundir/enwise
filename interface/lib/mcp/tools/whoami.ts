@@ -94,6 +94,7 @@ export function registerWhoami(server: McpServer) {
             country: b.country,
             invoice_count: Number(invoiceCount ?? 0),
             profile_complete: profileComplete,
+            has_evm_wallet: Boolean(b.evmWalletAddress),
           };
         }),
       );
@@ -139,6 +140,7 @@ type BusinessOut = {
   name: string;
   invoice_count: number;
   profile_complete: boolean;
+  has_evm_wallet: boolean;
 };
 
 function buildHint(
@@ -151,7 +153,7 @@ function buildHint(
   - Business name (required)
   - Full address (tell them to paste it however they have it — you'll split it into line1 / city / region / postal_code / country yourself)
   - Tax ID if they have one (EIN / VAT / GSTIN / etc.; otherwise leave blank)
-Then call create_business with just the name, immediately followed by update_business_profile with whatever address + tax ID they gave you. Currency is NOT a business-level field — it lives on the client (default_currency) or per invoice, so don't ask about it here. Do NOT ask for address fields separately, do NOT show numbered multiple-choice pickers, and do NOT ask about payment terms, invoice prefix, brand color, logo, wallet address, reply-to email, or contact name during onboarding — those are editable later. Save what they give, move on with what they don't; re-ask only if a required field (name) is missing. After the profile is in, move on to clients. Do NOT invent data.`;
+Then call create_business with just the name, immediately followed by update_business_profile with whatever address + tax ID they gave you. Currency is NOT a business-level field — it lives on the client (default_currency) or per invoice, so don't ask about it here. Do NOT ask for address fields separately, do NOT show numbered multiple-choice pickers, and do NOT ask about payment terms, invoice prefix, brand color, logo, reply-to email, or contact name during onboarding — those are editable later. Save what they give, move on with what they don't; re-ask only if a required field (name) is missing. After the profile is in, move on to clients. Do NOT invent data.`;
   }
 
   if (bs.length === 1) {
@@ -164,7 +166,7 @@ HARD RULES for both asks:
 - Treat address as a single freeform blob. Do NOT ask for street / city / state / postal / country as separate fields. Tell the user "paste the full address however you have it" and YOU split it into address_line1 / city / region / postal_code / country (ISO-2) before calling the tool. Same for the client's address.
 - Do NOT show numbered multiple-choice pickers ("1. USD  2. INR  3. EUR"). Plain prose only.
 - Currency is NOT a business-level concept. The only place currency is stored is the CLIENT (default_currency) or the INVOICE itself. So don't ask "what currency should this business invoice in?" — ask currency when creating the client (or skip and ask at invoice time). If create_invoice returns currency_required, ask the user then and persist on the client via update_client.
-- Do NOT ask about other advanced knobs during onboarding: default payment terms, invoice number prefix, brand color, logo, wallet address, reply-to email, contact name. They are editable later and not worth a question.
+- Do NOT ask about other advanced knobs during onboarding: default payment terms, invoice number prefix, brand color, logo, reply-to email, contact name. They are editable later and not worth a question.
 - Required vs optional: only re-ask if a REQUIRED field is missing (business name, client name). For everything else, save what was given and move on — if it turns out to matter at invoice creation time (e.g. no client email but they want to email the invoice), ask THEN.
 
 ASK 1 — Business profile. Single message asking for, plainly:
@@ -175,17 +177,23 @@ Then call update_business_profile once with whatever they gave you.
 
 ASK 2 — First client. Single message asking for: client name (required), email, full address (one paste), currency they should be billed in (e.g. USD / INR — skip if unsure, it can be set at invoice time). Do NOT ask about the client's tax ID here — only matters for EU VAT or India GST invoices, ask later at invoice time if the client country is EU or IN. Then create_client with whatever you got.
 
-After both, ask what they'd like to bill the client for and call create_invoice. Ask for any still-missing fields (email, currency, etc.) only if they actually block the next action.
+After both, send ONE transition message that does two things:
+1. Mention crypto payments in ONE sentence — e.g. "One more thing: you can accept USDC payments directly from any invoice on Base or Arbitrum — just share your wallet address and I'll add it to your profile." Do NOT ask a question about it. Do NOT make it a blocker. If they respond with a wallet address, call update_business_profile(evm_wallet_address). If they skip it, move on.
+2. Ask what they'd like to bill the client for.
 
 Do NOT invent data at any step. Do NOT create a sample/demo invoice. If the user says "just demo it" or "make something up", refuse and ask for real details.`;
     }
     if (!b.profile_complete) {
       return `Business "${b.name}" has no address / tax ID yet. Before sending invoices, send ONE message asking for: full address (one freeform paste — you split it into line1 / city / region / postal_code / country yourself), and tax ID if they have one. Don't ask for address fields separately, don't drip-feed, don't show numbered pickers, and don't ask about advanced knobs (default currency, payment terms, prefix, brand color, logo, wallet, reply-to). Save with a single update_business_profile call — whatever they gave you, move on with what they didn't.`;
     }
+    const cryptoNudge = b.has_evm_wallet
+      ? ""
+      : `\n\nCRYPTO PAYMENTS NOT SET UP: This business has no EVM wallet address. If there is a natural opening (user asks about payment, getting paid, or how invoices work), mention in one sentence that they can accept USDC on Base or Arbitrum by sharing their wallet address. Do not interrupt an invoice flow to ask — raise it only when it fits. If they share a 0x address, call update_business_profile(evm_wallet_address).`;
+
     if (totalClients === 0) {
-      return `Business "${b.name}" is configured but has no clients. Offer to add the first client in ONE message: name (required), email, full address (one freeform paste — you split it yourself), currency they should be billed in (skip if unsure, can be set at invoice time). Do NOT ask about the client's tax ID here — buyer tax IDs only matter on EU VAT or India GST invoices; ask later at invoice time if the client country is EU or IN. Then create_client with whatever you got — don't re-ask for optional fields. Don't ask for address parts separately, don't invent data.\n\n${WRITING_STYLE}`;
+      return `Business "${b.name}" is configured but has no clients. Offer to add the first client in ONE message: name (required), email, full address (one freeform paste — you split it yourself), currency they should be billed in (skip if unsure, can be set at invoice time). Do NOT ask about the client's tax ID here — buyer tax IDs only matter on EU VAT or India GST invoices; ask later at invoice time if the client country is EU or IN. Then create_client with whatever you got — don't re-ask for optional fields. Don't ask for address parts separately, don't invent data.${cryptoNudge}\n\n${WRITING_STYLE}`;
     }
-    return `Business "${b.name}" has ${totalClients} client${totalClients === 1 ? "" : "s"}. Use find_client to resolve names the user mentions.\n\n${WRITING_STYLE}`;
+    return `Business "${b.name}" has ${totalClients} client${totalClients === 1 ? "" : "s"}. Use find_client to resolve names the user mentions.${cryptoNudge}\n\n${WRITING_STYLE}`;
   }
 
   // Multiple businesses. Clients are SHARED across all of them (account-
@@ -193,13 +201,20 @@ Do NOT invent data at any step. Do NOT create a sample/demo invoice. If the user
   const list = bs
     .map(
       (b) =>
-        `- ${b.name} (${b.id}). ${b.invoice_count} invoice${b.invoice_count === 1 ? "" : "s"}${b.profile_complete ? "" : ", PROFILE INCOMPLETE"}`,
+        `- ${b.name} (${b.id}). ${b.invoice_count} invoice${b.invoice_count === 1 ? "" : "s"}${b.profile_complete ? "" : ", PROFILE INCOMPLETE"}${b.has_evm_wallet ? "" : ", NO CRYPTO WALLET"}`,
     )
     .join("\n");
+
+  const anyMissingWallet = bs.some((b) => !b.has_evm_wallet);
+  const multiCryptoNudge = anyMissingWallet
+    ? `\n\nCRYPTO PAYMENTS: One or more businesses above have no EVM wallet (marked NO CRYPTO WALLET). If there is a natural opening, mention in one sentence that they can accept USDC on Base or Arbitrum by sharing a wallet address for that business. Do not interrupt an invoice flow to ask.`
+    : "";
+
   return `${MULTI_BUSINESS_NOTE}
 
 Businesses on this account:
 ${list}
+${multiCryptoNudge}
 
 ${WRITING_STYLE}`;
 }
