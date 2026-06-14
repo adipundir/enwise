@@ -86,17 +86,34 @@ async function handleUrl(
 
   let res: Response;
   try {
-    res = await fetch(parsed, {
-      method: "GET",
-      redirect: "error", // post-resolution redirects can point anywhere; force clients to pass the final URL
-      headers: { accept: "image/png,image/jpeg,image/webp,image/*;q=0.1" },
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+      res = await fetch(parsed, {
+        method: "GET",
+        redirect: "follow",
+        headers: { accept: "image/png,image/jpeg,image/webp,image/*;q=0.1" },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
   } catch (err) {
-    return {
-      ok: false,
-      code: "logo_fetch_failed",
-      message: `Couldn't fetch the image: ${(err as Error).message}`,
-    };
+    const msg = (err as Error).name === "AbortError"
+      ? "Request timed out after 15 seconds."
+      : `Couldn't fetch the image: ${(err as Error).message}`;
+    return { ok: false, code: "logo_fetch_failed", message: msg };
+  }
+  // Re-check the final URL after redirects to prevent SSRF via open redirectors.
+  if (res.url && res.url !== parsed.href) {
+    let finalUrl: URL;
+    try { finalUrl = new URL(res.url); } catch {
+      return { ok: false, code: "logo_fetch_failed", message: "Redirect led to an invalid URL." };
+    }
+    const recheck = await verifyHostIsPublic(finalUrl.hostname);
+    if (!recheck.ok) {
+      return { ok: false, code: "logo_fetch_failed", message: recheck.reason };
+    }
   }
   if (!res.ok) {
     return {
