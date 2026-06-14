@@ -195,13 +195,10 @@ function PayInner({
         connector: wc,
         ...(isSupportedChainId(chainId) ? { chainId } : {}),
       });
-      if (isSupportedChainId(chainId)) {
-        try {
-          await switchChainAsync({ chainId });
-        } catch {
-          // Connected but on a different chain — "Switch to …" handles it.
-        }
-      }
+      // Do not call switchChainAsync here — WalletConnect chain-switch requests
+      // frequently hang when sent immediately after connect (the relay delivers
+      // the request but MetaMask never surfaces it). The onWrongChain render
+      // branch shows an explicit "Switch to …" button when needed.
     } catch (e) {
       if (!isUserRejection(e)) {
         setPhase({ kind: "error", message: "Could not connect wallet. Please try again." });
@@ -223,13 +220,11 @@ function PayInner({
           connector: wc,
           ...(isSupportedChainId(selectedChainId) ? { chainId: selectedChainId as SupportedChainId } : {}),
         });
-        if (isSupportedChainId(selectedChainId)) {
-          try {
-            await switchChainAsync({ chainId: selectedChainId });
-          } catch {
-            // Connected but on a different chain — "Switch to …" handles it.
-          }
-        }
+        // Do not call switchChainAsync here — it frequently hangs over
+        // WalletConnect when the relay delivers the request but MetaMask
+        // never surfaces the approval prompt, leaving the modal frozen.
+        // If the wallet lands on the wrong chain, onWrongChain renders an
+        // explicit "Switch to …" button.
         setSetupOpen(false);
       } catch (e) {
         if (!isUserRejection(e)) {
@@ -245,6 +240,15 @@ function PayInner({
       }
     }
   }
+
+  // Safety net: close the setup modal as soon as wagmi reports connected,
+  // even if connectAsync's promise never resolved (a known WalletConnect
+  // relay timing issue where the session is established but the promise hangs).
+  useEffect(() => {
+    if (status === "connected" && setupOpen) {
+      setSetupOpen(false);
+    }
+  }, [status, setupOpen]);
 
   // Eagerly initialize WalletConnect SDK so the modal opens instantly.
   const warmedRef = useRef(false);
