@@ -19,7 +19,7 @@ Everything that ships lives in `interface/`. The Makefile at the root is a thin 
 - **MCP server** (`app/api/mcp/route.ts`, `lib/mcp/`) exposes the whole business as tools: `whoami`, business profile, clients, products, invoices, bank accounts, recurring templates, uploads, and analytics. Point Claude at it and operate everything by chat.
 - **Multi-business accounts.** One user can own many businesses, each with its own invoice numbering. Clients and products are shared at the account level.
 - **Hosted invoices** at `/i/[slug]` with a Download PDF route and a receipt PDF route.
-- **Wallet payments.** Pay invoices in USDC on Base (mainnet `8453`, Sepolia `84532`) via WalletConnect / Reown. Merchants set their own payment chain per business.
+- **Wallet payments.** Pay invoices in USDC on Base (`8453`) and Arbitrum One (`42161`) via WalletConnect / Reown. Merchants set accepted chains per business; payers pick at checkout. On-chain verification uses Alchemy RPC.
 - **Transactional email** via Resend, with React Email templates in `emails/`.
 - **Recurring invoices** run on a Vercel Cron route (`app/api/cron/recurring/`).
 - **Auth** via Auth.js (GitHub / Google OAuth). API tokens are encrypted at rest (AES-256-GCM).
@@ -52,7 +52,14 @@ Copy `interface/.env.example` to `interface/.env` and fill it in. The essentials
 | `AUTH_URL` | Canonical app URL (`http://localhost:3000` in dev) |
 | `TOKEN_ENC_KEY` | AES-256-GCM key for API tokens (`openssl rand -base64 32`) |
 
-Add as you enable more: `BLOB_READ_WRITE_TOKEN` (logo uploads), `RESEND_API_KEY` + `RESEND_FROM_ADDRESS` (email), `CRON_SECRET` (recurring cron), `PUBLIC_BASE_URL` (share links), `NEXT_PUBLIC_DEFAULT_CHAIN_ID`, and `NEXT_PUBLIC_REOWN_PROJECT_ID` (wallet payments). See `interface/.env.example` for the full list and notes.
+Add as you enable more: `BLOB_READ_WRITE_TOKEN` (logo uploads), `RESEND_API_KEY` + `RESEND_FROM_ADDRESS` (email), `CRON_SECRET` (recurring cron), `PUBLIC_BASE_URL` (share links), `NEXT_PUBLIC_DEFAULT_CHAIN_ID`, `NEXT_PUBLIC_REOWN_PROJECT_ID` (wallet payments), and the Alchemy RPC vars below. See `interface/.env.example` for the full list and notes.
+
+| Variable | Purpose |
+|---|---|
+| `BASE_RPC_URL` | Alchemy RPC for Base mainnet (`https://base-mainnet.g.alchemy.com/v2/<key>`) |
+| `ARBITRUM_RPC_URL` | Alchemy RPC for Arbitrum One (`https://arb-mainnet.g.alchemy.com/v2/<key>`) |
+
+Get keys at [dashboard.alchemy.com](https://dashboard.alchemy.com). Falls back to the chain's public RPC if unset, but Alchemy is required in production for reliable payment verification.
 
 For the full local-dev walkthrough, MCP smoke test, Vercel deploy steps, OAuth callback setup, and project layout, see [`interface/README.md`](interface/README.md).
 
