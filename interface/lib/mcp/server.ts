@@ -48,13 +48,11 @@ One user can own many businesses (e.g., "Acme LLC" and "Side Project Ltd"). Each
 5. Resolve before acting. When the user refers to a client or product by name, call \`find_client\` / \`find_product\` first. If multiple matches come back with similarity scores, show them and let the user pick. Never pass a name to a tool that expects an id, and never invent an id.
 
 6. Wallets and bank accounts are different concepts; do not confuse them.
-   - The merchant's crypto wallets live on the BUSINESS via \`update_business_profile\`. There are THREE chain-specific fields: \`evm_wallet_address\`, \`starknet_wallet_address\`, \`aptos_wallet_address\`. All three chains have native (Circle-issued) USDC.
-     - \`evm_wallet_address\`: raw 0x + 40 hex, or ENS \`*.eth\`. The Pay-with-USDC button reads THIS field and only fires on raw 0x.
-     - \`starknet_wallet_address\`: raw 0x + up to 64 hex, or Starknet Domains \`*.stark\`. Displayed only — no client-side pay button.
-     - \`aptos_wallet_address\`: raw 0x + up to 64 hex, or Aptos Names \`*.apt\`. Displayed only — no client-side pay button.
-   - When the user says "set my wallet" / "add my USDC address" / pastes a 0x address: a 40-hex 0x address is unambiguously EVM. Anything longer (or any 0x without context) could be Starknet OR Aptos — ASK which chain. A .eth → EVM. A .stark → Starknet. A .apt → Aptos.
-   - \`add_bank_account\` is for FIAT rails only (ACH, Fedwire, IFSC, IBAN, SWIFT). NEVER jam a wallet into \`account_number\`. The tool rejects EVM-shaped inputs and points you back to update_business_profile.
-   - The default for \`accepted_payment_methods\` is DERIVED from business state when \`create_invoice\` is called without it. Bank-wins: if the business has any bank account configured, default = \`["bank"]\`. Crypto-only fallback: if no bank but a wallet is set, default = \`["crypto_wallet"]\`. Neither configured → \`["bank"]\` (neutral). Pass an explicit value to override on a per-invoice basis: \`["bank","crypto_wallet"]\` to show both, \`["crypto_wallet"]\` to accept crypto only on this one, \`["bank"]\` to force bank only, \`[]\` to hide all rails. crypto_wallet shows ALL configured wallets (EVM + Starknet + Aptos), so the merchant decides which chains are visible by which fields they've populated.
+   - The merchant's EVM wallet lives on the BUSINESS via \`update_business_profile({ evm_wallet_address })\`. A single EVM address covers ALL EVM chains — Base, Arbitrum, Ethereum, Polygon, etc. The Pay-with-USDC button reads this field and only fires on a raw 0x address.
+   - When the user says "set my wallet" / "add my USDC address" / pastes a 0x address: save it as \`evm_wallet_address\`. Do NOT ask about Starknet or Aptos wallets unless the user explicitly mentions those chains.
+   - Accepted chains default to Base (8453) + Arbitrum (42161) when not explicitly set. Do not tell the user crypto payments are "not configured" — if they have an EVM wallet set, USDC on Base and Arbitrum is already live.
+   - \`add_bank_account\` is for FIAT rails only (ACH, Fedwire, IFSC, IBAN, SWIFT). NEVER jam a wallet into \`account_number\`.
+   - The default for \`accepted_payment_methods\` is DERIVED from business state when \`create_invoice\` is called without it. Bank-wins: if the business has any bank account configured, default = \`["bank"]\`. Crypto-only fallback: if no bank but a wallet is set, default = \`["crypto_wallet"]\`. Neither configured → \`["bank"]\` (neutral). Pass an explicit value to override on a per-invoice basis: \`["bank","crypto_wallet"]\` to show both, \`["crypto_wallet"]\` to accept crypto only on this one, \`["bank"]\` to force bank only.
 
 # Canonical workflow: invoicing a client
 

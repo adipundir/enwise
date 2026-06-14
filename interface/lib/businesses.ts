@@ -147,8 +147,6 @@ export function formatBusinessForMcp(row: Business) {
     tax_id: row.taxId,
     contact_name: row.contactName,
     evm_wallet_address: row.evmWalletAddress,
-    starknet_wallet_address: row.starknetWalletAddress,
-    aptos_wallet_address: row.aptosWalletAddress,
     address_line1: row.addressLine1,
     address_line2: row.addressLine2,
     city: row.city,
@@ -162,8 +160,8 @@ export function formatBusinessForMcp(row: Business) {
     email_reply_to: row.emailReplyTo,
     default_payment_terms_days: row.defaultPaymentTermsDays,
     default_notes: row.defaultNotes,
-    payment_chain_id: row.paymentChainId,
-    accepted_chain_ids: row.acceptedChainIds,
+    payment_chain_id: row.paymentChainId ?? 8453,
+    accepted_chain_ids: row.acceptedChainIds ?? [8453, 42161],
   };
 }
 
