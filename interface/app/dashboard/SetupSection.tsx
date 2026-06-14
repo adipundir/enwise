@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type AgentId = "claude-code" | "claude-ai" | "cursor" | "windsurf";
+type AgentId = "claude-code" | "cursor" | "anti-gravity" | "windsurf" | "claude-ai";
 
 interface AgentMeta {
   id: AgentId;
@@ -11,52 +11,33 @@ interface AgentMeta {
 
 const AGENTS: AgentMeta[] = [
   { id: "claude-code", label: "Claude Code" },
-  { id: "claude-ai", label: "Claude.ai" },
   { id: "cursor", label: "Cursor" },
+  { id: "anti-gravity", label: "Anti-Gravity" },
   { id: "windsurf", label: "Windsurf" },
+  { id: "claude-ai", label: "Claude.ai" },
 ];
+
+const FIRST_PROMPT =
+  "Use whoami to show my enwise account, then walk me through setting up my business profile and first client.";
 
 function buildClaudeCodeCommands(
   rawToken: string,
   mcpUrl: string,
-): { remove: string; add: string; restart: string; firstPrompt: string } {
-  // The `add` command is chained with a silent `remove` first so it works in
-  // both cases:
-  //   - First-time install: remove exits 1 ("No user-scoped MCP server
-  //     found"), 2>/dev/null swallows it, add proceeds.
-  //   - Re-install / regenerate: remove cleans up the stale registration
-  //     (which would otherwise make `claude mcp add` a no-op and leave the
-  //     old token in ~/.claude.json), then add registers fresh.
-  // `;` not `&&` — we want add to run regardless of remove's exit code.
+): { add: string; firstPrompt: string } {
   const removeCmd = `claude mcp remove enwise -s user 2>/dev/null`;
   const addCmd = `claude mcp add --transport http --scope user enwise ${mcpUrl} --header "Authorization: Bearer ${rawToken}"`;
   return {
-    remove: `claude mcp remove enwise -s user`,
     add: `${removeCmd}; ${addCmd}`,
-    restart: `/exit\nclaude`,
-    firstPrompt: `Use whoami to show my enwise account, then walk me through setting up my business profile and first client.`,
+    firstPrompt: FIRST_PROMPT,
   };
 }
 
-/** What the "Generate key" button copies to the clipboard for claude-code:
- *  the install command with the freshly-minted token already embedded. */
-function buildClaudeCodeInstall(rawToken: string, mcpUrl: string): string {
-  return buildClaudeCodeCommands(rawToken, mcpUrl).add;
+function buildCursorPrompt(rawToken: string, mcpUrl: string): string {
+  return `Add enwise as an MCP server. Write the following under mcpServers.enwise in ~/.cursor/mcp.json (create the file if it doesn't exist, merge if it does): url "${mcpUrl}", Authorization header "Bearer ${rawToken}". Then reload the window and use whoami to show my enwise account, then walk me through setting up my business profile and first client.`;
 }
 
-function buildJsonConfig(rawToken: string, mcpUrl: string): string {
-  return JSON.stringify(
-    {
-      mcpServers: {
-        enwise: {
-          url: mcpUrl,
-          headers: { Authorization: `Bearer ${rawToken}` },
-        },
-      },
-    },
-    null,
-    2,
-  );
+function buildAntiGravityPrompt(rawToken: string, mcpUrl: string): string {
+  return `Add enwise as an MCP server. Write the following under mcpServers.enwise in your MCP config file (create it if it doesn't exist, merge if it does): url "${mcpUrl}", Authorization header "Bearer ${rawToken}". Then restart and use whoami to show my enwise account, then walk me through setting up my business profile and first client.`;
 }
 
 function buildWindsurfConfig(rawToken: string, mcpUrl: string): string {
@@ -74,12 +55,6 @@ function buildWindsurfConfig(rawToken: string, mcpUrl: string): string {
   );
 }
 
-/**
- * Setup flow with a per-agent dropdown. Each agent has its own three
- * step layout: configure, restart/reload, verify. Tokens are minted on
- * signup (auth.ts) and never rotated — users only ever see their actual
- * key embedded in the install command.
- */
 export function SetupSection({
   initialRawToken,
   mcpUrl,
@@ -90,32 +65,35 @@ export function SetupSection({
   hasInvoices: boolean;
 }) {
   const [agent, setAgent] = useState<AgentId>("claude-code");
-  // Once the user has at least one invoice, the setup steps are noise on
-  // every dashboard visit. Collapse by default; user can re-open to switch
-  // agent or grab the install command again.
   const [expanded, setExpanded] = useState(!hasInvoices);
 
   const rawToken = initialRawToken;
 
+  const isTerminalAgent = agent === "claude-code";
+  const isPromptAgent = agent === "cursor" || agent === "anti-gravity";
+
   function payloadFor(token: string): string {
     switch (agent) {
       case "claude-code":
-        return buildClaudeCodeInstall(token, mcpUrl);
+        return buildClaudeCodeCommands(token, mcpUrl).add;
+      case "cursor":
+        return buildCursorPrompt(token, mcpUrl);
+      case "anti-gravity":
+        return buildAntiGravityPrompt(token, mcpUrl);
       case "claude-ai":
         return `Authorization: Bearer ${token}`;
       case "windsurf":
         return buildWindsurfConfig(token, mcpUrl);
-      case "cursor":
-        return buildJsonConfig(token, mcpUrl);
     }
   }
 
-  const primaryLabel =
-    agent === "claude-ai"
-      ? "Copy bearer header"
-      : agent === "cursor" || agent === "windsurf"
-        ? "Copy JSON config"
-        : "Copy install command";
+  const primaryLabel = isTerminalAgent
+    ? "Copy install command"
+    : isPromptAgent
+      ? "Copy setup prompt"
+      : agent === "claude-ai"
+        ? "Copy bearer header"
+        : "Copy JSON config";
 
   return (
     <section className="space-y-6">
@@ -158,84 +136,81 @@ export function SetupSection({
         </div>
       </div>
 
-      {!expanded ? null : agent === "claude-code" ? (
-        <ClaudeCodeSteps rawToken={rawToken} mcpUrl={mcpUrl} />
+      {!expanded ? null : isTerminalAgent ? (
+        <TerminalInstallSteps rawToken={rawToken} mcpUrl={mcpUrl} />
+      ) : isPromptAgent ? (
+        <PromptInstallSteps agent={agent} rawToken={rawToken} mcpUrl={mcpUrl} />
       ) : (
-      <div className="grid gap-px overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900 md:grid-cols-3">
-        {/* STEP 1 */}
-        <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
-          <StepKicker n="01" title="Copy the config" />
-          <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-            {step1Body(agent)}
-          </p>
-          <div className="mt-auto pt-8">
-            <CopyButton
-              command={payloadFor(rawToken ?? "")}
-              label={primaryLabel}
-              copiedLabel={primaryLabel.replace(/^Copy/, "Copied")}
-            />
+        <div className="grid gap-px overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900 md:grid-cols-3">
+          {/* STEP 1 */}
+          <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
+            <StepKicker n="01" title="Copy the config" />
+            <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+              {step1Body(agent)}
+            </p>
+            <div className="mt-auto pt-8">
+              <CopyButton
+                command={payloadFor(rawToken ?? "")}
+                label={primaryLabel}
+                copiedLabel={primaryLabel.replace(/^Copy/, "Copied")}
+              />
+            </div>
+          </div>
+
+          {/* STEP 2 */}
+          <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
+            <StepKicker n="02" title={step2Title(agent)} />
+            <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+              {step2Body(agent)}
+            </p>
+            {step2Code(agent) ? (
+              <div className="mt-auto pt-8 space-y-3">
+                <div className="rounded-md border border-zinc-800 bg-[#070707] p-3 font-mono text-xs text-zinc-300">
+                  {step2Code(agent)!.split("\n").map((line, i) => (
+                    <div key={i} className={i > 0 ? "mt-1" : ""}>
+                      <span className="text-zinc-600">$</span> {line}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs leading-relaxed text-zinc-500">
+                  {step2Hint(agent)}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          {/* STEP 3 */}
+          <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
+            <StepKicker n="03" title="Verify it works" />
+            <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+              In a new chat, ask:{" "}
+              <em className="text-zinc-200">
+                &ldquo;use enwise to show my account&rdquo;
+              </em>
+              . {step3Tail(agent)}
+            </p>
           </div>
         </div>
-
-        {/* STEP 2 */}
-        <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
-          <StepKicker n="02" title={step2Title(agent)} />
-          <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-            {step2Body(agent)}
-          </p>
-          {step2Code(agent) ? (
-            <div className="mt-auto pt-8 space-y-3">
-              <div className="rounded-md border border-zinc-800 bg-[#070707] p-3 font-mono text-xs text-zinc-300">
-                {step2Code(agent)!.split("\n").map((line, i) => (
-                  <div key={i} className={i > 0 ? "mt-1" : ""}>
-                    <span className="text-zinc-600">$</span> {line}
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs leading-relaxed text-zinc-500">
-                {step2Hint(agent)}
-              </p>
-            </div>
-          ) : null}
-        </div>
-
-        {/* STEP 3 */}
-        <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
-          <StepKicker n="03" title="Verify it works" />
-          <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-            In a new chat, ask:{" "}
-            <em className="text-zinc-200">
-              &ldquo;use enwise to show my account&rdquo;
-            </em>
-            . {step3Tail(agent)}
-          </p>
-        </div>
-      </div>
       )}
     </section>
   );
 }
 
-function ClaudeCodeSteps({
+function TerminalInstallSteps({
   rawToken,
   mcpUrl,
 }: {
   rawToken: string | null;
   mcpUrl: string;
 }) {
-  // The dashboard server route always passes a non-null rawToken — new
-  // signups get one in auth.ts::events.createUser, legacy rows get
-  // auto-rotated on dashboard load. The null-guard here is just a type
-  // narrowing safety net.
   const c = buildClaudeCodeCommands(rawToken ?? "", mcpUrl);
-
   return (
     <div className="grid gap-px overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900 md:grid-cols-3">
-      {/* STEP 1 — install (register the MCP server) */}
       <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
         <StepKicker n="01" title="Install enwise MCP" />
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-          Click to copy the install command to your clipboard, then paste it in your terminal.
+          Click to copy, then paste the command into your terminal and run it.
+          Your key is already embedded.
         </p>
         <div className="mt-auto pt-6">
           <CopyButton
@@ -245,8 +220,6 @@ function ClaudeCodeSteps({
           />
         </div>
       </div>
-
-      {/* STEP 2 — restart Claude Code */}
       <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
         <StepKicker n="02" title="Restart Claude Code" />
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
@@ -254,16 +227,62 @@ function ClaudeCodeSteps({
           running, exit and reopen it.
         </p>
       </div>
-
-      {/* STEP 3 — paste setup prompt in the fresh session */}
       <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
         <StepKicker n="03" title="Paste this in Claude Code" />
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-          One prompt that guides Claude through setting up your business profile and your first client.
+          One prompt that guides Claude through setting up your business profile
+          and your first client.
         </p>
         <div className="mt-auto pt-6">
           <CopyButton command={c.firstPrompt} label="Copy setup prompt" />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PromptInstallSteps({
+  agent,
+  rawToken,
+  mcpUrl,
+}: {
+  agent: "cursor" | "anti-gravity";
+  rawToken: string | null;
+  mcpUrl: string;
+}) {
+  const token = rawToken ?? "";
+  const prompt =
+    agent === "cursor"
+      ? buildCursorPrompt(token, mcpUrl)
+      : buildAntiGravityPrompt(token, mcpUrl);
+  const agentName = agent === "cursor" ? "Cursor" : "Anti-Gravity";
+
+  return (
+    <div className="grid gap-px overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900 md:grid-cols-2">
+      <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
+        <StepKicker n="01" title={`Paste this into ${agentName}`} />
+        <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+          Copy the prompt below and paste it into a new {agentName} chat.{" "}
+          {agentName} will add the MCP server, reload, and walk you through
+          setup — no terminal needed.
+        </p>
+        <div className="mt-auto pt-6">
+          <CopyButton
+            command={prompt}
+            label="Copy setup prompt"
+            copiedLabel="Prompt copied"
+          />
+        </div>
+      </div>
+      <div className="flex flex-col bg-[#0a0a0a] p-6 sm:p-8">
+        <StepKicker n="02" title="Verify it works" />
+        <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+          After {agentName} restarts with the new config, ask:{" "}
+          <em className="text-zinc-200">
+            &ldquo;use enwise to show my account&rdquo;
+          </em>
+          . It will walk you through your business profile and first client.
+        </p>
       </div>
     </div>
   );
@@ -278,9 +297,6 @@ function CopyButton({
   label: string;
   copiedLabel?: string;
 }) {
-  // Once copied, the button stays in the copied state — the value really
-  // is on the clipboard until the user replaces it. Reverting to the
-  // original label would lie about that.
   const [copied, setCopied] = useState(false);
   async function copy() {
     try {
@@ -328,11 +344,11 @@ function CheckIcon() {
 function step1Body(agent: AgentId): string {
   switch (agent) {
     case "claude-code":
-      return "Click the button below, then paste it into Claude Code. Your key is in the prompt.";
-    case "claude-ai":
-      return "Open claude.ai. Settings, then Connectors, then Add custom connector. Name it enwise. Paste the URL above and add the Authorization header (the button copies the header value).";
     case "cursor":
-      return "Click the button below to copy the JSON. Open Cursor Settings, MCP, Add new MCP server. Or edit ~/.cursor/mcp.json and paste it in.";
+    case "anti-gravity":
+      return "Click to copy the install command, then paste it in your terminal.";
+    case "claude-ai":
+      return "Open claude.ai. Settings, then Connectors, then Add custom connector. Name it enwise. Paste the MCP URL and add the Authorization header (the button copies the header value).";
     case "windsurf":
       return "Click the button below to copy the JSON. Open Windsurf Settings, Cascade, Model Context Protocol. Or edit ~/.codeium/windsurf/mcp_config.json and paste it in.";
   }
@@ -342,10 +358,12 @@ function step2Title(agent: AgentId): string {
   switch (agent) {
     case "claude-code":
       return "Restart Claude Code";
-    case "claude-ai":
-      return "Save the connector";
     case "cursor":
       return "Reload Cursor";
+    case "anti-gravity":
+      return "Restart Anti-Gravity";
+    case "claude-ai":
+      return "Save the connector";
     case "windsurf":
       return "Restart Windsurf";
   }
@@ -354,11 +372,13 @@ function step2Title(agent: AgentId): string {
 function step2Body(agent: AgentId): string {
   switch (agent) {
     case "claude-code":
-      return "Claude Code only loads MCP tools at session start. This step is required. Most 'it isn't working' reports are because of this.";
-    case "claude-ai":
-      return "Once saved, the enwise connector is live in any new chat. No restart needed. The settings page should show enwise with a green Connected badge.";
+      return "Claude Code only loads MCP tools at session start. This step is required.";
     case "cursor":
-      return "Reload Cursor (Cmd-Shift-P, then 'Reload Window'). The enwise tools become available in chats with MCP enabled.";
+      return "Reload Cursor (Cmd-Shift-P, then 'Reload Window'). The enwise tools become available in Agent mode.";
+    case "anti-gravity":
+      return "Quit Anti-Gravity and reopen it. It reads the MCP config at launch.";
+    case "claude-ai":
+      return "Once saved, the enwise connector is live in any new chat. The settings page should show enwise with a green Connected badge.";
     case "windsurf":
       return "Quit Windsurf and start it again. Cascade reads the MCP config at launch.";
   }
@@ -366,41 +386,30 @@ function step2Body(agent: AgentId): string {
 
 function step2Code(agent: AgentId): string | null {
   switch (agent) {
-    case "claude-code":
-      return "/exit\nclaude";
-    case "claude-ai":
-      return null;
     case "cursor":
       return "Cmd-Shift-P\nReload Window";
-    case "windsurf":
-      return "Quit Windsurf\nOpen Windsurf";
+    default:
+      return null;
   }
 }
 
 function step2Hint(agent: AgentId): string {
   switch (agent) {
-    case "claude-code":
-      return "Type /exit, then run claude again.";
-    case "claude-ai":
-      return "";
     case "cursor":
       return "Use the command palette to reload the window.";
-    case "windsurf":
-      return "Quit fully and reopen.";
+    default:
+      return "";
   }
 }
 
 function step3Tail(agent: AgentId): string {
-  switch (agent) {
-    case "claude-code":
-      return "Claude will walk you through setting up your business so you can start invoicing.";
-    case "claude-ai":
-      return "Claude will walk you through setting up your business so you can start invoicing.";
-    case "cursor":
-      return "Cursor will walk you through setting up your business so you can start invoicing.";
-    case "windsurf":
-      return "Windsurf will walk you through setting up your business so you can start invoicing.";
-  }
+  const name =
+    agent === "claude-ai"
+      ? "Claude"
+      : agent === "windsurf"
+        ? "Windsurf"
+        : agent;
+  return `${name} will walk you through setting up your business so you can start invoicing.`;
 }
 
 function StepKicker({

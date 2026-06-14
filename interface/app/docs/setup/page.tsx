@@ -87,6 +87,30 @@ export default async function SetupDocsPage() {
                 </pre>
 
                 <h3 className="mt-5 text-sm font-semibold text-zinc-200">
+                  Cursor
+                </h3>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Open a new Cursor chat and paste this prompt. Cursor will add
+                  the MCP server to its config, reload, and walk you through
+                  setup — no terminal needed.
+                </p>
+                <pre className="mt-2 overflow-auto rounded-md border border-zinc-800 bg-[#0a0a0a] p-4 font-mono text-xs leading-relaxed text-zinc-100 whitespace-pre-wrap">
+{`Add enwise as an MCP server. Write the following under mcpServers.enwise in ~/.cursor/mcp.json (create the file if it doesn't exist, merge if it does): url "${mcpUrl}", Authorization header "Bearer <YOUR_TOKEN>". Then reload the window and use whoami to show my enwise account, then walk me through setting up my business profile and first client.`}
+                </pre>
+
+                <h3 className="mt-5 text-sm font-semibold text-zinc-200">
+                  Anti-Gravity
+                </h3>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Open a new Anti-Gravity chat and paste this prompt. It will
+                  add the MCP server to its config, restart, and walk you
+                  through setup.
+                </p>
+                <pre className="mt-2 overflow-auto rounded-md border border-zinc-800 bg-[#0a0a0a] p-4 font-mono text-xs leading-relaxed text-zinc-100 whitespace-pre-wrap">
+{`Add enwise as an MCP server. Write the following under mcpServers.enwise in your MCP config file (create it if it doesn't exist, merge if it does): url "${mcpUrl}", Authorization header "Bearer <YOUR_TOKEN>". Then restart and use whoami to show my enwise account, then walk me through setting up my business profile and first client.`}
+                </pre>
+
+                <h3 className="mt-5 text-sm font-semibold text-zinc-200">
                   Claude.ai (web, native MCP connectors)
                 </h3>
                 <ol className="mt-2 space-y-1 text-sm text-zinc-400 list-decimal list-inside">
