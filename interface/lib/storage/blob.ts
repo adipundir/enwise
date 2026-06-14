@@ -74,6 +74,30 @@ async function handleUrl(
       message: "image_url must be http:// or https://",
     };
   }
+
+  // Fast-path: image already lives on our Vercel Blob storage.
+  // Skip the download + re-upload entirely; just verify it's an image via HEAD.
+  if (isTrustedBlobUrl(url)) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5_000);
+      let head: Response;
+      try {
+        head = await fetch(url, { method: "HEAD", signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (!head.ok) {
+        return { ok: false, code: "logo_fetch_failed", message: `Blob URL returned HTTP ${head.status}.` };
+      }
+      const ct = (head.headers.get("content-type") || "").split(";")[0].trim();
+      if (!ALLOWED_MIME.has(ct)) return mimeError();
+      return { ok: true, url };
+    } catch {
+      // If the HEAD fails for any reason, fall through to the normal path.
+    }
+  }
+
   // SSRF guard: resolve hostname and reject private / loopback / link-local / metadata IPs.
   const ssrfCheck = await verifyHostIsPublic(parsed.hostname);
   if (!ssrfCheck.ok) {
