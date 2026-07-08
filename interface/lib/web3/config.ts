@@ -1,5 +1,5 @@
 import { createConfig } from "wagmi";
-import { arbitrum, base, baseSepolia } from "wagmi/chains";
+import { arbitrum, base, baseSepolia, mainnet } from "wagmi/chains";
 import { walletConnect } from "wagmi/connectors";
 import { resolveChain, transportFor } from "./chain";
 
@@ -17,7 +17,7 @@ const projectId = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID ?? "";
 // Register every chain we might transact on. The literal tuple is required
 // so wagmi's `Register` type knows the full set; per-tx chain is picked at
 // writeContract time via the `chainId` arg.
-const chains = [base, baseSepolia, arbitrum] as const;
+const chains = [base, baseSepolia, arbitrum, mainnet] as const;
 
 export const wagmiConfig = createConfig({
   chains,
@@ -44,6 +44,7 @@ export const wagmiConfig = createConfig({
     [base.id]: transportFor(resolveChain(base.id)),
     [baseSepolia.id]: transportFor(resolveChain(baseSepolia.id)),
     [arbitrum.id]: transportFor(resolveChain(arbitrum.id)),
+    [mainnet.id]: transportFor(resolveChain(mainnet.id)),
   },
   ssr: true,
 });

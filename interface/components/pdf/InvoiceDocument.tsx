@@ -415,7 +415,7 @@ export function InvoiceDocument({
             <Text style={styles.blockLabel}>Payment details</Text>
             {business.evmWalletAddress ? (
               <View style={styles.walletRow}>
-                <Text style={styles.bankCellLabel}>EVM (USDC on Base / ETH / Arbitrum / etc.)</Text>
+                <Text style={styles.bankCellLabel}>EVM (USDC on Base / Arbitrum, USDT on Ethereum)</Text>
                 <Text style={{ ...styles.bankCellValue, ...styles.bankCellMono }}>
                   {business.evmWalletAddress}
                 </Text>

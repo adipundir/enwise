@@ -58,6 +58,7 @@ Add as you enable more: `BLOB_READ_WRITE_TOKEN` (logo uploads), `RESEND_API_KEY`
 |---|---|
 | `BASE_RPC_URL` | Alchemy RPC for Base mainnet (`https://base-mainnet.g.alchemy.com/v2/<key>`) |
 | `ARBITRUM_RPC_URL` | Alchemy RPC for Arbitrum One (`https://arb-mainnet.g.alchemy.com/v2/<key>`) |
+| `ETH_MAINNET_RPC_URL` | Alchemy RPC for Ethereum mainnet, used for USDT payments (`https://eth-mainnet.g.alchemy.com/v2/<key>`) |
 
 Get keys at [dashboard.alchemy.com](https://dashboard.alchemy.com). Falls back to the chain's public RPC if unset, but Alchemy is required in production for reliable payment verification.
 

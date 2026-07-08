@@ -1,7 +1,8 @@
-// Brand marks for the EVM chains we accept USDC on. Inlined (not <img>) so
-// they scale crisply, inherit sizing via className, and add no extra request.
-// Base: canonical circle-with-slot symbol (#0052FF). Arbitrum One: official
-// faceted "A" mark. Source: official brand kits.
+// Brand marks for the EVM chains we accept stablecoins on (USDC on Base /
+// Arbitrum, USDT on Ethereum). Inlined (not <img>) so they scale crisply,
+// inherit sizing via className, and add no extra request. Base: canonical
+// circle-with-slot symbol (#0052FF). Arbitrum One: faceted "A" mark.
+// Ethereum: official faceted diamond (#627EEA). Source: official brand kits.
 
 export function BaseLogo({ className }: { className?: string }) {
   return (
@@ -49,3 +50,23 @@ export function ArbitrumLogo({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function EthereumLogo({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 256 417"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden
+    >
+      <path fill="#627EEA" fillOpacity=".6" d="m127.96 0-2.8 9.5v275.668l2.8 2.79 127.96-75.638z" />
+      <path fill="#627EEA" d="M127.96 0 0 212.32l127.96 75.639V154.158z" />
+      <path fill="#627EEA" fillOpacity=".6" d="m127.96 312.187-1.575 1.92v98.199l1.575 4.6L256 236.587z" />
+      <path fill="#627EEA" d="M127.96 416.905v-104.72L0 236.585z" />
+      <path fill="#627EEA" fillOpacity=".2" d="m127.96 287.958 127.96-75.637-127.96-58.162z" />
+      <path fill="#627EEA" fillOpacity=".6" d="M0 212.32l127.96 75.638v-133.8z" />
+    </svg>
+  );
+}
+

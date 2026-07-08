@@ -1,11 +1,11 @@
 /**
  * POST /api/invoices/:slug/confirm-payment
  *
- * Called by the share page after the payer signs a USDC.transfer to the
+ * Called by the share page after the payer signs a stablecoin transfer to the
  * merchant's wallet via their connected wallet. We verify on-chain that the
- * transaction happened on the merchant's preferred chain (or the platform
- * default), targets USDC, hits the merchant's wallet, and clears the
- * outstanding balance. Only then do we mark the invoice paid.
+ * transaction happened on a chain this invoice accepts, targets that chain's
+ * stablecoin (USDC, or USDT on Ethereum mainnet), hits the merchant's wallet,
+ * and clears the outstanding balance. Only then do we mark the invoice paid.
  *
  * The chain is the source of truth — we never trust the client's claim that
  * "this tx is mine," we verify directly via the chain's RPC. Idempotent on
@@ -164,13 +164,13 @@ async function handle(
     return NextResponse.json({ error: "transaction reverted on-chain" }, { status: 409 });
   }
 
-  // Parse the receipt for a USDC Transfer to the merchant on the expected
-  // chain. We accept the tx if any log is (a) emitted by the chain's USDC
+  // Parse the receipt for a stablecoin Transfer to the merchant on the expected
+  // chain. We accept the tx if any log is (a) emitted by the chain's stablecoin
   // contract and (b) a Transfer with to=merchantWallet.
   let transferredAmount = 0n;
   let fromAddress: `0x${string}` | null = null;
   for (const log of receipt.logs) {
-    if (log.address.toLowerCase() !== resolved.usdcAddress.toLowerCase()) continue;
+    if (log.address.toLowerCase() !== resolved.tokenAddress.toLowerCase()) continue;
     try {
       const decoded = decodeEventLog({
         abi: erc20Abi,
@@ -188,19 +188,21 @@ async function handle(
         if (!fromAddress) fromAddress = from;
       }
     } catch {
-      // Non-Transfer log on the USDC contract — ignore.
+      // Non-Transfer log on the stablecoin contract — ignore.
     }
   }
 
   if (transferredAmount === 0n) {
     return NextResponse.json(
-      { error: "transaction does not transfer USDC to the merchant wallet" },
+      {
+        error: `transaction does not transfer ${resolved.tokenSymbol} to the merchant wallet`,
+      },
       { status: 409 },
     );
   }
 
   const outstandingDecimal = addAmounts(invoice.total, `-${invoice.amountPaid}`);
-  const outstandingUnits = decimalToUsdcUnits(outstandingDecimal, resolved.usdcDecimals);
+  const outstandingUnits = decimalToTokenUnits(outstandingDecimal, resolved.tokenDecimals);
   if (transferredAmount < outstandingUnits) {
     return NextResponse.json(
       {
@@ -218,7 +220,7 @@ async function handle(
   // still receives any excess on-chain; the books just reflect the invoice.
   const creditedUnits =
     transferredAmount > outstandingUnits ? outstandingUnits : transferredAmount;
-  const amountDecimal = usdcUnitsToDecimal(creditedUnits, resolved.usdcDecimals);
+  const amountDecimal = tokenUnitsToDecimal(creditedUnits, resolved.tokenDecimals);
 
   const result = await recordOnchainPayment({
     invoiceId: invoice.id,
@@ -257,7 +259,7 @@ async function handle(
   });
 }
 
-function decimalToUsdcUnits(decimal: string, decimals: number): bigint {
+function decimalToTokenUnits(decimal: string, decimals: number): bigint {
   const negative = decimal.startsWith("-");
   const body = negative ? decimal.slice(1) : decimal;
   const [intPart, decPart = ""] = body.split(".");
@@ -266,7 +268,7 @@ function decimalToUsdcUnits(decimal: string, decimals: number): bigint {
   return negative ? -units : units;
 }
 
-function usdcUnitsToDecimal(units: bigint, decimals: number): string {
+function tokenUnitsToDecimal(units: bigint, decimals: number): string {
   // raw → 2-decimal string (truncate, don't round — we err in the merchant's
   // favor by only crediting full cents).
   const divisor = 10n ** BigInt(decimals);

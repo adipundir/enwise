@@ -5,23 +5,29 @@
  * from NEXT_PUBLIC_DEFAULT_CHAIN_ID. Everything chain-specific (chain object,
  * USDC contract, RPC URL, block explorer) flows out of `resolveChain(id)`.
  *
- * Supported chains:
- *   8453   = Base mainnet
- *   84532  = Base Sepolia (testnet)
- *   42161  = Arbitrum One mainnet
+ * Supported chains (each maps to exactly one stablecoin):
+ *   8453   = Base mainnet     (USDC)
+ *   84532  = Base Sepolia     (USDC, testnet)
+ *   42161  = Arbitrum One     (USDC)
+ *   1      = Ethereum mainnet (USDT)
  *
- * Add a chain: append to SUPPORTED with its USDC contract and the name of
- * its server-only RPC override env var. The wagmi config + verify endpoint
- * pick up new chains automatically via SUPPORTED_CHAIN_IDS.
+ * Add a chain: append to SUPPORTED with its stablecoin contract + symbol and
+ * the name of its server-only RPC override env var. The verify endpoint picks
+ * new chains up via SUPPORTED_CHAIN_IDS; the wagmi config in ./config.ts must
+ * ALSO register the new viem chain object and a transport for it (that tuple
+ * is hardcoded for wagmi's Register type).
  */
 
 import { fallback, http, type Transport } from "viem";
-import { arbitrum, base, baseSepolia, type Chain } from "viem/chains";
+import { arbitrum, base, baseSepolia, mainnet, type Chain } from "viem/chains";
 
 type ChainEntry = {
   chain: Chain;
-  /** Canonical USDC ERC-20 contract on this chain. */
-  usdcAddress: `0x${string}`;
+  /** Canonical stablecoin ERC-20 on this chain. USDC everywhere except
+   *  Ethereum mainnet, which settles in USDT. Both are 6-decimal. */
+  tokenAddress: `0x${string}`;
+  /** Ticker for that stablecoin — drives payer-facing labels and receipts. */
+  tokenSymbol: "USDC" | "USDT";
   /** Name of the server-only RPC override env var (Alchemy / Infura) for
    *  THIS chain. Each chain needs its own — a Base RPC URL returns wrong /
    *  empty data for an Arbitrum receipt. Falls back to the chain's public
@@ -32,19 +38,31 @@ type ChainEntry = {
 const SUPPORTED = {
   8453: {
     chain: base,
-    usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    tokenAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    tokenSymbol: "USDC",
     rpcEnvVar: "BASE_RPC_URL",
   },
   84532: {
     chain: baseSepolia,
-    usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    tokenAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    tokenSymbol: "USDC",
     rpcEnvVar: "BASE_SEPOLIA_RPC_URL",
   },
   42161: {
     chain: arbitrum,
     // Circle-issued native USDC on Arbitrum One (NOT the bridged USDC.e).
-    usdcAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    tokenAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    tokenSymbol: "USDC",
     rpcEnvVar: "ARBITRUM_RPC_URL",
+  },
+  1: {
+    chain: mainnet,
+    // Tether (USDT) on Ethereum mainnet. 6-decimal, non-standard ERC-20
+    // (transfer/approve return no bool) — fine for a plain wallet transfer,
+    // which is all the public rail does (no approve flow on this path).
+    tokenAddress: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    tokenSymbol: "USDT",
+    rpcEnvVar: "ETH_MAINNET_RPC_URL",
   },
 } as const satisfies Record<number, ChainEntry>;
 
@@ -68,8 +86,11 @@ export function isSupportedChainId(id: unknown): id is SupportedChainId {
 export type ResolvedChain = {
   chainId: SupportedChainId;
   chain: Chain;
-  usdcAddress: `0x${string}`;
-  usdcDecimals: number;
+  /** The chain's stablecoin ERC-20 (USDC, or USDT on Ethereum mainnet). */
+  tokenAddress: `0x${string}`;
+  tokenDecimals: number;
+  /** Ticker of that stablecoin (USDC / USDT) for labels + receipts. */
+  tokenSymbol: "USDC" | "USDT";
   /** Primary RPC URL. First entry in rpcUrls. */
   rpcUrl: string;
   /** All RPC URLs in priority order: env override(s) first, then the
@@ -95,7 +116,7 @@ export function resolveChain(chainId?: number | null): ResolvedChain {
         : DEFAULT_CHAIN_ID;
   const entry = SUPPORTED[id];
   const chain = entry.chain;
-  const usdcAddress = entry.usdcAddress;
+  const tokenAddress = entry.tokenAddress;
   // Priority: this chain's own server-only RPC override (e.g. BASE_RPC_URL,
   // ARBITRUM_RPC_URL — the paid Alchemy/Infura URL) → the chain's public
   // default. The override is read by its per-chain env-var name so we never
@@ -114,8 +135,10 @@ export function resolveChain(chainId?: number | null): ResolvedChain {
   return {
     chainId: id,
     chain,
-    usdcAddress,
-    usdcDecimals: 6,
+    tokenAddress,
+    // USDC and USDT are both 6-decimal on every chain we support.
+    tokenDecimals: 6,
+    tokenSymbol: entry.tokenSymbol,
     rpcUrl: rpcUrls[0]!,
     rpcUrls,
     explorerUrl,

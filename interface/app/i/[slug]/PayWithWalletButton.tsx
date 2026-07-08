@@ -9,7 +9,7 @@ import {
   useSwitchChain,
   useWriteContract,
 } from "wagmi";
-import { ArbitrumLogo, BaseLogo } from "@/components/chain-logos";
+import { ArbitrumLogo, BaseLogo, EthereumLogo } from "@/components/chain-logos";
 import { WalletProviders } from "@/lib/web3/providers";
 import { chainLabel, isSupportedChainId, resolveChain, type SupportedChainId } from "@/lib/web3/chain";
 import { PaidBadge } from "./PaidBadge";
@@ -39,10 +39,12 @@ function friendlyErrorMessage(error: unknown): string {
 type Props = {
   slug: string;
   merchantWallet: `0x${string}`;
-  /** USDC units (bigint as string, 6 decimals). */
+  /** Stablecoin base units (bigint as string, 6 decimals). USDC and USDT are
+   *  both 6-dec, so the unit count is the same regardless of which chain. */
   amountUsdcUnits: string;
-  /** "236.00 USDC" for the button label. */
-  amountLabel: string;
+  /** Numeric amount for the button label, e.g. "236.00". The token symbol
+   *  (USDC / USDT) is appended from whichever chain the payer selects. */
+  amountDisplay: string;
   /** The EVM chains the merchant accepts on, in display order. The payer
    *  picks one; all pay to the same merchantWallet. Resolved by the share
    *  page from the invoice / business accepted_chain_ids. */
@@ -142,7 +144,7 @@ function PayInner({
   slug,
   merchantWallet,
   amountUsdcUnits,
-  amountLabel,
+  amountDisplay,
   acceptedChainIds,
   defaultChainId,
 }: Props) {
@@ -264,7 +266,7 @@ function PayInner({
     try {
       const txHash = await writeContractAsync({
         chainId: resolved.chainId,
-        address: resolved.usdcAddress,
+        address: resolved.tokenAddress,
         abi: erc20Abi,
         functionName: "transfer",
         args: [merchantWallet, amount],
@@ -382,7 +384,9 @@ function PayInner({
   } else {
     content = (
       <div className="flex flex-col items-end gap-1.5">
-        <RainbowButton onClick={onPay}>Pay {amountLabel}</RainbowButton>
+        <RainbowButton onClick={onPay}>
+          Pay {amountDisplay} {resolved.tokenSymbol}
+        </RainbowButton>
         <WalletMeta
           address={address}
           chainId={selectedChainId}
@@ -421,6 +425,9 @@ function ChainLogo({ chainId, className }: { chainId: number; className?: string
   }
   if (chainId === 42161) {
     return <ArbitrumLogo className={className} />;
+  }
+  if (chainId === 1) {
+    return <EthereumLogo className={className} />;
   }
   return (
     <span

@@ -155,16 +155,20 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                 txHash={latestPayment?.txHash}
                 chainId={latestPayment?.chainId}
               />
-            ) : canPayWithWallet && isEvmAddress(businessEvmWallet) ? (
-              <PayWithWalletButton
-                slug={slug}
-                merchantWallet={businessEvmWallet}
-                amountUsdcUnits={outstandingUsdcUnits.toString()}
-                amountLabel={`${outstandingDecimal} USDC`}
-                acceptedChainIds={acceptedChainIds}
-                defaultChainId={defaultChainId}
-              />
-            ) : null}
+            ) : (
+              <>
+                {canPayWithWallet && isEvmAddress(businessEvmWallet) ? (
+                  <PayWithWalletButton
+                    slug={slug}
+                    merchantWallet={businessEvmWallet}
+                    amountUsdcUnits={outstandingUsdcUnits.toString()}
+                    amountDisplay={outstandingDecimal}
+                    acceptedChainIds={acceptedChainIds}
+                    defaultChainId={defaultChainId}
+                  />
+                ) : null}
+              </>
+            )}
             <a
               href={`/i/${slug}/pdf`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50"
@@ -418,7 +422,7 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
               {businessEvmWallet ? (
                 <div className="flex flex-col gap-0.5 text-sm">
                   <dt className="text-[10px] uppercase tracking-widest text-zinc-500">
-                    EVM (USDC on Base / ETH / Arbitrum / etc.)
+                    EVM (USDC on Base / Arbitrum, USDT on Ethereum)
                   </dt>
                   <dd>
                     <CopyableField value={businessEvmWallet} mono />
