@@ -20,39 +20,24 @@ export default async function Image() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <div
-            style={{
-              position: "relative",
-              width: 64,
-              height: 64,
-              display: "flex",
-            }}
+          <svg
+            width={64}
+            height={64}
+            viewBox="0 0 256 256"
+            fill="none"
+            style={{ display: "flex" }}
           >
-            <div
-              style={{
-                position: "absolute",
-                right: 0,
-                top: 8,
-                width: 48,
-                height: 48,
-                borderRadius: 999,
-                border: "6px solid #fafafa",
-                display: "flex",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                left: 0,
-                top: 29,
-                width: 26,
-                height: 6,
-                borderRadius: 3,
-                background: "#fafafa",
-                display: "flex",
-              }}
-            />
-          </div>
+            <g
+              stroke="#fafafa"
+              strokeWidth={22}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            >
+              <circle cx={176} cy={128} r={48} />
+              <path d="M 56 128 L 128 128" />
+            </g>
+          </svg>
           <div style={{ fontSize: 40, fontWeight: 700, color: "#fafafa", display: "flex" }}>
             enwise
           </div>
