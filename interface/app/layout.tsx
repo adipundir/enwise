@@ -14,10 +14,26 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
+const title = "enwise | invoicing from inside Claude";
+const description =
+  "An MCP server that runs your entire invoicing business through natural language in Claude. Clients, invoices, emails, PDFs, all by conversation.";
+
 export const metadata: Metadata = {
-  title: "enwise | invoicing from inside Claude",
-  description:
-    "An MCP server that runs your entire invoicing business through natural language in Claude. Clients, invoices, emails, PDFs, all by conversation.",
+  metadataBase: new URL(process.env.PUBLIC_BASE_URL || "https://enwise.app"),
+  title,
+  description,
+  openGraph: {
+    title,
+    description,
+    url: "/",
+    siteName: "enwise",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+  },
 };
 
 export default function RootLayout({
