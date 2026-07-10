@@ -27,9 +27,11 @@ type AddressFields = {
 
 type BankFields = {
   account_holder?: string | null;
+  beneficiary_address?: string | null;
   bank_name?: string | null;
   account_number?: string | null;
   ifsc?: string | null;
+  upi_id?: string | null;
   swift?: string | null;
   iban?: string | null;
   ach_routing?: string | null;

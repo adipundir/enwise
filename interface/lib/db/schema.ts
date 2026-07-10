@@ -215,9 +215,16 @@ export const businessBankAccounts = pgTable(
      *  prompts and on the rendered invoice. e.g. "USD primary", "INR HDFC". */
     label: text("label").notNull(),
     accountHolder: text("account_holder"),
+    /** Street address of the account holder (the beneficiary). US/EU sending
+     *  banks require this on wire forms (OFAC screening) — distinct from
+     *  branch_address, which is the receiving bank's address. */
+    beneficiaryAddress: text("beneficiary_address"),
     bankName: text("bank_name"),
     accountNumber: text("account_number"),
     ifsc: text("ifsc"),
+    /** India UPI virtual payment address (VPA), e.g. "name@okhdfcbank".
+     *  Lets INR accounts surface an instant-payment rail alongside IFSC. */
+    upiId: text("upi_id"),
     swift: text("swift"),
     iban: text("iban"),
     /** US ACH routing number (9 digits). Used for domestic US transfers
@@ -395,7 +402,7 @@ export const invoices = pgTable(
     invoiceNumber: text("invoice_number").notNull(),
     status: invoiceStatus("status").notNull().default("draft"),
     issueDate: date("issue_date").notNull(),
-    dueDate: date("due_date").notNull(),
+    dueDate: date("due_date"),
     currency: char("currency", { length: 3 }).notNull(),
     subtotal: numeric("subtotal", { precision: 14, scale: 2 })
       .notNull()
@@ -442,8 +449,9 @@ export const invoices = pgTable(
     businessAptosWalletAddressSnapshot: text("business_aptos_wallet_address_snapshot"),
     businessAddressSnapshot: jsonb("business_address_snapshot"),
     businessLogoUrlSnapshot: text("business_logo_url_snapshot"),
-    /** Frozen at finalize: an array of {id?, label, account_holder, bank_name,
-     *  account_number, ifsc, swift, iban, branch_address, currency} objects
+    /** Frozen at finalize: an array of {id?, label, account_holder,
+     *  beneficiary_address, bank_name, account_number, ifsc, upi_id, swift,
+     *  iban, ach_routing, fedwire_routing, branch_address, currency} objects
      *  representing the bank accounts to surface on this specific invoice.
      *  Renderers prefer this over live business_bank_accounts when present. */
     businessBankAccountsSnapshot: jsonb("business_bank_accounts_snapshot"),

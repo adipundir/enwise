@@ -57,9 +57,18 @@ function rejectIfWalletShaped(fields: {
 const fieldSchemas = {
   label: z.string().min(1).max(64),
   account_holder: z.string().max(200).nullish(),
+  beneficiary_address: z.string().max(300).nullish(),
   bank_name: z.string().max(200).nullish(),
   account_number: z.string().max(64).nullish(),
   ifsc: z.string().max(32).nullish(),
+  upi_id: z
+    .string()
+    .max(256)
+    .regex(
+      /^[a-zA-Z0-9][a-zA-Z0-9._-]*@[a-zA-Z0-9]{2,64}$/,
+      "UPI VPA like 'name@okhdfcbank' or '9876543210@ybl'",
+    )
+    .nullish(),
   swift: z.string().max(32).nullish(),
   iban: z.string().max(64).nullish(),
   ach_routing: z.string().max(32).nullish(),
@@ -85,9 +94,11 @@ const updateInput = {
   bank_account_id: uuid,
   label: fieldSchemas.label.optional(),
   account_holder: fieldSchemas.account_holder,
+  beneficiary_address: fieldSchemas.beneficiary_address,
   bank_name: fieldSchemas.bank_name,
   account_number: fieldSchemas.account_number,
   ifsc: fieldSchemas.ifsc,
+  upi_id: fieldSchemas.upi_id,
   swift: fieldSchemas.swift,
   iban: fieldSchemas.iban,
   ach_routing: fieldSchemas.ach_routing,
@@ -111,7 +122,7 @@ export function registerBankAccountTools(server: McpServer) {
     {
       title: "List bank accounts for a business",
       description:
-        "Return every active bank account configured on a business. Default account is first in the list, others by creation order. Each entry includes id, label, account_holder, bank_name, account_number, ifsc, swift, iban, ach_routing, fedwire_routing, branch_address, currency, is_default. Use this BEFORE add_bank_account to avoid creating duplicates, and BEFORE create_invoice when the user hasn't picked which account to use. Pass `business_id` if the user owns multiple businesses.",
+        "Return every active bank account configured on a business. Default account is first in the list, others by creation order. Each entry includes id, label, account_holder, beneficiary_address, bank_name, account_number, ifsc, upi_id, swift, iban, ach_routing, fedwire_routing, branch_address, currency, is_default. Use this BEFORE add_bank_account to avoid creating duplicates, and BEFORE create_invoice when the user hasn't picked which account to use. Pass `business_id` if the user owns multiple businesses.",
       inputSchema: listInput,
     },
     async (args, extra) => {
@@ -130,7 +141,7 @@ export function registerBankAccountTools(server: McpServer) {
     {
       title: "Add a bank account",
       description:
-        "Create a new bank payout account for a business — for FIAT rails only (USD ACH/Fedwire, INR IFSC, EUR SEPA/IBAN, international SWIFT). A merchant can have multiple accounts (e.g. USD primary + INR HDFC + EUR Wise) and pick which one(s) to show on each invoice. `label` is a short human name the merchant uses to disambiguate ('USD primary', 'INR HDFC'). Fill the fields appropriate for the receiving rail: IFSC for India, SWIFT for international wires into the account, IBAN for Europe, ach_routing for US domestic ACH transfers, fedwire_routing for US domestic wires (often a different 9-digit number than ACH at the same bank — set both if the bank provides them). `branch_address` is required by most US/EU sending banks. Pass `set_default: true` to make this the merchant's default account for new invoices — if no accounts exist yet, the first one added becomes default automatically.\n\n**DO NOT use this tool to store a crypto wallet address.** A 0x… EVM address or an ENS name does NOT go into `account_number`. Wallets live on the BUSINESS record in chain-specific fields: `evm_wallet_address`, `starknet_wallet_address`, `aptos_wallet_address`. If the user says 'add my wallet', 'set my USDC address', 'I want to receive crypto', etc., call `update_business_profile` with the right chain field instead (ask which chain if ambiguous). This tool will REJECT any `account_number` that looks like an EVM address (0x + 40 hex). Wallet-as-bank-account creates the wrong rendering on the share page (\"Account number: 0x…\") and also leaves the real wallet field empty so the Pay-with-USDC button never appears.",
+        "Create a new bank payout account for a business — for FIAT rails only (USD ACH/Fedwire, INR IFSC, EUR SEPA/IBAN, international SWIFT). A merchant can have multiple accounts (e.g. USD primary + INR HDFC + EUR Wise) and pick which one(s) to show on each invoice. `label` is a short human name the merchant uses to disambiguate ('USD primary', 'INR HDFC'). Fill the fields appropriate for the receiving rail: IFSC for India, SWIFT for international wires into the account, IBAN for Europe, ach_routing for US domestic ACH transfers, fedwire_routing for US domestic wires (often a different 9-digit number than ACH at the same bank — set both if the bank provides them). `beneficiary_address` is the account holder's street address — US/EU sending banks require it on wire forms, so set it for any account that will receive international wires. `branch_address` is the receiving bank branch's address (some sending forms ask for it; most auto-fill it from SWIFT/routing). `upi_id` is an India UPI VPA like 'name@okhdfcbank' — an instant-payment rail rendered alongside the bank details; fiat only, NOT for wallet addresses. Pass `set_default: true` to make this the merchant's default account for new invoices — if no accounts exist yet, the first one added becomes default automatically.\n\n**DO NOT use this tool to store a crypto wallet address.** A 0x… EVM address or an ENS name does NOT go into `account_number`. Wallets live on the BUSINESS record in chain-specific fields: `evm_wallet_address`, `starknet_wallet_address`, `aptos_wallet_address`. If the user says 'add my wallet', 'set my USDC address', 'I want to receive crypto', etc., call `update_business_profile` with the right chain field instead (ask which chain if ambiguous). This tool will REJECT any `account_number` that looks like an EVM address (0x + 40 hex). Wallet-as-bank-account creates the wrong rendering on the share page (\"Account number: 0x…\") and also leaves the real wallet field empty so the Pay-with-USDC button never appears.",
       inputSchema: addInput,
     },
     async (args, extra) => {
@@ -149,9 +160,11 @@ export function registerBankAccountTools(server: McpServer) {
       const row = await addBankAccount(scope.scoped.businessId, {
         label: input.label,
         accountHolder: input.account_holder ?? null,
+        beneficiaryAddress: input.beneficiary_address ?? null,
         bankName: input.bank_name ?? null,
         accountNumber: input.account_number ?? null,
         ifsc: input.ifsc ?? null,
+        upiId: input.upi_id ?? null,
         swift: input.swift ?? null,
         iban: input.iban ?? null,
         achRouting: input.ach_routing ?? null,
@@ -169,7 +182,7 @@ export function registerBankAccountTools(server: McpServer) {
     {
       title: "Update a bank account",
       description:
-        "Modify any subset of fields on an existing bank account (label, holder, bank name, account number, IFSC, SWIFT, IBAN, ach_routing, fedwire_routing, branch address, currency). Omitted fields are unchanged; pass null to clear a nullable field. To change which account is the default, use `set_default_bank_account` instead. Soft-deleted accounts can't be updated — use add_bank_account to add a new one.\n\nThis tool is for FIAT rails only. Wallet addresses don't go into `account_number` — they live on the business via `update_business_profile({ evm_wallet_address / starknet_wallet_address / aptos_wallet_address })`. The tool rejects EVM-shaped `account_number` (0x + 40 hex).",
+        "Modify any subset of fields on an existing bank account (label, holder, beneficiary address, bank name, account number, IFSC, UPI ID, SWIFT, IBAN, ach_routing, fedwire_routing, branch address, currency). Omitted fields are unchanged; pass null to clear a nullable field. To change which account is the default, use `set_default_bank_account` instead. Soft-deleted accounts can't be updated — use add_bank_account to add a new one.\n\nThis tool is for FIAT rails only. Wallet addresses don't go into `account_number` — they live on the business via `update_business_profile({ evm_wallet_address / starknet_wallet_address / aptos_wallet_address })`. The tool rejects EVM-shaped `account_number` (0x + 40 hex).",
       inputSchema: updateInput,
     },
     async (args, extra) => {
@@ -188,9 +201,12 @@ export function registerBankAccountTools(server: McpServer) {
       const patch: BankAccountPatch = {};
       if (input.label !== undefined) patch.label = input.label;
       if (input.account_holder !== undefined) patch.accountHolder = input.account_holder ?? null;
+      if (input.beneficiary_address !== undefined)
+        patch.beneficiaryAddress = input.beneficiary_address ?? null;
       if (input.bank_name !== undefined) patch.bankName = input.bank_name ?? null;
       if (input.account_number !== undefined) patch.accountNumber = input.account_number ?? null;
       if (input.ifsc !== undefined) patch.ifsc = input.ifsc ?? null;
+      if (input.upi_id !== undefined) patch.upiId = input.upi_id ?? null;
       if (input.swift !== undefined) patch.swift = input.swift ?? null;
       if (input.iban !== undefined) patch.iban = input.iban ?? null;
       if (input.ach_routing !== undefined) patch.achRouting = input.ach_routing ?? null;

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/auth";
-import { ArbitrumLogo, BaseLogo } from "@/components/chain-logos";
+import { ArbitrumLogo, BaseLogo, EthereumLogo } from "@/components/chain-logos";
 import { RotatingWord } from "@/components/rotating-word";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -155,6 +155,10 @@ export async function Landing() {
               <span className="inline-flex items-center gap-2.5 text-sm text-zinc-300">
                 <ArbitrumLogo className="size-6" />
                 Arbitrum
+              </span>
+              <span className="inline-flex items-center gap-2.5 text-sm text-zinc-300">
+                <EthereumLogo className="size-6" />
+                Ethereum
               </span>
             </div>
 

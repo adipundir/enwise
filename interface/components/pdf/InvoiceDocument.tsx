@@ -236,9 +236,11 @@ export interface InvoicePdfData {
     bankAccounts: Array<{
       label: string;
       accountHolder: string | null;
+      beneficiaryAddress: string | null;
       bankName: string | null;
       accountNumber: string | null;
       ifsc: string | null;
+      upiId: string | null;
       swift: string | null;
       iban: string | null;
       achRouting: string | null;
@@ -299,10 +301,12 @@ export function InvoiceDocument({
               <Text style={styles.metaRowLabel}>Issue date</Text>
               <Text>{invoice.issueDate}</Text>
             </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaRowLabel}>Due date</Text>
-              <Text>{invoice.dueDate}</Text>
-            </View>
+            {invoice.dueDate ? (
+              <View style={styles.metaRow}>
+                <Text style={styles.metaRowLabel}>Due date</Text>
+                <Text>{invoice.dueDate}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -449,6 +453,13 @@ export function InvoiceDocument({
                   {account.accountHolder ? (
                     <BankCell label="Account holder" value={account.accountHolder} fullWidth />
                   ) : null}
+                  {account.beneficiaryAddress ? (
+                    <BankCell
+                      label="Beneficiary address"
+                      value={account.beneficiaryAddress}
+                      fullWidth
+                    />
+                  ) : null}
                   {account.bankName ? (
                     <BankCell label="Bank" value={account.bankName} />
                   ) : null}
@@ -457,6 +468,9 @@ export function InvoiceDocument({
                   ) : null}
                   {account.ifsc ? (
                     <BankCell label="IFSC" value={account.ifsc} mono />
+                  ) : null}
+                  {account.upiId ? (
+                    <BankCell label="UPI ID" value={account.upiId} mono />
                   ) : null}
                   {account.swift ? (
                     <BankCell label="SWIFT / BIC" value={account.swift} mono />

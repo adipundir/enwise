@@ -251,7 +251,9 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
               </div>
               <dl className="mt-4 space-y-1 text-sm">
                 <DlRow label="Issue date" value={invoice.issueDate} />
-                <DlRow label="Due date" value={invoice.dueDate} />
+                {invoice.dueDate ? (
+                  <DlRow label="Due date" value={invoice.dueDate} />
+                ) : null}
               </dl>
             </div>
           </section>
@@ -463,6 +465,13 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                     {account.accountHolder ? (
                       <BankRow label="Account holder" value={account.accountHolder} fullWidth />
                     ) : null}
+                    {account.beneficiaryAddress ? (
+                      <BankRow
+                        label="Beneficiary address"
+                        value={account.beneficiaryAddress}
+                        fullWidth
+                      />
+                    ) : null}
                     {account.bankName ? (
                       <BankRow label="Bank" value={account.bankName} />
                     ) : null}
@@ -471,6 +480,9 @@ export default async function PublicInvoicePage({ params }: { params: Params }) 
                     ) : null}
                     {account.ifsc ? (
                       <BankRow label="IFSC" value={account.ifsc} mono />
+                    ) : null}
+                    {account.upiId ? (
+                      <BankRow label="UPI ID" value={account.upiId} mono />
                     ) : null}
                     {account.swift ? (
                       <BankRow label="SWIFT / BIC" value={account.swift} mono />
@@ -555,9 +567,11 @@ interface AddressSource {
 type BankAccountForRender = {
   label: string;
   accountHolder: string | null;
+  beneficiaryAddress: string | null;
   bankName: string | null;
   accountNumber: string | null;
   ifsc: string | null;
+  upiId: string | null;
   swift: string | null;
   iban: string | null;
   achRouting: string | null;
@@ -570,9 +584,11 @@ type BankAccountSnapshotEntry = {
   id?: string;
   label?: string;
   account_holder?: string | null;
+  beneficiary_address?: string | null;
   bank_name?: string | null;
   account_number?: string | null;
   ifsc?: string | null;
+  upi_id?: string | null;
   swift?: string | null;
   iban?: string | null;
   ach_routing?: string | null;
@@ -695,9 +711,11 @@ function snapshotEntryToBankAccount(snap: BankAccountSnapshotEntry): BankAccount
   return {
     label: snap.label ?? "Bank account",
     accountHolder: snap.account_holder ?? null,
+    beneficiaryAddress: snap.beneficiary_address ?? null,
     bankName: snap.bank_name ?? null,
     accountNumber: snap.account_number ?? null,
     ifsc: snap.ifsc ?? null,
+    upiId: snap.upi_id ?? null,
     swift: snap.swift ?? null,
     iban: snap.iban ?? null,
     achRouting: snap.ach_routing ?? null,

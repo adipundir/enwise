@@ -185,8 +185,8 @@ export interface OutstandingInvoice {
   amount_paid: string;
   outstanding: string;
   issue_date: string;
-  due_date: string;
-  days_overdue: number;
+  due_date: string | null;
+  days_overdue: number | null;
 }
 
 export async function getOutstandingInvoices(
@@ -237,8 +237,10 @@ export async function getOutstandingInvoices(
       amount_paid: String(row.amount_paid),
       outstanding: String(row.outstanding),
       issue_date: String(row.issue_date),
-      due_date: String(row.due_date),
-      days_overdue: Number(row.days_overdue),
+      due_date: row.due_date === null ? null : String(row.due_date),
+      // Postgres greatest() ignores NULL args, so days_overdue would
+      // otherwise come back as 0 (not NULL) for a due-date-less invoice.
+      days_overdue: row.due_date === null ? null : Number(row.days_overdue),
     };
   });
 }

@@ -9,9 +9,11 @@ import {
 export type BankAccountInput = {
   label: string;
   accountHolder?: string | null;
+  beneficiaryAddress?: string | null;
   bankName?: string | null;
   accountNumber?: string | null;
   ifsc?: string | null;
+  upiId?: string | null;
   swift?: string | null;
   iban?: string | null;
   achRouting?: string | null;
@@ -25,9 +27,11 @@ export type BankAccountInput = {
 export type BankAccountPatch = Partial<{
   label: string;
   accountHolder: string | null;
+  beneficiaryAddress: string | null;
   bankName: string | null;
   accountNumber: string | null;
   ifsc: string | null;
+  upiId: string | null;
   swift: string | null;
   iban: string | null;
   achRouting: string | null;
@@ -152,9 +156,11 @@ export async function addBankAccount(
     businessId,
     label: input.label,
     accountHolder: input.accountHolder ?? null,
+    beneficiaryAddress: input.beneficiaryAddress ?? null,
     bankName: input.bankName ?? null,
     accountNumber: input.accountNumber ?? null,
     ifsc: input.ifsc ?? null,
+    upiId: input.upiId ?? null,
     swift: input.swift ?? null,
     iban: input.iban ?? null,
     achRouting: input.achRouting ?? null,
@@ -305,9 +311,11 @@ export function toSnapshotShape(row: BusinessBankAccount): {
   id: string;
   label: string;
   account_holder: string | null;
+  beneficiary_address: string | null;
   bank_name: string | null;
   account_number: string | null;
   ifsc: string | null;
+  upi_id: string | null;
   swift: string | null;
   iban: string | null;
   ach_routing: string | null;
@@ -319,9 +327,11 @@ export function toSnapshotShape(row: BusinessBankAccount): {
     id: row.id,
     label: row.label,
     account_holder: row.accountHolder,
+    beneficiary_address: row.beneficiaryAddress,
     bank_name: row.bankName,
     account_number: row.accountNumber,
     ifsc: row.ifsc,
+    upi_id: row.upiId,
     swift: row.swift,
     iban: row.iban,
     ach_routing: row.achRouting,
@@ -337,9 +347,11 @@ export function formatBankAccountForMcp(row: BusinessBankAccount) {
     id: row.id,
     label: row.label,
     account_holder: row.accountHolder,
+    beneficiary_address: row.beneficiaryAddress,
     bank_name: row.bankName,
     account_number: row.accountNumber,
     ifsc: row.ifsc,
+    upi_id: row.upiId,
     swift: row.swift,
     iban: row.iban,
     ach_routing: row.achRouting,

@@ -16,9 +16,11 @@ type BankAccountSnapshot = {
   id?: string;
   label: string;
   account_holder: string | null;
+  beneficiary_address?: string | null;
   bank_name: string | null;
   account_number: string | null;
   ifsc: string | null;
+  upi_id?: string | null;
   swift: string | null;
   iban: string | null;
   ach_routing?: string | null;
@@ -210,9 +212,11 @@ async function resolveBankAccountsForInvoice(
 function snapshotToBankAccount(snap: BankAccountSnapshot): {
   label: string;
   accountHolder: string | null;
+  beneficiaryAddress: string | null;
   bankName: string | null;
   accountNumber: string | null;
   ifsc: string | null;
+  upiId: string | null;
   swift: string | null;
   iban: string | null;
   achRouting: string | null;
@@ -223,9 +227,11 @@ function snapshotToBankAccount(snap: BankAccountSnapshot): {
   return {
     label: snap.label,
     accountHolder: snap.account_holder ?? null,
+    beneficiaryAddress: snap.beneficiary_address ?? null,
     bankName: snap.bank_name ?? null,
     accountNumber: snap.account_number ?? null,
     ifsc: snap.ifsc ?? null,
+    upiId: snap.upi_id ?? null,
     swift: snap.swift ?? null,
     iban: snap.iban ?? null,
     achRouting: snap.ach_routing ?? null,

@@ -161,7 +161,7 @@ export function formatBusinessForMcp(row: Business) {
     default_payment_terms_days: row.defaultPaymentTermsDays,
     default_notes: row.defaultNotes,
     payment_chain_id: row.paymentChainId ?? 8453,
-    accepted_chain_ids: row.acceptedChainIds ?? [8453, 42161],
+    accepted_chain_ids: row.acceptedChainIds ?? [8453, 42161, 1],
   };
 }
 

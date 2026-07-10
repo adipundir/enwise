@@ -21,7 +21,7 @@ export interface InvoiceEmailProps {
   logoUrl: string | null;
   total: string;
   currency: string;
-  dueDate: string;
+  dueDate: string | null;
   shareUrl: string;
   customMessage: string | null;
   businessAddressLines: string[];
@@ -94,10 +94,12 @@ export function InvoiceEmail({
                   <td style={styles.metaLabelCell}>Total</td>
                   <td style={styles.metaValueCell}>{formattedTotal}</td>
                 </tr>
-                <tr>
-                  <td style={styles.metaLabelCell}>Due date</td>
-                  <td style={styles.metaValueCell}>{dueDate}</td>
-                </tr>
+                {dueDate ? (
+                  <tr>
+                    <td style={styles.metaLabelCell}>Due date</td>
+                    <td style={styles.metaValueCell}>{dueDate}</td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </Section>

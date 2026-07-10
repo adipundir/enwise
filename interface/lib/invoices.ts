@@ -65,7 +65,9 @@ export type CreateInvoiceInput = {
    *  Must be available in this business; omit to auto-assign the next one. */
   invoiceNumber?: string;
   issueDate?: string; // YYYY-MM-DD
-  dueDate?: string;   // YYYY-MM-DD
+  /** YYYY-MM-DD. Omit for the default (issue date + 30 days). Pass null for
+   *  no due date at all. */
+  dueDate?: string | null;
   currency?: string;  // ISO 4217. Falls back to client.default_currency; otherwise create_invoice returns currency_required.
   notes?: string | null;
   terms?: string | null;
@@ -465,7 +467,8 @@ export async function createInvoice(
   }
 
   const issueDate = input.issueDate ?? toDateStr(new Date());
-  const dueDate = input.dueDate ?? addDays(issueDate, 30);
+  const dueDate =
+    input.dueDate === null ? null : (input.dueDate ?? addDays(issueDate, 30));
   const shareSlug = nanoid(24);
 
   // Resolve attachments up front so any upload failure aborts before we
@@ -727,7 +730,8 @@ export type UpdateInvoiceInput = {
    *  Must be available in the (possibly new) business. */
   invoiceNumber?: string;
   issueDate?: string;
-  dueDate?: string;
+  /** Pass null to remove the due date entirely. */
+  dueDate?: string | null;
   notes?: string | null;
   terms?: string | null;
   /** Per-invoice atomic field overrides. See lib/invoices/displayResolver.ts.

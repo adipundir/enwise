@@ -185,7 +185,7 @@ export async function sendInvoiceByEmail(
       cc: ccArray && ccArray.length > 0 ? ccArray : undefined,
       bcc: bccArray && bccArray.length > 0 ? bccArray : undefined,
       replyTo: replyToAddress ?? undefined,
-      subject: `Invoice ${sent.invoiceNumber} — ${formatMoney(sent.total, sent.currency)} due ${sent.dueDate}`,
+      subject: `Invoice ${sent.invoiceNumber} — ${formatMoney(sent.total, sent.currency)}${sent.dueDate ? ` due ${sent.dueDate}` : ""}`,
       html,
       text: plainText,
       attachments: invoiceAttachment ? [invoiceAttachment] : undefined,
