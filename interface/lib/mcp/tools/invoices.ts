@@ -626,7 +626,7 @@ export function registerInvoiceTools(server: McpServer) {
     {
       title: "Duplicate invoice",
       description:
-        "Clone an existing invoice's line items into a new draft under the same business. Optionally retarget to a different client via `client_id`, or change the issue date via `new_issue_date` (due_date is recomputed from the business's default net terms). Returns the new DRAFT invoice including `share_url`. **Always show the share_url** so the user can open the new draft and confirm before sending.",
+        "Clone an existing invoice into a new draft under the SAME business as the source invoice (regardless of `business_id`, which only scopes the lookup) — line items, currency, notes, terms, and the payment surface (accepted_payment_methods / accepted_bank_account_ids / accepted_chain_ids) all carry over. To place the clone under a different business, call update_invoice({business_id}) afterwards. Optionally retarget to a different client via `client_id`, or change the issue date via `new_issue_date` (due_date is recomputed from the business's default net terms). Returns the new DRAFT invoice including `share_url`. **Always show the share_url** so the user can open the new draft and confirm before sending.",
       inputSchema: {
         business_id: uuid.optional(),
         invoice_id: uuid,

@@ -1631,7 +1631,11 @@ export async function duplicateInvoice(
   if (!source) {
     return { ok: false, code: "client_not_found", message: `No invoice with id ${invoiceId}.` };
   }
-  return createInvoice(ctx, {
+  // Clone under the source invoice's business, not whatever business the
+  // caller's scope fell back to (the account default when no business_id was
+  // passed) — the tool contract is "a new draft under the same business".
+  const targetCtx: ScopedCtx = { ...ctx, businessId: source.businessId };
+  return createInvoice(targetCtx, {
     clientId: opts.clientId ?? source.clientId,
     lineItems: source.lineItems.map((l) => ({
       description: l.description,
@@ -1646,6 +1650,13 @@ export async function duplicateInvoice(
     currency: source.currency,
     notes: source.notes,
     terms: source.terms,
+    // Carry the payment surface over — otherwise the clone re-derives rails
+    // from live business state and can silently drop the bank panel the
+    // source invoice showed. null (legacy "show everything") falls through
+    // to undefined so the clone gets a freshly derived explicit value.
+    acceptedPaymentMethods: source.acceptedPaymentMethods ?? undefined,
+    acceptedBankAccountIds: source.acceptedBankAccountIds ?? undefined,
+    acceptedChainIds: source.acceptedChainIds ?? undefined,
   });
 }
 
